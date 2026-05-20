@@ -162,6 +162,16 @@ public class SlopeAwareMovementTest {
         assertFalse(climbControls.climbing);
     }
 
+    @Test
+    public void prepareForRecoveryCancelsQueuedActionsBeforeMovingAway() {
+        FakeActionQueueControls actionQueueControls = new FakeActionQueueControls();
+        SlopeAwareMovement movement = new SlopeAwareMovement(new FakeClimbControls(true), actionQueueControls);
+
+        movement.prepareForRecoveryMove();
+
+        assertEquals(1, actionQueueControls.cancelCalls);
+    }
+
     private static class FakeClimbControls implements SlopeAwareMovement.ClimbControls {
         private boolean climbing;
         private int toggles;
@@ -179,6 +189,15 @@ public class SlopeAwareMovementTest {
         public void toggleClimbing() {
             climbing = !climbing;
             toggles++;
+        }
+    }
+
+    private static class FakeActionQueueControls implements SlopeAwareMovement.ActionQueueControls {
+        private int cancelCalls;
+
+        @Override
+        public void cancelQueuedActions() {
+            cancelCalls++;
         }
     }
 }

@@ -1,5 +1,6 @@
 package net.ildar.wurm.bot;
 
+import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 
@@ -15,6 +16,10 @@ class SlopeAwareMovement {
         boolean isClimbing();
 
         void toggleClimbing();
+    }
+
+    interface ActionQueueControls {
+        void cancelQueuedActions();
     }
 
     static boolean requiresClimb(float fromX, float fromY, float toX, float toY, HeightProvider heights) {
@@ -141,13 +146,19 @@ class SlopeAwareMovement {
 
     private final RecoveryState recoveryState = new RecoveryState();
     private final ClimbControls climbControls;
+    private final ActionQueueControls actionQueueControls;
 
     SlopeAwareMovement() {
-        this(new WurmClimbControls());
+        this(new WurmClimbControls(), new WurmActionQueueControls());
     }
 
     SlopeAwareMovement(ClimbControls climbControls) {
+        this(climbControls, new WurmActionQueueControls());
+    }
+
+    SlopeAwareMovement(ClimbControls climbControls, ActionQueueControls actionQueueControls) {
         this.climbControls = climbControls;
+        this.actionQueueControls = actionQueueControls;
     }
 
     void markRecovery(float recoveryX, float recoveryY) {
@@ -245,6 +256,7 @@ class SlopeAwareMovement {
         float workX = recoveryState.getWorkX();
         float workY = recoveryState.getWorkY();
         try {
+            prepareForRecoveryMove();
             Utils.movePlayerBySteps(recoveryState.getRecoveryX(), recoveryState.getRecoveryY(), 5, stepDuration);
             setClimbing(false);
             waitForRecovery();
@@ -258,6 +270,10 @@ class SlopeAwareMovement {
             throw e;
         }
         return true;
+    }
+
+    void prepareForRecoveryMove() {
+        actionQueueControls.cancelQueuedActions();
     }
 
     void stopClimbing() {
@@ -299,6 +315,15 @@ class SlopeAwareMovement {
         @Override
         public void toggleClimbing() {
             WurmHelper.hud.toggleStateButton(0);
+        }
+    }
+
+    private static class WurmActionQueueControls implements ActionQueueControls {
+        @Override
+        public void cancelQueuedActions() {
+            for (int i = 0; i < Utils.getMaxActionNumber(); i++) {
+                WurmHelper.hud.sendAction(PlayerAction.STOP, 0);
+            }
         }
     }
 }
