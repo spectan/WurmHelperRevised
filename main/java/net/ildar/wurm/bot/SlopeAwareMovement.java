@@ -1,0 +1,253 @@
+package net.ildar.wurm.bot;
+
+import net.ildar.wurm.Utils;
+import net.ildar.wurm.WurmHelper;
+
+class SlopeAwareMovement {
+    static final float MAX_WALKABLE_SLOPE = 3.0f;
+    static final float RECOVERY_STAMINA = 0.99f;
+
+    interface HeightProvider {
+        float getHeight(float x, float y);
+    }
+
+    interface ClimbControls {
+        boolean isClimbing();
+
+        void toggleClimbing();
+    }
+
+    static boolean requiresClimb(float fromX, float fromY, float toX, float toY, HeightProvider heights) {
+        return planMove(fromX, fromY, toX, toY, heights).requiresClimb();
+    }
+
+    static ClimbPlan planMove(float fromX, float fromY, float toX, float toY, HeightProvider heights) {
+        float deltaX = toX - fromX;
+        float deltaY = toY - fromY;
+        float horizontalDistance = (float)Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        int segments = Math.max(2, (int)Math.ceil(horizontalDistance / 2f));
+        float previousX = fromX;
+        float previousY = fromY;
+        float previousHeight = heights.getHeight(previousX, previousY);
+
+        for (int segment = 1; segment <= segments; segment++) {
+            float progress = (float)segment / segments;
+            float sampleX = fromX + deltaX * progress;
+            float sampleY = fromY + deltaY * progress;
+            float sampleHeight = heights.getHeight(sampleX, sampleY);
+            float segmentDistance = distance(previousX, previousY, sampleX, sampleY);
+            float allowedHeightDelta = MAX_WALKABLE_SLOPE * segmentDistance / 4f;
+
+            if (Math.abs(previousHeight - sampleHeight) > allowedHeightDelta)
+                return ClimbPlan.requiresClimb(previousX, previousY);
+
+            previousX = sampleX;
+            previousY = sampleY;
+            previousHeight = sampleHeight;
+        }
+
+        return ClimbPlan.walkable();
+    }
+
+    private static float distance(float fromX, float fromY, float toX, float toY) {
+        float deltaX = toX - fromX;
+        float deltaY = toY - fromY;
+        return (float)Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    }
+
+    static class RecoveryState {
+        private boolean active;
+        private float recoveryX;
+        private float recoveryY;
+
+        void markActive(float recoveryX, float recoveryY) {
+            this.active = true;
+            this.recoveryX = recoveryX;
+            this.recoveryY = recoveryY;
+        }
+
+        void clear() {
+            active = false;
+        }
+
+        boolean isActive() {
+            return active;
+        }
+
+        float getRecoveryX() {
+            return recoveryX;
+        }
+
+        float getRecoveryY() {
+            return recoveryY;
+        }
+
+        boolean needsRecovery(float stamina, float damage, float staminaThreshold) {
+            return active && stamina + damage <= staminaThreshold;
+        }
+    }
+
+    static class ClimbPlan {
+        private final boolean requiresClimb;
+        private final float recoveryX;
+        private final float recoveryY;
+
+        private ClimbPlan(boolean requiresClimb, float recoveryX, float recoveryY) {
+            this.requiresClimb = requiresClimb;
+            this.recoveryX = recoveryX;
+            this.recoveryY = recoveryY;
+        }
+
+        static ClimbPlan walkable() {
+            return new ClimbPlan(false, 0f, 0f);
+        }
+
+        static ClimbPlan requiresClimb(float recoveryX, float recoveryY) {
+            return new ClimbPlan(true, recoveryX, recoveryY);
+        }
+
+        boolean requiresClimb() {
+            return requiresClimb;
+        }
+
+        float getRecoveryX() {
+            return recoveryX;
+        }
+
+        float getRecoveryY() {
+            return recoveryY;
+        }
+    }
+
+    private final RecoveryState recoveryState = new RecoveryState();
+    private final ClimbControls climbControls;
+
+    SlopeAwareMovement() {
+        this(new WurmClimbControls());
+    }
+
+    SlopeAwareMovement(ClimbControls climbControls) {
+        this.climbControls = climbControls;
+    }
+
+    void markRecovery(float recoveryX, float recoveryY) {
+        if (recoveryState.isActive())
+            return;
+        recoveryState.markActive(recoveryX, recoveryY);
+    }
+
+    void clearRecovery() {
+        recoveryState.clear();
+    }
+
+    boolean isRecovering() {
+        return recoveryState.isActive();
+    }
+
+    float getRecoveryX() {
+        return recoveryState.getRecoveryX();
+    }
+
+    float getRecoveryY() {
+        return recoveryState.getRecoveryY();
+    }
+
+    boolean needsRecovery(float stamina, float damage, float staminaThreshold) {
+        return recoveryState.needsRecovery(stamina, damage, staminaThreshold);
+    }
+
+    void moveForward(float distance, int steps, long duration) throws InterruptedException {
+        try {
+            float x = WurmHelper.hud.getWorld().getPlayerPosX();
+            float y = WurmHelper.hud.getWorld().getPlayerPosY();
+            float xRot = Utils.getField(WurmHelper.hud.getWorld().getPlayer(), "xRotUsed");
+            float targetX = x + (float)(distance * Math.sin((double)xRot / 180 * Math.PI));
+            float targetY = y + (float)(-distance * Math.cos((double)xRot / 180 * Math.PI));
+
+            moveTo(targetX, targetY, steps, duration);
+        } catch (InterruptedException e) {
+            throw e;
+        } catch (Exception e) {
+            Utils.consolePrint("Unexpected error while moving slope-aware - " + e.getMessage());
+            Utils.consolePrint(e.toString());
+        }
+    }
+
+    void moveTo(float targetX, float targetY, int steps, long duration) throws InterruptedException {
+        float x = WurmHelper.hud.getWorld().getPlayerPosX();
+        float y = WurmHelper.hud.getWorld().getPlayerPosY();
+        HeightProvider heights = (sampleX, sampleY) ->
+                WurmHelper.hud.getWorld().getNearTerrainBuffer().getInterpolatedHeight(sampleX, sampleY);
+        ClimbPlan climbPlan = planMove(x, y, targetX, targetY, heights);
+
+        if (!climbPlan.requiresClimb()) {
+            Utils.movePlayerBySteps(targetX, targetY, steps, duration);
+            return;
+        }
+
+        markRecovery(climbPlan.getRecoveryX(), climbPlan.getRecoveryY());
+        setClimbing(true);
+        try {
+            Utils.movePlayerBySteps(targetX, targetY, steps, duration);
+        } catch (InterruptedException e) {
+            stopClimbing();
+            throw e;
+        } catch (RuntimeException e) {
+            stopClimbing();
+            throw e;
+        }
+    }
+
+    boolean recoverIfNeeded(float stamina, float damage, float staminaThreshold, long stepDuration) throws InterruptedException {
+        if (!needsRecovery(stamina, damage, staminaThreshold))
+            return false;
+
+        Utils.movePlayerBySteps(recoveryState.getRecoveryX(), recoveryState.getRecoveryY(), 5, stepDuration);
+        setClimbing(false);
+        waitForRecovery();
+        recoveryState.clear();
+        return true;
+    }
+
+    void stopClimbing() {
+        if (!recoveryState.isActive())
+            return;
+        setClimbing(false);
+        recoveryState.clear();
+    }
+
+    boolean hasRecovered(float stamina, float damage) {
+        return stamina + damage >= RECOVERY_STAMINA;
+    }
+
+    private void waitForRecovery() throws InterruptedException {
+        while (!hasRecovered(
+                WurmHelper.hud.getWorld().getPlayer().getStamina(),
+                WurmHelper.hud.getWorld().getPlayer().getDamage())) {
+            Thread.sleep(500);
+        }
+    }
+
+    private void setClimbing(boolean climbing) {
+        if (climbControls.isClimbing() != climbing)
+            climbControls.toggleClimbing();
+    }
+
+    private static class WurmClimbControls implements ClimbControls {
+        @Override
+        public boolean isClimbing() {
+            try {
+                Object[] stateButtons = Utils.getField(WurmHelper.hud, "stateButtons");
+                return Utils.getField(stateButtons[0], "enabled");
+            } catch (Exception e) {
+                Utils.consolePrint("Unable to read climbing state - " + e.getMessage());
+                return false;
+            }
+        }
+
+        @Override
+        public void toggleClimbing() {
+            WurmHelper.hud.toggleStateButton(0);
+        }
+    }
+}

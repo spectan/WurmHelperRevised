@@ -6,7 +6,7 @@ import java.util.*;
 import java.util.function.Function;
 
 public class Chat {
-    private static List<MessageProcessor> messageProcessors = new ArrayList<>();
+    private static List<MessageProcessor> messageProcessors = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     //On message in tabName: if (filter.apply(message)) callback.run()
     public static MessageProcessor registerMessageProcessor(String tabName, Function<String, Boolean> filter, Runnable callback) {
@@ -25,12 +25,18 @@ public class Chat {
             message = pruneMulticolorString((List<MulticolorLineSegment>) input);
         } else
             message = (String)input;
-        String messageWithoutTime = message.substring(11).trim();
+        String messageWithoutTime = message.length() > 11 ? message.substring(11).trim() : message.trim();
         if (messageWithoutTime.isEmpty()) return;
-        messageProcessors.stream()
-                .filter(mp -> Objects.equals(mp.tabName, context))
-                .filter(mp -> mp.filter.apply(message))
-                .forEach(mp -> mp.callback.run());
+        for (MessageProcessor mp : messageProcessors) {
+            if (!Objects.equals(mp.tabName, context))
+                continue;
+            try {
+                if (Boolean.TRUE.equals(mp.filter.apply(message)))
+                    mp.callback.run();
+            } catch (RuntimeException e) {
+                Utils.consolePrint("Chat message processor failed: " + e);
+            }
+        }
         switch (context) {
             case ":Combat":
                 if (input instanceof List)

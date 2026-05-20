@@ -94,6 +94,24 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             return false;
         }
     }
+
+    static RegistryAddress parseRegistryAddress(String value) {
+        String[] pair = value.split(":", 2);
+        if(pair.length != 2 || pair[0].isEmpty() || pair[1].isEmpty())
+            throw new IllegalArgumentException("Expected host:port");
+
+        return new RegistryAddress(pair[0], Integer.parseInt(pair[1]));
+    }
+
+    static class RegistryAddress {
+        final String host;
+        final int port;
+
+        RegistryAddress(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
+    }
     
     public RMIBot()
     {
@@ -781,21 +799,15 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             return;
         }
         
-        String[] pair = args[0].split(":", 1);
-        if(pair.length != 2)
-        {
-            printInputKeyUsageString(Inputs.regaddr);
-            return;
-        }
-        
         try
         {
-            registryPort = Integer.parseInt(pair[1]);
-            registryHost = pair[0];
+            RegistryAddress address = parseRegistryAddress(args[0]);
+            registryPort = address.port;
+            registryHost = address.host;
         }
-        catch(NumberFormatException err)
+        catch(IllegalArgumentException err)
         {
-            Utils.consolePrint("Couldn't parse port: %s", err.getMessage());
+            Utils.consolePrint("Couldn't parse registry address: %s", err.getMessage());
         }
     }
 
@@ -1158,7 +1170,25 @@ final class ClientSet implements BotClient
     @Override
     public CombatInfo getCombatInfo() throws RemoteException
     {
-        throw new UnsupportedOperationException();
+        CombatInfo result = new CombatInfo();
+        result.target = -10;
+        result.playerHealth = 1f;
+
+        boolean firstRemote = true;
+        for(BotClient remote: remotes)
+        {
+            CombatInfo remoteInfo = remote.getCombatInfo();
+            if(firstRemote)
+            {
+                result.target = remoteInfo.target;
+                firstRemote = false;
+            }
+            else if(result.target != remoteInfo.target)
+                result.target = -10;
+            result.playerHealth = Math.min(result.playerHealth, remoteInfo.playerHealth);
+        }
+
+        return result;
     }
     
     @Override

@@ -30,6 +30,7 @@ public class DiggerBot extends Bot{
     private boolean toolRepairing = true;
     private DiggingTileInfo diggingTileInfo;
     private AreaAssistant areaAssistant;
+    private SlopeAwareMovement slopeMovement;
     private InventoryMetaItem shovelItem;
     private PlayerAction digAction;
     private Set<Pair<Integer, Integer>> invalidCorners;
@@ -50,6 +51,8 @@ public class DiggerBot extends Bot{
         registerInputHandler(DiggerBot.InputKey.sm, input -> toggleSurfaceMining());
 
         areaAssistant = new AreaAssistant(this);
+        slopeMovement = new SlopeAwareMovement();
+        areaAssistant.setMoveStrategy(slopeMovement::moveForward);
         areaAssistant.setMoveAheadDistance(1);
         areaAssistant.setMoveRightDistance(2);
         invalidCorners = new HashSet<>();
@@ -91,96 +94,102 @@ public class DiggerBot extends Bot{
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
         Object progressBar = Utils.getField(creationWindow, "progressBar");
         registerEventProcessors();
-        while (isActive()) {
-            waitOnPause();
-            if (toolRepairing) {
-                if (surfaceMiningMode && pickaxeItem.getDamage() > 10)
-                    WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxeItem.getId());
-                if (!surfaceMiningMode && shovelItem.getDamage() > 10)
-                    WurmHelper.hud.sendAction(PlayerAction.REPAIR, shovelItem.getId());
-            }
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            float progress = Utils.getField(progressBar, "progress");
-            stopDiggingIfHeightIsLower(progressBar);
-            if ((stamina + damage) > staminaThreshold && progress == 0f) {
-                switch (workMode) {
-                    case Digging: {
-                        boolean actionsMade = doDigActions();
-                        if (!actionsMade) {
-                            workMode = WorkMode.Unknown;
-                            Utils.showOnScreenMessage("Digging is over");
-                            clearInvalidCorners();
-                        }
-                        break;
-                    }
-                    case DiggingTile:{
-                        boolean actionsMade = doDigActions();
-                        if (!actionsMade) {
-                            if (validCornersExists())
-                                moveToNextTileCorner();
-                            else {
-                                Utils.movePlayerBySteps(diggingTileInfo.x * 4 + 2, diggingTileInfo.y * 4 + 2, STEPS, stepDuration);
-                                if (areaAssistant.areaTourActivated()) {
-                                    while(areaAssistant.areaTourActivated()) {
-                                        areaAssistant.areaNextPosition();
-                                        diggingTileInfo.x = (int)(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
-                                        diggingTileInfo.y = (int)(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
-                                        if (validCornersExists()) {
-                                            moveToNextTileCorner();
-                                            break;
-                                        }
-                                    }
-                                } else {
-                                    Utils.showOnScreenMessage("The digging is over");
-                                    workMode = WorkMode.Unknown;
-                                }
+        try {
+            while (isActive()) {
+                waitOnPause();
+                if (toolRepairing) {
+                    if (surfaceMiningMode && pickaxeItem.getDamage() > 10)
+                        WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxeItem.getId());
+                    if (!surfaceMiningMode && shovelItem.getDamage() > 10)
+                        WurmHelper.hud.sendAction(PlayerAction.REPAIR, shovelItem.getId());
+                }
+                float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
+                float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
+                float progress = Utils.getField(progressBar, "progress");
+                stopDiggingIfHeightIsLower(progressBar);
+                if (progress == 0f && slopeMovement.recoverIfNeeded(stamina, damage, staminaThreshold, stepDuration))
+                    continue;
+                if ((stamina + damage) > staminaThreshold && progress == 0f) {
+                    switch (workMode) {
+                        case Digging: {
+                            boolean actionsMade = doDigActions();
+                            if (!actionsMade) {
+                                workMode = WorkMode.Unknown;
+                                Utils.showOnScreenMessage("Digging is over");
+                                clearInvalidCorners();
                             }
-                        }
-                        break;
-                    }
-                    case Levelling: {
-                        if (levellingDone) {
-                            finishLeveling();
                             break;
                         }
-                        PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
-                        if (pickableUnit != null && pickableUnit instanceof TilePicker) {
-                            if (pickableUnit.getHoverName().contains("(flat)")) {
+                        case DiggingTile:{
+                            boolean actionsMade = doDigActions();
+                            if (!actionsMade) {
+                                if (validCornersExists())
+                                    moveToNextTileCorner();
+                                else {
+                                    slopeMovement.moveTo(diggingTileInfo.x * 4 + 2, diggingTileInfo.y * 4 + 2, STEPS, stepDuration);
+                                    if (areaAssistant.areaTourActivated()) {
+                                        while(areaAssistant.areaTourActivated()) {
+                                            areaAssistant.areaNextPosition();
+                                            diggingTileInfo.x = (int)(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
+                                            diggingTileInfo.y = (int)(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
+                                            if (validCornersExists()) {
+                                                moveToNextTileCorner();
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                        Utils.showOnScreenMessage("The digging is over");
+                                        workMode = WorkMode.Unknown;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        case Levelling: {
+                            if (levellingDone) {
                                 finishLeveling();
                                 break;
                             }
-                            WurmHelper.hud.getWorld().getServerConnection().sendAction(shovelItem.getId(),
-                                    new long[]{pickableUnit.getId()},
-                                    PlayerAction.LEVEL);
-                        } else {
-                            Utils.consolePrint("Dirt tile is not selected!");
-                        }
-                        break;
-                    }
-                    case LevellingArea: {
-                        int[][] area = Utils.getAreaCoordinates();
-                        boolean actionTaken = false;
-                        for (int i = 0; i < area.length; i += 2) {
-                            if (i == 4) continue;
-                            Tiles.Tile tileType = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(area[i][0], area[i][1]);
-                            boolean levelableTile = tileType == Tiles.Tile.TILE_DIRT || tileType == Tiles.Tile.TILE_GRASS;
-                            if (levelableTile && needLevelling(area[i][0], area[i][1])) {
+                            PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
+                            if (pickableUnit != null && pickableUnit instanceof TilePicker) {
+                                if (pickableUnit.getHoverName().contains("(flat)")) {
+                                    finishLeveling();
+                                    break;
+                                }
                                 WurmHelper.hud.getWorld().getServerConnection().sendAction(shovelItem.getId(),
-                                        new long[]{Tiles.getTileId(area[i][0], area[i][1], 1)},
+                                        new long[]{pickableUnit.getId()},
                                         PlayerAction.LEVEL);
-                                actionTaken = true;
-                                break;
+                            } else {
+                                Utils.consolePrint("Dirt tile is not selected!");
                             }
+                            break;
                         }
-                        if (!actionTaken) {
-                            areaAssistant.areaNextPosition();
+                        case LevellingArea: {
+                            int[][] area = Utils.getAreaCoordinates();
+                            boolean actionTaken = false;
+                            for (int i = 0; i < area.length; i += 2) {
+                                if (i == 4) continue;
+                                Tiles.Tile tileType = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(area[i][0], area[i][1]);
+                                boolean levelableTile = tileType == Tiles.Tile.TILE_DIRT || tileType == Tiles.Tile.TILE_GRASS;
+                                if (levelableTile && needLevelling(area[i][0], area[i][1])) {
+                                    WurmHelper.hud.getWorld().getServerConnection().sendAction(shovelItem.getId(),
+                                            new long[]{Tiles.getTileId(area[i][0], area[i][1], 1)},
+                                            PlayerAction.LEVEL);
+                                    actionTaken = true;
+                                    break;
+                                }
+                            }
+                            if (!actionTaken) {
+                                areaAssistant.areaNextPosition();
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
+                sleep(timeout);
             }
-            sleep(timeout);
+        } finally {
+            slopeMovement.stopClimbing();
         }
     }
 
@@ -376,7 +385,7 @@ public class DiggerBot extends Bot{
             }
         }
         if (cornerFound)
-            Utils.movePlayerBySteps(destX * 4, destY * 4, STEPS, stepDuration);
+            slopeMovement.moveTo(destX * 4, destY * 4, STEPS, stepDuration);
     }
 
     private void toggleSurfaceMining() {

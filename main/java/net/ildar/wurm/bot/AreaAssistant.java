@@ -11,6 +11,7 @@ class AreaAssistant {
     private long stepTimeout = 1000;
 
     private Bot bot;
+    private MoveStrategy moveStrategy = Utils::movePlayerBySteps;
     private int height = 0, width = 0;
 
     //start point - bottom left corner of area
@@ -37,7 +38,7 @@ class AreaAssistant {
         if (movedAhead < height - 1) {
             for (int tiles = 0; tiles < moveAheadDistance; tiles++) {
                 if (movedAhead >= height - 1) break;
-                Utils.movePlayerBySteps(4, STEPS_IN_MOVE, stepTimeout);
+                moveStrategy.moveForward(4, STEPS_IN_MOVE, stepTimeout);
                 movedAhead++;
             }
         } else if (movedToRight < width - 1) {
@@ -48,7 +49,7 @@ class AreaAssistant {
             Thread.sleep(300);
             for (int tiles = 0; tiles < moveRightDistance; tiles++) {
                 if (movedToRight >= width - 1) break;
-                Utils.movePlayerBySteps(4, STEPS_IN_MOVE, stepTimeout);
+                moveStrategy.moveForward(4, STEPS_IN_MOVE, stepTimeout);
                 movedToRight++;
             }
             if (turnedRight)
@@ -127,6 +128,10 @@ class AreaAssistant {
         this.moveRightDistance = moveRightDistance;
     }
 
+    void setMoveStrategy(MoveStrategy moveStrategy) {
+        this.moveStrategy = moveStrategy;
+    }
+
     void toggleAreaTour(String[] input) {
         if (areaTourActivated()) {
             stopAreaTour();
@@ -193,5 +198,9 @@ class AreaAssistant {
         public String getUsage() {
             return usage;
         }
+    }
+
+    interface MoveStrategy {
+        void moveForward(float distance, int steps, long duration) throws InterruptedException;
     }
 }

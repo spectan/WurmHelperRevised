@@ -551,10 +551,18 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             ctWurmConsole.getMethod("handleDevInput", "(Ljava/lang/String;[Ljava/lang/String;)Z").insertBefore("if (net.ildar.wurm.WurmHelper.getInstance().handleInput($1,$2)) return true;");
 
             final CtClass ctSocketConnection = classPool.getCtClass("com.wurmonline.communication.SocketConnection");
-            ctSocketConnection.getMethod("tickWriting", "(J)Z").insertBefore("net.ildar.wurm.Utils.serverCallLock.lock();");
-            ctSocketConnection.getMethod("tickWriting", "(J)Z").insertAfter("net.ildar.wurm.Utils.serverCallLock.unlock();");
-            ctSocketConnection.getMethod("getBuffer", "()Ljava/nio/ByteBuffer;").insertBefore("net.ildar.wurm.Utils.serverCallLock.lock();");
-            ctSocketConnection.getMethod("flush", "()V").insertAfter("net.ildar.wurm.Utils.serverCallLock.unlock();");
+            CtMethod tickWriting = ctSocketConnection.getMethod("tickWriting", "(J)Z");
+            tickWriting.insertBefore("net.ildar.wurm.Utils.serverCallLock.lock();");
+            tickWriting.insertAfter("net.ildar.wurm.Utils.serverCallLock.unlock();", true);
+
+            CtMethod getBuffer = ctSocketConnection.getMethod("getBuffer", "()Ljava/nio/ByteBuffer;");
+            getBuffer.insertBefore("net.ildar.wurm.Utils.serverCallLock.lock();");
+            getBuffer.addCatch(
+                "{ net.ildar.wurm.Utils.serverCallLock.unlock(); throw $e; }",
+                classPool.get("java.lang.Throwable")
+            );
+
+            ctSocketConnection.getMethod("flush", "()V").insertAfter("net.ildar.wurm.Utils.serverCallLock.unlock();", true);
 
             final CtClass ctConsoleComponent = classPool.getCtClass("com.wurmonline.client.renderer.gui.ConsoleComponent");
             CtMethod consoleGameTickMethod = CtNewMethod.make(
