@@ -59,11 +59,23 @@ class SlopeAwareMovement {
         private boolean active;
         private float recoveryX;
         private float recoveryY;
+        private float workX;
+        private float workY;
 
         void markActive(float recoveryX, float recoveryY) {
+            markActive(recoveryX, recoveryY, recoveryX, recoveryY);
+        }
+
+        void markActive(float recoveryX, float recoveryY, float workX, float workY) {
             this.active = true;
             this.recoveryX = recoveryX;
             this.recoveryY = recoveryY;
+            updateWork(workX, workY);
+        }
+
+        void updateWork(float workX, float workY) {
+            this.workX = workX;
+            this.workY = workY;
         }
 
         void clear() {
@@ -80,6 +92,14 @@ class SlopeAwareMovement {
 
         float getRecoveryY() {
             return recoveryY;
+        }
+
+        float getWorkX() {
+            return workX;
+        }
+
+        float getWorkY() {
+            return workY;
         }
 
         boolean needsRecovery(float stamina, float damage, float staminaThreshold) {
@@ -131,9 +151,20 @@ class SlopeAwareMovement {
     }
 
     void markRecovery(float recoveryX, float recoveryY) {
+        markRecovery(recoveryX, recoveryY, recoveryX, recoveryY);
+    }
+
+    void markRecovery(float recoveryX, float recoveryY, float workX, float workY) {
         if (recoveryState.isActive())
+            recoveryState.updateWork(workX, workY);
+        else
+            recoveryState.markActive(recoveryX, recoveryY, workX, workY);
+    }
+
+    void updateWorkPosition(float workX, float workY) {
+        if (!recoveryState.isActive())
             return;
-        recoveryState.markActive(recoveryX, recoveryY);
+        recoveryState.updateWork(workX, workY);
     }
 
     void clearRecovery() {
@@ -150,6 +181,14 @@ class SlopeAwareMovement {
 
     float getRecoveryY() {
         return recoveryState.getRecoveryY();
+    }
+
+    float getWorkX() {
+        return recoveryState.getWorkX();
+    }
+
+    float getWorkY() {
+        return recoveryState.getWorkY();
     }
 
     boolean needsRecovery(float stamina, float damage, float staminaThreshold) {
@@ -179,13 +218,14 @@ class SlopeAwareMovement {
         HeightProvider heights = (sampleX, sampleY) ->
                 WurmHelper.hud.getWorld().getNearTerrainBuffer().getInterpolatedHeight(sampleX, sampleY);
         ClimbPlan climbPlan = planMove(x, y, targetX, targetY, heights);
+        updateWorkPosition(targetX, targetY);
 
         if (!climbPlan.requiresClimb()) {
             Utils.movePlayerBySteps(targetX, targetY, steps, duration);
             return;
         }
 
-        markRecovery(climbPlan.getRecoveryX(), climbPlan.getRecoveryY());
+        markRecovery(climbPlan.getRecoveryX(), climbPlan.getRecoveryY(), targetX, targetY);
         setClimbing(true);
         try {
             Utils.movePlayerBySteps(targetX, targetY, steps, duration);
@@ -202,10 +242,21 @@ class SlopeAwareMovement {
         if (!needsRecovery(stamina, damage, staminaThreshold))
             return false;
 
-        Utils.movePlayerBySteps(recoveryState.getRecoveryX(), recoveryState.getRecoveryY(), 5, stepDuration);
-        setClimbing(false);
-        waitForRecovery();
-        recoveryState.clear();
+        float workX = recoveryState.getWorkX();
+        float workY = recoveryState.getWorkY();
+        try {
+            Utils.movePlayerBySteps(recoveryState.getRecoveryX(), recoveryState.getRecoveryY(), 5, stepDuration);
+            setClimbing(false);
+            waitForRecovery();
+            setClimbing(true);
+            Utils.movePlayerBySteps(workX, workY, 5, stepDuration);
+        } catch (InterruptedException e) {
+            stopClimbing();
+            throw e;
+        } catch (RuntimeException e) {
+            stopClimbing();
+            throw e;
+        }
         return true;
     }
 

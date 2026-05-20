@@ -113,11 +113,22 @@ public class SlopeAwareMovementTest {
     public void activeRecoveryPointIsNotOverwritten() {
         SlopeAwareMovement movement = new SlopeAwareMovement();
 
-        movement.markRecovery(10f, 20f);
-        movement.markRecovery(30f, 40f);
+        movement.markRecovery(10f, 20f, 15f, 25f);
+        movement.markRecovery(30f, 40f, 35f, 45f);
 
         assertEquals(10f, movement.getRecoveryX(), 0f);
         assertEquals(20f, movement.getRecoveryY(), 0f);
+    }
+
+    @Test
+    public void activeRecoveryWorkPointUpdatesToLatestClimbDestination() {
+        SlopeAwareMovement movement = new SlopeAwareMovement();
+
+        movement.markRecovery(10f, 20f, 15f, 25f);
+        movement.markRecovery(30f, 40f, 35f, 45f);
+
+        assertEquals(35f, movement.getWorkX(), 0f);
+        assertEquals(45f, movement.getWorkY(), 0f);
     }
 
     @Test
