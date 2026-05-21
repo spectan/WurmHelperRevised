@@ -96,7 +96,7 @@ public class MinerBot extends Bot {
                 int tileX = WurmHelper.hud.getWorld().getPlayerCurrentTileX();
                 int tileY = WurmHelper.hud.getWorld().getPlayerCurrentTileY();
                 List<Long> closePileIds = new ArrayList<>();
-                for (Map.Entry<Long, GroundItemCellRenderable> entry : new HashSet<>(groundItems.entrySet())) {
+                for (Map.Entry<Long, GroundItemCellRenderable> entry : snapshotEntries(groundItems, 5)) {
                     GroundItemCellRenderable groundItem = entry.getValue();
                     GroundItemData groundItemData = Utils.getField(groundItem, "item");
                     int itemX = (int) (groundItemData.getX()/4);
@@ -304,6 +304,16 @@ public class MinerBot extends Bot {
 
     static private boolean isMinableTile(Tiles.Tile type) {
         return type.tilename.equals("Cave") || type.tilename.equals("Reinforced cave");
+    }
+
+    static <K, V> List<Map.Entry<K, V>> snapshotEntries(Map<K, V> map, int maxTries) {
+        for (int tries = 0; tries < maxTries; tries++) {
+            try {
+                return new ArrayList<>(map.entrySet());
+            } catch (ConcurrentModificationException ignored) {
+            }
+        }
+        return Collections.emptyList();
     }
 
     private void handleDirectionChange(String[] input) {
