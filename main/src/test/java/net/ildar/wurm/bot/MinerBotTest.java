@@ -36,6 +36,16 @@ public class MinerBotTest {
         assertTrue(entries.isEmpty());
     }
 
+    @Test
+    public void shouldTakeShardWhenItFitsAndLeavesLessThanTwentyFree() {
+        assertTrue(MinerBot.shouldTakeShard(35f, 20f, 0));
+    }
+
+    @Test
+    public void shouldTakeAdditionalShardWhenItFits() {
+        assertTrue(MinerBot.shouldTakeShard(25f, 20f, 1));
+    }
+
     private static class FlakyEntryMap<K, V> extends AbstractMap<K, V> {
         private int failuresRemaining;
         private final Set<Map.Entry<K, V>> entries;

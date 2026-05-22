@@ -96,7 +96,8 @@ public class MinerBot extends Bot {
                 int tileX = WurmHelper.hud.getWorld().getPlayerCurrentTileX();
                 int tileY = WurmHelper.hud.getWorld().getPlayerCurrentTileY();
                 List<Long> closePileIds = new ArrayList<>();
-                for (Map.Entry<Long, GroundItemCellRenderable> entry : snapshotEntries(groundItems, 5)) {
+                List<Map.Entry<Long, GroundItemCellRenderable>> groundItemEntries = snapshotEntries(groundItems, 5);
+                for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItemEntries) {
                     GroundItemCellRenderable groundItem = entry.getValue();
                     GroundItemData groundItemData = Utils.getField(groundItem, "item");
                     int itemX = (int) (groundItemData.getX()/4);
@@ -125,7 +126,7 @@ public class MinerBot extends Bot {
                 for (ItemListWindow wurmComponent : piles) {
                     InventoryListComponent ilc = Utils.getField(wurmComponent, "component");
                     InventoryMetaItem rootItem = Utils.getRootItem(ilc);
-                    if (!closePileIds.contains(rootItem.getId())) {
+                    if (!groundItemEntries.isEmpty() && !closePileIds.contains(rootItem.getId())) {
                         WurmHelper.hud.sendAction(PlayerAction.CLOSE, rootItem.getId());
                         continue;
                     }
@@ -133,8 +134,7 @@ public class MinerBot extends Bot {
                     if (componentItems != null && componentItems.size() > 0)
                         for (InventoryMetaItem item : componentItems)
                             if (item.getRarity() == 0
-                                    && (item.getWeight() < freeSpace - 20
-                                    || (itemsToTake.size() > 0 && item.getWeight() < freeSpace))) {
+                                    && shouldTakeShard(freeSpace, item.getWeight(), itemsToTake.size())) {
                                 itemsToTake.add(item);
                                 freeSpace -= item.getWeight();
                                 if (freeSpace < 20) break;
@@ -142,7 +142,7 @@ public class MinerBot extends Bot {
                     if (freeSpace < 20) break;
 
                 }
-                if (itemsToTake.size() > 1 && freeSpace < 20) {
+                if (itemsToTake.size() > 0 && freeSpace < 20) {
                     if (verbose) Utils.consolePrint("Taking " + itemsToTake.stream().map(InventoryMetaItem::getId).collect(Collectors.toList()));
                     for (InventoryMetaItem item : itemsToTake)
                         WurmHelper.hud.sendAction(PlayerAction.TAKE, item.getId());
@@ -314,6 +314,11 @@ public class MinerBot extends Bot {
             }
         }
         return Collections.emptyList();
+    }
+
+    static boolean shouldTakeShard(float freeSpace, float shardWeight, int alreadyTaking) {
+        return shardWeight < freeSpace
+                && (freeSpace - shardWeight < 20 || alreadyTaking > 0);
     }
 
     private void handleDirectionChange(String[] input) {
