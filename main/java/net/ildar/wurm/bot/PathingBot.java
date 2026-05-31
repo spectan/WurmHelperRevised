@@ -967,7 +967,7 @@ class SleepBlocker implements ForkJoinPool.ManagedBlocker
 	@Override
 	public boolean block() throws InterruptedException
 	{
-		Thread.sleep(remaining());
+		Thread.sleep(Math.max(0, remaining()));
 		return remaining() <= 0;
 	}
 

@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
         abbreviation = "fg")
 public class ForagerBot extends Bot {
     static String DEFAULT_CONTAINER_NAME = "backpack";
-    private static Set<String> forageSet = new HashSet<>(Arrays.asList(
+    private static final Set<String> forageSet = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "oregano","rosemary","lingonberry","pumpkin",
             "thyme","tomato","lovage","fennel plant",
             "acorn","cumin","wemp plants","corn",
@@ -35,9 +35,9 @@ public class ForagerBot extends Bot {
             "barley","onion","turmeric","basil",
             "mint","sugar beet","rice","cucumber",
             "lettuce","branch","woad","oat",
-            "paprika", "nutmeg", "rock"));
-    private static Set<String> forageSetKeywords = new HashSet<>(Arrays.asList(
-            "fresh","seedling","sprout","mushroom","bouquet"));
+            "paprika", "nutmeg", "rock")));
+    private static final Set<String> forageSetKeywords = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "fresh","seedling","sprout","mushroom","bouquet")));
 
     private float staminaThreshold;
     private Comparator<InventoryMetaItem> weightComparator = Comparator.comparingDouble(InventoryMetaItem::getWeight);
@@ -191,9 +191,9 @@ public class ForagerBot extends Bot {
 
                 if(grassGathering) {
                     List <InventoryMetaItem> grass = Utils.getInventoryItems("mixed grass");
-                    List <InventoryMetaItem> forCombining = new ArrayList<>();
-                    grass.sort(weightComparator);
                     if(grass != null && grass.size() > 0) {
+                        List <InventoryMetaItem> forCombining = new ArrayList<>();
+                        grass.sort(weightComparator);
                         float totalWeight = 0;
                         for (InventoryMetaItem grassItem : grass)
                             if (grassItem.getWeight()+totalWeight < 3.2) {
@@ -341,7 +341,7 @@ public class ForagerBot extends Bot {
         try {
             maxActions = Integer.parseInt(input[0]);
             Utils.consolePrint("Maximum actions was set " + maxActions);
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             Utils.consolePrint("Wrong max actions value!");
         }
     }

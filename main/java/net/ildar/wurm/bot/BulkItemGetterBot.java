@@ -23,7 +23,8 @@ public class BulkItemGetterBot extends Bot
     public static final Pattern quantityRegex = Pattern.compile("\\((\\d+)x\\)");
 
     public static volatile boolean closeBMLWindow;
-    public static int moveQuantity = -1;
+    public static volatile int currentMoveQuantity = -1;
+    private int moveQuantity = -1;
     ArrayList<ItemSpec> specs = new ArrayList<>();
     int selectedSpec = 0;
     
@@ -45,6 +46,7 @@ public class BulkItemGetterBot extends Bot
     public void work() throws Exception
     {
         closeBMLWindow = false;
+        currentMoveQuantity = -1;
         moveQuantity = -1;
         setTimeout(5000);
         registerEventProcessor(
@@ -91,6 +93,7 @@ public class BulkItemGetterBot extends Bot
                         moveQuantity = sourceQuantity;
                 }
                 
+                currentMoveQuantity = moveQuantity;
                 closeBMLWindow = true;
                 // Utils.consolePrint("moving `%s` => `%s`", ItemSpec.getCanonicalName(spec.source), ItemSpec.getCanonicalName(spec.target));
                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(spec.target.getId(), new long[]{spec.source.getId()});
@@ -101,6 +104,7 @@ public class BulkItemGetterBot extends Bot
                 {
                     Utils.consolePrint("Timed out after 5 seconds waiting for bulk item transfer question");
                     closeBMLWindow = false;
+                    currentMoveQuantity = -1;
                 }
             }
             // Utils.consolePrint("main loop sleep for %dms", timeout);

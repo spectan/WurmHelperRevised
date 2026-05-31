@@ -317,14 +317,14 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
                 if (BulkItemGetterBot.closeBMLWindow && wc instanceof BmlWindowComponent) {
                     String title = Utils.getField(wc, "title");
                     if (title.equals("Removing items")) {
-                        if(BulkItemGetterBot.moveQuantity > 0)
+                        if(BulkItemGetterBot.currentMoveQuantity > 0)
                         {
                             Map<String, Object> inputs = Utils.getField(wc, "inputFields");
                             Object quantityField = inputs.values().iterator().next();
                             Utils.setField(
                                 quantityField,
                                 "input",
-                                String.format("%d", BulkItemGetterBot.moveQuantity)
+                                String.format("%d", BulkItemGetterBot.currentMoveQuantity)
                             );
                         }
                         
