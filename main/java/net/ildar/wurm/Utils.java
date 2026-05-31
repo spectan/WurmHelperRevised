@@ -440,6 +440,30 @@ public class Utils {
         return items.get(0);
     }
 
+    /**
+     * Select a tool from the player's currently-selected inventory item.
+     * Validates that the selected item's base name matches one of the allowed tools.
+     * @param validToolNames array of acceptable tool base names (e.g. "hatchet", "pickaxe")
+     * @return the selected InventoryMetaItem if valid, null otherwise
+     */
+    public static InventoryMetaItem selectInventoryTool(String[] validToolNames) {
+        List<InventoryMetaItem> selectedItems = getSelectedItems();
+        if (selectedItems == null || selectedItems.isEmpty()) {
+            consolePrint("Select a tool in your inventory first!");
+            return null;
+        }
+        InventoryMetaItem item = selectedItems.get(0);
+        String baseName = item.getBaseName().toLowerCase();
+        for (String validName : validToolNames) {
+            if (baseName.equals(validName.toLowerCase())) {
+                return item;
+            }
+        }
+        consolePrint("'%s' is not a valid tool. Valid tools: %s",
+                item.getBaseName(), String.join(", ", validToolNames));
+        return null;
+    }
+
     public static InventoryMetaItem getRootItem(InventoryListComponent ilc) {
         try {
             Object listRootItem = getField(ilc, "rootItem");

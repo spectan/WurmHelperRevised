@@ -24,6 +24,7 @@ public class MinerBot extends Bot {
     private MiningMode miningMode = MiningMode.Unknown;
     private float staminaThreshold;
     private InventoryMetaItem pickaxe;
+    private static final String[] VALID_TOOLS = {"pickaxe"};
     private long fixedTileId;
     private int[] lastTile;
     private Set<Pair<Integer, Integer>> errorTiles = new HashSet<>();
@@ -63,12 +64,14 @@ public class MinerBot extends Bot {
         registerInputHandler(MinerBot.InputKey.sfn, this::setFuelName);
         registerInputHandler(MinerBot.InputKey.v, input -> toggleVerboseMode());
         registerInputHandler(MinerBot.InputKey.dir, this::handleDirectionChange);
+        registerInputHandler(MinerBot.InputKey.tool, input -> selectTool());
     }
 
     @Override
     public void work() throws Exception{
         staminaThreshold = 0.96f;
-        pickaxe = Utils.locateToolItem("pickaxe");
+        if (pickaxe == null)
+            pickaxe = Utils.locateToolItem("pickaxe");
         if (pickaxe == null) {
             Utils.consolePrint("You don't have a pickaxe!");
             deactivate();
@@ -315,6 +318,14 @@ public class MinerBot extends Bot {
     static boolean shouldTakeShard(float freeSpace, float shardWeight, int alreadyTaking) {
         return shardWeight < freeSpace
                 && (freeSpace - shardWeight < 20 || alreadyTaking > 0);
+    }
+
+    private void selectTool() {
+        InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
+        if (tool != null) {
+            pickaxe = tool;
+            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+        }
     }
 
     private void handleDirectionChange(String[] input) {
@@ -709,7 +720,8 @@ public class MinerBot extends Bot {
         sft("Set a smelter fuelling timeout for smelting ores", "timeout(in milliseconds)"),
         sfn("Set a name for the fuel for smelting ores", "name"),
         v("Toggle the verbose mode. While verbose bot will show additional info in console", ""),
-        dir("Set mining direction. Possible directions are: f - forward, u - upward, d - downward. Forward is default direction.", "direction");
+        dir("Set mining direction. Possible directions are: f - forward, u - upward, d - downward. Forward is default direction.", "direction"),
+        tool("Set the mining tool from selected inventory item.", "tool");
 
         private String description;
         private String usage;

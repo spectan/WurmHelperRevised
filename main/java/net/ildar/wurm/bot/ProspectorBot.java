@@ -14,23 +14,27 @@ import net.ildar.wurm.annotations.BotInfo;
 public class ProspectorBot extends Bot {
     private float staminaThreshold;
     private int clicks;
+    private InventoryMetaItem toolItem;
+    private static final String[] VALID_TOOLS = {"pickaxe"};
 
     public ProspectorBot() {
         registerInputHandler(ProspectorBot.InputKey.s, this::setStaminaThreshold);
         registerInputHandler(ProspectorBot.InputKey.c, this::setClicksNumber);
+        registerInputHandler(ProspectorBot.InputKey.tool, input -> selectTool());
     }
 
     @Override
     public void work() throws Exception{
-        InventoryMetaItem pickaxe = Utils.locateToolItem("pickaxe");
+        if (toolItem == null)
+            toolItem = Utils.locateToolItem("pickaxe");
         long pickaxeId;
-        if (pickaxe == null) {
+        if (toolItem == null) {
             Utils.consolePrint("You don't have a pickaxe");
             deactivate();
             return;
         } else {
-            pickaxeId = pickaxe.getId();
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + pickaxe.getBaseName());
+            pickaxeId = toolItem.getId();
+            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + toolItem.getBaseName());
         }
         PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
         if (pickableUnit == null) {
@@ -50,12 +54,20 @@ public class ProspectorBot extends Bot {
             float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
             float progress = Utils.getField(progressBar, "progress");
             if ((stamina+damage) > staminaThreshold && progress == 0f) {
-                if (pickaxe.getDamage() > 10)
+                if (toolItem.getDamage() > 10)
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxeId);
                 for(int i = 0; i < clicks; i++)
                     WurmHelper.hud.getWorld().getServerConnection().sendAction(pickaxeId, new long[]{caveWallId}, PlayerAction.PROSPECT);
             }
             sleep(timeout);
+        }
+    }
+
+    private void selectTool() {
+        InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
+        if (tool != null) {
+            toolItem = tool;
+            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }
 
@@ -99,7 +111,8 @@ public class ProspectorBot extends Bot {
     private enum InputKey implements Bot.InputKey {
         s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        c("Change the amount of clicks bot will do each time", "n(integer value)");
+        c("Change the amount of clicks bot will do each time", "n(integer value)"),
+        tool("Set the prospecting tool from selected inventory item.", "tool");
 
         private String description;
         private String usage;

@@ -49,6 +49,7 @@ public class DiggerBot extends Bot{
         registerInputHandler(DiggerBot.InputKey.la, this::toggleLevellingArea);
         registerInputHandler(DiggerBot.InputKey.tr, input -> toggleToolRepairing());
         registerInputHandler(DiggerBot.InputKey.sm, input -> toggleSurfaceMining());
+        registerInputHandler(DiggerBot.InputKey.tool, input -> selectTool());
 
         areaAssistant = new AreaAssistant(this);
         slopeMovement = new SlopeAwareMovement();
@@ -83,7 +84,8 @@ public class DiggerBot extends Bot{
 
     @Override
     protected void work() throws Exception{
-        shovelItem = Utils.locateToolItem("shovel");
+        if (shovelItem == null)
+            shovelItem = Utils.locateToolItem("shovel");
         if (shovelItem == null) {
             Utils.consolePrint("Player doesn't have a shovel!");
             return;
@@ -536,6 +538,14 @@ public class DiggerBot extends Bot{
         Utils.consolePrint(getClass().getSimpleName() + " will do " + clicks + " chops each time");
     }
 
+    private void selectTool() {
+        InventoryMetaItem tool = Utils.selectInventoryTool(new String[]{"shovel"});
+        if (tool != null) {
+            shovelItem = tool;
+            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+        }
+    }
+
     private void toggleToolRepairing() {
         toolRepairing = !toolRepairing;
         Utils.consolePrint("The repairing of the tool is " + (toolRepairing ?"on":"off"));
@@ -564,7 +574,8 @@ public class DiggerBot extends Bot{
         l("Toggle the levelling of selected tile", ""),
         la("Toggle the levelling of area around player", "height(in slopes)"),
         tr("Toggle the repairing of the tool", ""),
-        sm("Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", "");
+        sm("Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", ""),
+        tool("Set the digging tool from selected inventory item.", "tool");
 
         private String description;
         private String usage;

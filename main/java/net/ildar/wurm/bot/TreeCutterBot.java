@@ -37,9 +37,10 @@ public class TreeCutterBot extends Bot{
     private boolean sproutingTreeCutting;
 
     private long hatchetId;
+    private InventoryMetaItem selectedTool;
     private long lastActionFinishedTime;
     private Byte[] sproutingAgeId = {7,9,11,13};
-    public String[] Axes = {"hatchet", "small axe", "axe", "huge axe", "longsword", "two handed sword", "short sword", "shovel", "pickaxe", "sickle", "rake", "scythe"};
+    private static final String[] VALID_TOOLS = {"hatchet", "small axe", "axe", "huge axe", "longsword", "two handed sword", "short sword", "shovel", "pickaxe", "sickle", "rake", "scythe"};
 
     private AreaAssistant areaAssistant = new AreaAssistant(this);
     private List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
@@ -48,7 +49,7 @@ public class TreeCutterBot extends Bot{
         registerInputHandler(InputKey.s, this::setStaminaThreshold);
         registerInputHandler(InputKey.c, this::setMaxActions);
         registerInputHandler(InputKey.a, this::setMinAge);
-        registerInputHandler(InputKey.axe, input->setAxe());
+        registerInputHandler(InputKey.tool, input -> selectTool());
         registerInputHandler(InputKey.al, input-> showAgesList());
         registerInputHandler(InputKey.tt, this::setTreeType);
         registerInputHandler(InputKey.b, input-> toggleBushCutting());
@@ -71,16 +72,17 @@ public class TreeCutterBot extends Bot{
         PlayerObj player = world.getPlayer();
         lastActionFinishedTime = System.currentTimeMillis();
 
-        InventoryMetaItem hatchet = Utils.locateToolItem("hatchet");
-
-        if (hatchet == null) {
-            Utils.consolePrint("You don't have a hatchet! " + this.getClass().getSimpleName() + " won't start");
-            deactivate();
-            return;
-        } else {
+        if (selectedTool == null) {
+            InventoryMetaItem hatchet = Utils.locateToolItem("hatchet");
+            if (hatchet == null) {
+                Utils.consolePrint("You don't have a hatchet! " + this.getClass().getSimpleName() + " won't start");
+                deactivate();
+                return;
+            }
+            selectedTool = hatchet;
             hatchetId = hatchet.getId();
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + hatchet.getDisplayName() + " with QL:" + hatchet.getQuality() + " DMG:" + hatchet.getDamage());
         }
+        Utils.consolePrint(this.getClass().getSimpleName() + " will use " + selectedTool.getDisplayName() + " with QL:" + selectedTool.getQuality() + " DMG:" + selectedTool.getDamage());
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
         Object progressBar = Utils.getField(creationWindow, "progressBar");
 
@@ -250,19 +252,13 @@ public class TreeCutterBot extends Bot{
         Utils.consolePrint(getClass().getSimpleName() + " will do " + maxActions + " chops each time");
     }
 
-    private void setAxe() {
-        List<InventoryMetaItem> selectedItems = Utils.getSelectedItems();
-        if (selectedItems == null || selectedItems.size() == 0) {
-            Utils.consolePrint("Select the axe first!");
-            return;
+    private void selectTool() {
+        InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
+        if (tool != null) {
+            selectedTool = tool;
+            hatchetId = tool.getId();
+            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
-        InventoryMetaItem axe = selectedItems.get(0);
-        if (Arrays.asList(Axes).contains(axe.getBaseName())) {
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + axe.getDisplayName() + " with QL:" + axe.getQuality() + " DMG:" + axe.getDamage());
-            hatchetId = axe.getId();
-            return;
-        }
-        Utils.consolePrint("Unable to assign selected item to any known axes");
     }
 
     private void setStaminaThreshold(float s) {
@@ -282,7 +278,7 @@ public class TreeCutterBot extends Bot{
         tt("Set tree types for chopping. Chop all trees by default", "birch oak"),
         c("Set chops number", "1"),
         a("Set minimal tree age for chopping. Chop all trees by default", "ov"),
-        axe("Set axe-like item for chopping. Useful for leveling weapontype skill.", "axe"),
+        tool("Set the cutting tool from selected inventory item.", "tool"),
         al("Get ages abbreviation list", ""),
         b("Toggle bush cutting. Disabled by default", ""),
         sp("Toggle sprouting trees cutting. Enabled by default", "");

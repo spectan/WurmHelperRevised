@@ -40,7 +40,7 @@ public class BotController {
         }
         Class<? extends Bot> botClass = getBotClass(data[0]);
         if (botClass == null) {
-            Utils.consolePrint("Didn't find a bot with abbreviation \"" + data[0] + "\"");
+            Utils.consolePrint("Didn't find a bot with name or abbreviation \"" + data[0] + "\"");
             Utils.consolePrint(usageString);
             return;
         }
@@ -168,22 +168,25 @@ public class BotController {
             if (botRegistration != null)
                 abbreviation = botRegistration.getAbbreviation();
             Utils.consolePrint("Status: OFF");
-            Utils.consolePrint("Type \"bot " + abbreviation + " " + "on\" to activate the bot");
+            Utils.consolePrint("Type \"bot " + botRegistration.getName() + " on\" or \"bot " + abbreviation + " on\" to activate the bot");
         }
     }
 
     public String getBotUsageString() {
         StringBuilder result = new StringBuilder("Usage: " + WurmHelper.ConsoleCommand.bot.name() + " {");
         for (BotRegistration botRegistration : botList)
-            result.append(botRegistration.getAbbreviation()).append("|");
+            result.append(botRegistration.getName()).append("(").append(botRegistration.getAbbreviation()).append(")|");
         result.append("pause|off}");
         return result.toString();
     }
 
-    Class<? extends Bot> getBotClass(String abbreviation) {
-        for (BotRegistration botRegistration : botList)
-            if (botRegistration.getAbbreviation().equals(abbreviation))
+    Class<? extends Bot> getBotClass(String nameOrAbbreviation) {
+        for (BotRegistration botRegistration : botList) {
+            if (botRegistration.getAbbreviation().equalsIgnoreCase(nameOrAbbreviation))
                 return botRegistration.getBotClass();
+            if (botRegistration.getName().equalsIgnoreCase(nameOrAbbreviation))
+                return botRegistration.getBotClass();
+        }
         return null;
     }
 
@@ -212,7 +215,7 @@ public class BotController {
                     status = "ON";
                 }
             }
-            Utils.consolePrint("  %s - %s [%s]", reg.getAbbreviation(), botClass.getSimpleName(), status);
+            Utils.consolePrint("  %s (%s) [%s]", botClass.getSimpleName(), reg.getAbbreviation(), status);
         }
     }
 

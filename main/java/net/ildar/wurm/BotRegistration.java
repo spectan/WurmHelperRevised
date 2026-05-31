@@ -24,4 +24,8 @@ public class BotRegistration {
     public String getAbbreviation() {
         return abbreviation;
     }
+
+    public String getName() {
+        return botClass.getSimpleName();
+    }
 }
