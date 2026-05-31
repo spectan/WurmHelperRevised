@@ -164,11 +164,7 @@ public class MinerBot extends Bot {
                 sleep(timeout);
                 continue;
             }
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            Object progressBar = Utils.getField(WurmHelper.hud.getCreationWindow(), "progressBar");
-            float progress = Utils.getField(progressBar, "progress");
-            if ((stamina + damage) > staminaThreshold && progress == 0f) {
+            if (canDoWork(staminaThreshold)) {
                 boolean actionTaken = false;
                 if (pickaxe.getDamage() > 10)
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxe.getId());

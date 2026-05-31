@@ -103,13 +103,14 @@ public class DiggerBot extends Bot{
                     if (!surfaceMiningMode && shovelItem.getDamage() > 10)
                         WurmHelper.hud.sendAction(PlayerAction.REPAIR, shovelItem.getId());
                 }
-                float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-                float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
                 float progress = Utils.getField(progressBar, "progress");
                 stopDiggingIfHeightIsLower(progressBar);
-                if (progress == 0f && slopeMovement.recoverIfNeeded(stamina, damage, staminaThreshold, stepDuration))
+                if (progress == 0f && slopeMovement.recoverIfNeeded(
+                        WurmHelper.hud.getWorld().getPlayer().getStamina(),
+                        WurmHelper.hud.getWorld().getPlayer().getDamage(),
+                        staminaThreshold, stepDuration))
                     continue;
-                if ((stamina + damage) > staminaThreshold && progress == 0f) {
+                if (hasStamina(staminaThreshold) && progress == 0f) {
                     switch (workMode) {
                         case Digging: {
                             boolean actionsMade = doDigActions();
@@ -257,18 +258,21 @@ public class DiggerBot extends Bot{
                 return false;
             int neededClicks = Math.min(h - diggingHeightLimit, clicks);
             if (surfaceMiningMode) {
+                boolean actionSent = false;
                 for (int i = 0; i < neededClicks; i++) {
                     if(isTileRock(tileType)) {
                         WurmHelper.hud.getWorld().getServerConnection().sendAction(pickaxeItem.getId(),
                                 new long[]{Tiles.getTileId(x, y, 0)},
                                 PlayerAction.MINE_FORWARD);
+                        actionSent = true;
                     }else if(isTileDirt(tileType)){
                         WurmHelper.hud.getWorld().getServerConnection().sendAction(shovelItem.getId(),
                                 new long[]{Tiles.getTileId(x, y, 0)},
                                 digAction);
+                        actionSent = true;
                     }
                 }
-                return true;
+                return actionSent;
             } else {
                 for (int i = 0; i < neededClicks; i++) {
                     WurmHelper.hud.getWorld().getServerConnection().sendAction(shovelItem.getId(),

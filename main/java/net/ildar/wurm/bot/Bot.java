@@ -106,6 +106,33 @@ public abstract class Bot extends Thread {
         interrupt();
     }
 
+    /**
+     * Check whether the player has enough effective stamina to perform work.
+     * Effective stamina = stamina + damage.
+     */
+    protected boolean hasStamina(float threshold) {
+        float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
+        float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
+        return (stamina + damage) > threshold;
+    }
+
+    /**
+     * Check whether the creation progress bar is idle (progress == 0).
+     */
+    protected boolean isProgressZero() throws Exception {
+        Object progressBar = Utils.getField(WurmHelper.hud.getCreationWindow(), "progressBar");
+        float progress = Utils.getField(progressBar, "progress");
+        return progress == 0f;
+    }
+
+    /**
+     * Combined stamina + progress check. True when the player has stamina
+     * AND no action is currently in progress.
+     */
+    protected boolean canDoWork(float threshold) throws Exception {
+        return hasStamina(threshold) && isProgressZero();
+    }
+
     private String getAbbreviation() {
         BotRegistration botRegistration = BotController.getInstance().getBotRegistration(this.getClass());
         if (botRegistration == null) return null;

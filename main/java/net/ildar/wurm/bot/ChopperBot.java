@@ -50,10 +50,7 @@ public class ChopperBot extends Bot {
         ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
         while (isActive()) {
             waitOnPause();
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            float progress = Utils.getField(progressBar, "progress");
-            if ((stamina+damage) > staminaThreshold && progress == 0f) {
+            if (canDoWork(staminaThreshold)) {
                 Map<Long, GroundItemCellRenderable> groundItems = Utils.getField(sscc, "groundItems");
                 float x = WurmHelper.hud.getWorld().getPlayerPosX();
                 float y = WurmHelper.hud.getWorld().getPlayerPosY();
