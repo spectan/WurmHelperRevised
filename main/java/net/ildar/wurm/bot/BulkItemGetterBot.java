@@ -22,7 +22,7 @@ public class BulkItemGetterBot extends Bot
 {
     public static final Pattern quantityRegex = Pattern.compile("\\((\\d+)x\\)");
 
-    public static boolean closeBMLWindow;
+    public static volatile boolean closeBMLWindow;
     public static int moveQuantity = -1;
     ArrayList<ItemSpec> specs = new ArrayList<>();
     int selectedSpec = 0;

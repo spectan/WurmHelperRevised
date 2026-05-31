@@ -41,7 +41,7 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
     public static boolean hideStructures = false;
     public static boolean showTileCoords = false;
 
-    public List<WurmComponent> components;
+    public volatile List<WurmComponent> components;
     private Logger logger;
     private Map<ConsoleCommand, ConsoleCommandHandler> consoleCommandHandlers;
     private CommandRegistry commandRegistry;

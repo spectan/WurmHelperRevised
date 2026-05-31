@@ -25,8 +25,8 @@ public class MinerBot extends Bot {
     private float staminaThreshold;
     private InventoryMetaItem pickaxe;
     private long fixedTileId;
-    private static int[] lastTile;
-    private static Set<Pair<Integer, Integer>> errorTiles = new HashSet<>();
+    private int[] lastTile;
+    private Set<Pair<Integer, Integer>> errorTiles = new HashSet<>();
     private static long lastMining;
     private int clicks = 2;
     private boolean shardsCombining;
@@ -521,7 +521,7 @@ public class MinerBot extends Bot {
             Utils.consolePrint("Shards combining is off");
     }
 
-    private static void tileError() {
+    private void tileError() {
         if (lastTile != null)
             errorTiles.add(new Pair<>(lastTile[0], lastTile[1]));
     }
@@ -549,7 +549,7 @@ public class MinerBot extends Bot {
                 || message.contains("on the surface disturbs your operation")
                 || message.contains("This tile is protected by the gods. You can not mine here")
                 || message.contains("A felled tree on the surface disturbs your operation")
-                || message.contains("Lowering the floor further would make the cavern unstable"), MinerBot::tileError);
+                || message.contains("Lowering the floor further would make the cavern unstable"), this::tileError);
         registerEventProcessor(message -> message.contains("You mine "), () -> lastMining = System.currentTimeMillis());
     }
 

@@ -215,8 +215,6 @@ class SlopeAwareMovement {
             float targetY = y + (float)(-distance * Math.cos((double)xRot / 180 * Math.PI));
 
             moveTo(targetX, targetY, steps, duration);
-        } catch (InterruptedException e) {
-            throw e;
         } catch (Exception e) {
             Utils.consolePrint("Unexpected error while moving slope-aware - " + e.getMessage());
             Utils.consolePrint(e.toString());

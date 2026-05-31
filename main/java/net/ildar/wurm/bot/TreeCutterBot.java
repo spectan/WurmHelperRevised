@@ -238,7 +238,11 @@ public class TreeCutterBot extends Bot{
             printInputKeyUsageString(TreeCutterBot.InputKey.c);
             return;
         }
-        setMaxActions(Integer.parseInt(input[0]));
+        try {
+            setMaxActions(Integer.parseInt(input[0]));
+        } catch (NumberFormatException e) {
+            Utils.consolePrint("Invalid max actions value: " + input[0]);
+        }
     }
 
     private void setMaxActions(int num){

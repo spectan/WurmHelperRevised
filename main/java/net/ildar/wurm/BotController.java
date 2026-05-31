@@ -105,6 +105,7 @@ public class BotController {
         } else {
             Utils.consolePrint("Stopped: " + String.join(", ", stopped));
         }
+        gPaused = false;
     }
 
     public synchronized void onBotInterruption(Bot bot) {
