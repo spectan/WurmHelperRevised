@@ -75,7 +75,7 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
         if (registryHandler != null) {
             try {
                 registryHandler.handle(Arrays.copyOfRange(data, 1, data.length));
-                if (!noBlessings && Math.abs(lastBless - System.currentTimeMillis()) > BLESS_TIMEOUT) {
+                if (!noBlessings && System.currentTimeMillis() - lastBless > BLESS_TIMEOUT) {
                     hud.addOnscreenMessage("Ildar blesses you!", 1, 1, 1, (byte)1);
                     lastBless = System.currentTimeMillis();
                 }
@@ -94,7 +94,7 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             return false;
         try {
             consoleCommandHandler.handle(Arrays.copyOfRange(data, 1, data.length));
-            if (!noBlessings && Math.abs(lastBless - System.currentTimeMillis()) > BLESS_TIMEOUT) {
+            if (!noBlessings && System.currentTimeMillis() - lastBless > BLESS_TIMEOUT) {
                 hud.addOnscreenMessage("Ildar blesses you!", 1, 1, 1, (byte)1);
                 lastBless = System.currentTimeMillis();
             }

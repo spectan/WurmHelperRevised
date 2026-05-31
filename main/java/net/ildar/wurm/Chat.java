@@ -34,7 +34,9 @@ public class Chat {
                 if (Boolean.TRUE.equals(mp.filter.apply(message)))
                     mp.callback.run();
             } catch (RuntimeException e) {
-                Utils.consolePrint("Chat message processor failed: " + e);
+                java.io.StringWriter sw = new java.io.StringWriter();
+                e.printStackTrace(new java.io.PrintWriter(sw));
+                Utils.consolePrint("Chat message processor failed:\n%s", sw.toString());
             }
         }
         switch (context) {
@@ -47,8 +49,7 @@ public class Chat {
 
     private static String pruneMulticolorString(List<MulticolorLineSegment> multicolorString) {
         StringBuilder sb = new StringBuilder();
-        for (Iterator<MulticolorLineSegment> iter = multicolorString.iterator(); iter.hasNext(); ) {
-            MulticolorLineSegment segment = iter.next();
+        for (MulticolorLineSegment segment : multicolorString) {
             sb.append(segment.getText());
         }
         return sb.toString();

@@ -670,10 +670,11 @@ public class PathingBot extends Bot
 
 		try
 		{
-			while(isActive())
+			while(isActive()) {
 				// doesn't seem to be a way to donate this thread to the pool
 				// so we just sleep I guess
-				Thread.sleep(Long.MAX_VALUE);
+				Thread.sleep(1000);
+			}
 		}
 		catch(InterruptedException err) {}
 		finally

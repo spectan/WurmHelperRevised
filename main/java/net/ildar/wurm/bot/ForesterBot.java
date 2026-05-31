@@ -93,14 +93,12 @@ public class ForesterBot extends Bot {
         registerEventProcessors();
         while (isActive()) {
             waitOnPause();
-            float stamina = player.getStamina();
-            float damage = player.getDamage();
-            if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 10000 && (stamina + damage) > staminaThreshold)
+            if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 10000 && hasStamina(staminaThreshold))
                 queuedTiles.clear();
-            if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 20000 && (stamina + damage) > staminaThreshold)
+            if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 20000 && hasStamina(staminaThreshold))
                 toHarvest = 0;
 
-            if ((stamina + damage) > staminaThreshold && queuedTiles.size() == 0 && toHarvest == 0) {
+            if (hasStamina(staminaThreshold) && queuedTiles.size() == 0 && toHarvest == 0) {
                 int checkedtiles[][] = Utils.getAreaCoordinates();
                 int tileIndex = -1;
                 Set<Long> usedSprouts = new HashSet<>();

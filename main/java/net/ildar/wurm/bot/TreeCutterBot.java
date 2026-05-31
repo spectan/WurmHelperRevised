@@ -90,13 +90,10 @@ public class TreeCutterBot extends Bot{
             waitOnPause();
             float progress = Utils.getField(progressBar, "progress");
 
-            float stamina = player.getStamina();
-            float damage = player.getDamage();
-
-            if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 10000 && (stamina + damage) > staminaThreshold)
+            if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 10000 && hasStamina(staminaThreshold))
                 queuedTiles.clear();
 
-            if ((stamina + damage) > staminaThreshold && queuedTiles.size() == 0) {
+            if (hasStamina(staminaThreshold) && queuedTiles.size() == 0) {
                 int checkedtiles[][] = Utils.getAreaCoordinates();
                 int tileIndex = -1;
 
