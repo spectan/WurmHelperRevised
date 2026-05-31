@@ -37,7 +37,7 @@ public class DiggerBot extends Bot{
     private boolean surfaceMiningMode;
     private InventoryMetaItem pickaxeItem;
 
-    public static Tiles.Tile[] DirtList = {Tiles.Tile.TILE_DIRT, Tiles.Tile.TILE_GRASS, Tiles.Tile.TILE_SAND, Tiles.Tile.TILE_MYCELIUM, Tiles.Tile.TILE_TUNDRA, Tiles.Tile.TILE_STEPPE};
+    private static final Tiles.Tile[] DIRT_LIST = {Tiles.Tile.TILE_DIRT, Tiles.Tile.TILE_GRASS, Tiles.Tile.TILE_SAND, Tiles.Tile.TILE_MYCELIUM, Tiles.Tile.TILE_TUNDRA, Tiles.Tile.TILE_STEPPE};
 
     public DiggerBot() {
         registerInputHandler(DiggerBot.InputKey.s, this::setStaminaThreshold);
@@ -345,7 +345,7 @@ public class DiggerBot extends Bot{
         return isTileDirt(t);
     }
     private boolean isTileDirt(Tiles.Tile t){
-        return Arrays.asList(DirtList).contains(t);
+        return Arrays.asList(DIRT_LIST).contains(t);
     }
 
     private boolean isCornerInvalid(int x, int y) {

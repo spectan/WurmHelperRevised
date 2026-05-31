@@ -320,6 +320,7 @@ class SlopeAwareMovement {
         public boolean isClimbing() {
             try {
                 Object[] stateButtons = Utils.getField(WurmHelper.hud, "stateButtons");
+                if (stateButtons == null || stateButtons.length == 0) return false;
                 return Utils.getField(stateButtons[0], "enabled");
             } catch (Exception e) {
                 Utils.consolePrint("Unable to read climbing state - " + e.getMessage());

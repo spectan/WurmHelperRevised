@@ -204,7 +204,7 @@ public abstract class Bot extends Thread {
         try {
             int timeout = Integer.parseInt(input[0]);
             setTimeout(timeout);
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             Utils.consolePrint("Wrong timeout value!");
         }
     }

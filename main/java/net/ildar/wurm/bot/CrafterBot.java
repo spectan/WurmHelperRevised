@@ -206,7 +206,7 @@ public class CrafterBot extends Bot {
             int num = Integer.parseInt(input[0]);
             CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
             Utils.setField(creationWindow, "selectedActions", num);
-        } catch (Exception e) {
+        } catch (NumberFormatException | ReflectiveOperationException e) {
             Utils.consolePrint("Can't set an action number");
         }
     }
@@ -220,8 +220,11 @@ public class CrafterBot extends Bot {
             long id = Long.parseLong(input[0]);
             InventoryListComponent ilc = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
             List <InventoryMetaItem> allItems = Utils.getSelectedItems(ilc, true, true);
-            @SuppressWarnings("ConstantConditions")
-            InventoryMetaItem sourceItem = allItems.stream().filter(item->item.getId() == id).findAny().get();
+            InventoryMetaItem sourceItem = allItems.stream().filter(item->item.getId() == id).findAny().orElse(null);
+            if (sourceItem == null) {
+                Utils.consolePrint("Can't find item with id " + id);
+                return;
+            }
             CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
             CreationFrame source = Utils.getField(creationWindow, "source");
             List<InventoryMetaItem> newSourceList = new ArrayList<>();
@@ -255,7 +258,7 @@ public class CrafterBot extends Bot {
             try {
                 float threshold = Float.parseFloat(input[0]);
                 setStaminaThreshold(threshold);
-            } catch (Exception e) {
+            } catch (NumberFormatException e) {
                 Utils.consolePrint("Wrong threshold value!");
             }
         }
