@@ -50,8 +50,8 @@ public class BotController {
             Utils.writeToConsoleInputLine(WurmHelper.ConsoleCommand.bot.name() + " " + data[0] + " ");
             return;
         }
-        if (isInstantiated(botClass)) {
-            Bot botInstance = getInstance(botClass);
+        Bot botInstance = getActiveInstance(botClass);
+        if (botInstance != null) {
             if (botInstance.isInterrupted()) {
                 Utils.consolePrint(botClass.getSimpleName() + " is trying to stop");
             } else if (data[1].equals("on")) {
@@ -66,9 +66,9 @@ public class BotController {
             }
         } else {
             if (data[1].equals("on")) {
-                Bot botInstance = getInstance(botClass);
-                if (botInstance != null) {
-                    botInstance.start();
+                Bot newBot = getInstance(botClass);
+                if (newBot != null) {
+                    newBot.start();
                     Utils.consolePrint(botClass.getSimpleName() + " is on!");
                     printBotDescription(botClass);
                 } else {
@@ -87,16 +87,24 @@ public class BotController {
 
     private synchronized void deactivateAllBots() {
         List<Bot> bots = new ArrayList<>(activeBots); // deactivation mutates activeBots
+        List<String> stopped = new ArrayList<>();
         bots.forEach(bot -> {
-            if((bot instanceof RMIBot))
+            if ((bot instanceof RMIBot))
                 Utils.consolePrint(
                     "Note: not shutting down %s, use \"%s off\" directly to stop it",
                     RMIBot.class.getSimpleName(),
                     getBotRegistration(RMIBot.class).getAbbreviation()
                 );
-            else
+            else {
                 bot.deactivate();
+                stopped.add(bot.getClass().getSimpleName());
+            }
         });
+        if (stopped.isEmpty()) {
+            Utils.consolePrint("No bots were running.");
+        } else {
+            Utils.consolePrint("Stopped: " + String.join(", ", stopped));
+        }
     }
 
     public synchronized void onBotInterruption(Bot bot) {
@@ -130,12 +138,13 @@ public class BotController {
         try {
             Optional<Bot> optionalBot = activeBots.stream().filter(bot -> bot.getClass().equals(botClass)).findAny();
             if (!optionalBot.isPresent()) {
-                instance = botClass.newInstance();
+                instance = botClass.getDeclaredConstructor().newInstance();
                 activeBots.add(instance);
             } else
                 //noinspection unchecked
                 instance = (T) optionalBot.get();
-        } catch (InstantiationException | IllegalAccessException | NoSuchElementException | NullPointerException e) {
+        } catch (ReflectiveOperationException e) {
+            Utils.consolePrint("Failed to instantiate bot %s: %s", botClass.getName(), e.getMessage());
             e.printStackTrace();
         }
         return instance;
@@ -148,14 +157,17 @@ public class BotController {
             description = botRegistration.getDescription();
         Utils.consolePrint("=== " + botClass.getSimpleName() + " ===");
         Utils.consolePrint(description);
-        if (isInstantiated(botClass)) {
-            Bot botInstance = getInstance(botClass);
+        Bot botInstance = getActiveInstance(botClass);
+        if (botInstance != null) {
+            String status = botInstance.getPaused() ? " (paused)" : "";
+            Utils.consolePrint("Status: ON%s", status);
             Utils.consolePrint(botInstance.getUsageString());
         } else {
             String abbreviation = "*";
             if (botRegistration != null)
                 abbreviation = botRegistration.getAbbreviation();
-            Utils.consolePrint("Type \"" + WurmHelper.ConsoleCommand.bot.name() + " " + abbreviation + " " + "on\" to activate the bot");
+            Utils.consolePrint("Status: OFF");
+            Utils.consolePrint("Type \"bot " + abbreviation + " " + "on\" to activate the bot");
         }
     }
 
@@ -167,11 +179,40 @@ public class BotController {
         return result.toString();
     }
 
-    private Class<? extends Bot> getBotClass(String abbreviation) {
+    Class<? extends Bot> getBotClass(String abbreviation) {
         for (BotRegistration botRegistration : botList)
             if (botRegistration.getAbbreviation().equals(abbreviation))
                 return botRegistration.getBotClass();
         return null;
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    public synchronized <T extends Bot> T getActiveInstance(Class<T> botClass) {
+        Optional<Bot> optionalBot = activeBots.stream()
+                .filter(bot -> bot.getClass().equals(botClass))
+                .findAny();
+        return optionalBot.map(bot -> (T) bot).orElse(null);
+    }
+
+    public void printBotList() {
+        if (botList.isEmpty()) {
+            Utils.consolePrint("No bots registered.");
+            return;
+        }
+        Utils.consolePrint("Available bots:");
+        for (BotRegistration reg : botList) {
+            Class<? extends Bot> botClass = reg.getBotClass();
+            String status = "OFF";
+            if (isInstantiated(botClass)) {
+                Bot bot = getActiveInstance(botClass);
+                if (bot != null && bot.getPaused()) {
+                    status = "ON, paused";
+                } else {
+                    status = "ON";
+                }
+            }
+            Utils.consolePrint("  %s - %s [%s]", reg.getAbbreviation(), botClass.getSimpleName(), status);
+        }
     }
 
     public BotRegistration getBotRegistration(Class<? extends Bot> botClass) {

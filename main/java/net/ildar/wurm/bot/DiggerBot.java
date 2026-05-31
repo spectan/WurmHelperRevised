@@ -190,6 +190,7 @@ public class DiggerBot extends Bot{
             }
         } finally {
             slopeMovement.stopClimbing();
+            slopeMovement.forceClimbingOff();
         }
     }
 
@@ -393,6 +394,7 @@ public class DiggerBot extends Bot{
             pickaxeItem = Utils.locateToolItem("pickaxe");
             if (pickaxeItem == null) {
                 Utils.consolePrint("You don't have a pickaxe");
+                return;
             }
             surfaceMiningMode = true;
             Utils.consolePrint("Surface mining is on!");

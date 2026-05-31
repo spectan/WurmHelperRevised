@@ -163,6 +163,33 @@ public class SlopeAwareMovementTest {
     }
 
     @Test
+    public void forceClimbingOffTogglesOffEvenWhenNotRecovering() {
+        FakeClimbControls climbControls = new FakeClimbControls(true);
+        SlopeAwareMovement movement = new SlopeAwareMovement(climbControls);
+
+        // climbing is on but recovery state is inactive (edge case)
+        movement.forceClimbingOff();
+
+        assertFalse(climbControls.climbing);
+        assertEquals(1, climbControls.toggles);
+        assertFalse(movement.isRecovering());
+    }
+
+    @Test
+    public void forceClimbingOffWorksWhenRecovering() {
+        FakeClimbControls climbControls = new FakeClimbControls(true);
+        SlopeAwareMovement movement = new SlopeAwareMovement(climbControls);
+
+        movement.markRecovery(10f, 20f);
+        assertTrue(movement.isRecovering());
+
+        movement.forceClimbingOff();
+
+        assertFalse(climbControls.climbing);
+        assertFalse(movement.isRecovering());
+    }
+
+    @Test
     public void prepareForRecoveryCancelsQueuedActionsBeforeMovingAway() {
         FakeActionQueueControls actionQueueControls = new FakeActionQueueControls();
         SlopeAwareMovement movement = new SlopeAwareMovement(new FakeClimbControls(true), actionQueueControls);

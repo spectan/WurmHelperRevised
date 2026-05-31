@@ -42,10 +42,18 @@ public abstract class Bot extends Thread {
             Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
             Utils.consolePrint(e.toString());
             e.printStackTrace();
+        } finally {
+            try {
+                for (int i = 0; i < Utils.getMaxActionNumber(); i++) {
+                    WurmHelper.hud.sendAction(PlayerAction.STOP, 0);
+                }
+            } catch (Exception ignored) {
+                // hud may be unavailable during early crash
+            }
+            unregisterMessageProcessors();
+            BotController.getInstance().onBotInterruption(this);
+            Utils.consolePrint(this.getClass().getSimpleName() + " was stopped");
         }
-        unregisterMessageProcessors();
-        BotController.getInstance().onBotInterruption(this);
-        Utils.consolePrint(this.getClass().getSimpleName() + " was stopped");
     }
 
     /**
@@ -107,9 +115,7 @@ public abstract class Bot extends Thread {
     public String getUsageString() {
         StringBuilder output = new StringBuilder();
         output
-                .append("Usage: ")
-                .append(WurmHelper.ConsoleCommand.bot.name())
-                .append(" ")
+                .append("Usage: bot ")
                 .append(getAbbreviation())
                 .append(" {");
         boolean firstInputKeyString = true;
@@ -126,7 +132,7 @@ public abstract class Bot extends Thread {
     }
 
     void printInputKeyUsageString(InputKey inputKey) {
-        Utils.consolePrint("Usage: " + WurmHelper.ConsoleCommand.bot.name() + " " + getAbbreviation() + " " + inputKey.getName() + " " + inputKey.getUsage());
+        Utils.consolePrint("Usage: bot " + getAbbreviation() + " " + inputKey.getName() + " " + inputKey.getUsage());
     }
 
     /**
@@ -135,7 +141,7 @@ public abstract class Bot extends Thread {
      * @param data console input
      */
     public void handleInput(String[] data) {
-        if (data == null || data.length == 0)
+        if (data == null || data.length == 0 || data[0] == null)
             return;
         InputHandler inputHandler = getInputHandler(data[0]);
         if (inputHandler == null) {

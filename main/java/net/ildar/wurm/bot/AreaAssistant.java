@@ -60,7 +60,11 @@ class AreaAssistant {
             movedAhead = 0;
         } else
             stopAreaTour();
-        Utils.stabilizePlayer();
+        try {
+            Utils.stabilizePlayer();
+        } catch (Exception e) {
+            Utils.consolePrint("AreaAssistant: stabilizePlayer failed - " + e.getMessage());
+        }
     }
 
     private void turnPlayer(){

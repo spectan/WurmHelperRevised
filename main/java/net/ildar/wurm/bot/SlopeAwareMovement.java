@@ -220,6 +220,7 @@ class SlopeAwareMovement {
         } catch (Exception e) {
             Utils.consolePrint("Unexpected error while moving slope-aware - " + e.getMessage());
             Utils.consolePrint(e.toString());
+            throw new RuntimeException("Slope-aware movement failed", e);
         }
     }
 
@@ -260,8 +261,13 @@ class SlopeAwareMovement {
             Utils.movePlayerBySteps(recoveryState.getRecoveryX(), recoveryState.getRecoveryY(), 5, stepDuration);
             setClimbing(false);
             waitForRecovery();
-            setClimbing(true);
-            Utils.movePlayerBySteps(workX, workY, 5, stepDuration);
+            try {
+                setClimbing(true);
+                Utils.movePlayerBySteps(workX, workY, 5, stepDuration);
+            } catch (Exception e) {
+                setClimbing(false); // emergency: never leave climb on
+                throw e;
+            }
         } catch (InterruptedException e) {
             stopClimbing();
             throw e;
@@ -283,14 +289,25 @@ class SlopeAwareMovement {
         recoveryState.clear();
     }
 
+    void forceClimbingOff() {
+        setClimbing(false);
+        recoveryState.clear();
+    }
+
     boolean hasRecovered(float stamina, float damage) {
         return stamina + damage >= RECOVERY_STAMINA;
     }
 
     private void waitForRecovery() throws InterruptedException {
+        int maxIterations = 120; // 60 second safety cap
+        int iteration = 0;
         while (!hasRecovered(
                 WurmHelper.hud.getWorld().getPlayer().getStamina(),
                 WurmHelper.hud.getWorld().getPlayer().getDamage())) {
+            if (++iteration > maxIterations) {
+                Utils.consolePrint("SlopeAwareMovement: stamina did not recover within 60 seconds, aborting recovery");
+                throw new RuntimeException("Stamina recovery timeout");
+            }
             Thread.sleep(500);
         }
     }
