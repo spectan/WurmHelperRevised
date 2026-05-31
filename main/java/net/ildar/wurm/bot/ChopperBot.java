@@ -17,7 +17,7 @@ import java.util.Map;
         "Automatically chops felled trees near player",
         abbreviation = "ch")
 public class ChopperBot extends Bot {
-    private static float distance = 4;
+    private float distance = 4;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
     private float staminaThreshold;
     private int clicks;

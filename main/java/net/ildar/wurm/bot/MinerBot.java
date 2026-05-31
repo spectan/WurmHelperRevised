@@ -27,7 +27,7 @@ public class MinerBot extends Bot {
     private long fixedTileId;
     private int[] lastTile;
     private Set<Pair<Integer, Integer>> errorTiles = new HashSet<>();
-    private static long lastMining;
+    private long lastMining;
     private int clicks = 2;
     private boolean shardsCombining;
     private String shards = "rock shards";

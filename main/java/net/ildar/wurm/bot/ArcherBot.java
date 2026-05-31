@@ -12,6 +12,7 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
+import java.util.ConcurrentModificationException;
 import java.util.Map;
 
 @BotInfo(description =
@@ -20,7 +21,7 @@ import java.util.Map;
         "Deactivates on target death.",
         abbreviation = "ar")
 public class ArcherBot extends Bot {
-    private static boolean stringBreaks;
+    private boolean stringBreaks;
 
     private float staminaThreshold;
     private InventoryMetaItem bow;
@@ -82,9 +83,14 @@ public class ArcherBot extends Bot {
                 ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
                 Map<Long, CreatureCellRenderable> creatures = Utils.getField(sscc, "creatures");
                 boolean mobAlive = false;
-                if (creatures!=null && !isArcheryTarget)
-                    for(Map.Entry<Long, CreatureCellRenderable> entry:creatures.entrySet())
-                        if (entry.getValue().getId() == mobId) mobAlive = true;
+                if (creatures!=null && !isArcheryTarget) {
+                    try {
+                        for(Map.Entry<Long, CreatureCellRenderable> entry:creatures.entrySet())
+                            if (entry.getValue().getId() == mobId) mobAlive = true;
+                    } catch (ConcurrentModificationException e) {
+                        mobAlive = true;
+                    }
+                }
                 if (!mobAlive && !isArcheryTarget){
                     Utils.consolePrint("Mob dead or too far away!");
                     Utils.showOnScreenMessage("Deactivating archerbot!");

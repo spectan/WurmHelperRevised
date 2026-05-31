@@ -49,7 +49,7 @@ public class ForesterBot extends Bot {
     private boolean planting;
     private boolean shriveledTreesChopping;
     private boolean deforesting;
-    private static int toHarvest;
+    private int toHarvest;
 
     public ForesterBot() {
         registerInputHandler(ForesterBot.InputKey.s, this::setStaminaThreshold);
