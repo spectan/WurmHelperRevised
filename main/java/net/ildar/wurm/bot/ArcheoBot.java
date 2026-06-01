@@ -339,17 +339,19 @@ public class ArcheoBot extends Bot {
 	}
 
 	enum InputKey implements Bot.InputKey {
-		iv("Toggle investigating", ""),
-		id("Toggle identifying", ""),
-		co("Toggle fragment combining", ""),
-		sh("Toggle investigating with shovel", ""),
-		at("Add target inventory to identify fragments in", ""),
-		ct("Clear inventories to identify fragments in", ""),
+		iv("Investigating", "Toggle investigating", ""),
+		id("Identifying", "Toggle identifying", ""),
+		co("Fragment Combining", "Toggle fragment combining", ""),
+		sh("Shear", "Toggle investigating with shovel", ""),
+		at("Add Target", "Add target inventory to identify fragments in", ""),
+		ct("Combine Targets", "Clear inventories to identify fragments in", ""),
 		;
 
-		public String description;
+  public String fullName;
+  public String description;
         public String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -359,6 +361,10 @@ public class ArcheoBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

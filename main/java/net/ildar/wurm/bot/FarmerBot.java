@@ -277,20 +277,22 @@ public class FarmerBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        r("Toggle the tool repairing", ""),
-        ft("Toggle the farm tending", ""),
-        h("Toggle the harvesting", ""),
-        p("Toggle the planting. Provide the name of the seeds to plant", "seeds_name"),
-        c("Toggle the dirt cultivation", ""),
-        and("Add new item name to drop on the ground", "itemName"),
-        d("Toggle the dropping of harvested items. Add item names to drop by \"" + and.name() + "\" key", ""),
-        dl("Set the drop limit, configured number of harvests won't be dropped", "number");
+        r("Toggle Rares", "Toggle the tool repairing", ""),
+        ft("Forage Type", "Toggle the farm tending", ""),
+        h("Harvest Mode", "Toggle the harvesting", ""),
+        p("Path To", "Toggle the planting. Provide the name of the seeds to plant", "seeds_name"),
+        c("Clicks", "Toggle the dirt cultivation", ""),
+        and("Add Drop Item", "Add new item name to drop on the ground", "itemName"),
+        d("Distance", "Toggle the dropping of harvested items. Add item names to drop by \"" + and.name() + "\" key", ""),
+        dl("Drop Limit", "Set the drop limit, configured number of harvests won't be dropped", "number");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -300,6 +302,10 @@ public class FarmerBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

@@ -1396,52 +1396,54 @@ public class AssistantBot extends Bot {
     }
     
     private enum InputKey implements Bot.InputKey {
-        w("Toggle automatic drinking of the liquid the user pointing at", ""),
-        wid("Toggle automatic drinking of liquid with provided id", "id"),
-        eat("Toggle automatic eating of food the user is pointing at", ""),
-        ls("Show the list of available spells for autocasting", ""),
-        c("Toggle automatic casts of spells(if player has enough favor). Provide an optional spell abbreviation to change the default Dispel spell. " +
+        w("Drinking", "Toggle automatic drinking of the liquid the user pointing at", ""),
+        wid("Drink By ID", "Toggle automatic drinking of liquid with provided id", "id"),
+        eat("Eating", "Toggle automatic eating of food the user is pointing at", ""),
+        ls("List Skills", "Show the list of available spells for autocasting", ""),
+        c("Clicks", "Toggle automatic casts of spells(if player has enough favor). Provide an optional spell abbreviation to change the default Dispel spell. " +
                 "You can see the list of available spell with \"" + ls.name() + "\" key", "[spell_abbreviation]"),
-        p("Toggle automatic praying. The timeout between prayers can be configured separately.", ""),
-        pt("Change the timeout between prayers", "timeout(in milliseconds)"),
-        pid("Toggle automatic praying on altar with provided id", "id"),
-        pis("Toggle automatic praying on selected inventory item (e.g. prayer beads). Select the item in your inventory first.", ""),
-        ps("Set stamina threshold for praying.", "float"),
-        pc("Set number of prayers to be queued. If 0 (default) then max per mind logic.", "integer"),
-        s("Toggle automatic sacrificing. The timeout between sacrifices can be configured separately.", ""),
-        st("Change the timeout between sacrifices", "timeout(in milliseconds)"),
-        sid("Toggle automatic sacrifices at altar with provided id", "id"),
-        kb("Toggle automatic burning of kindlings in player's inventory. " +
+        p("Path To", "Toggle automatic praying. The timeout between prayers can be configured separately.", ""),
+        pt("Path To Tile", "Change the timeout between prayers", "timeout(in milliseconds)"),
+        pid("Pray By Altar ID", "Toggle automatic praying on altar with provided id", "id"),
+        pis("Pray By Item Select", "Toggle automatic praying on selected inventory item (e.g. prayer beads). Select the item in your inventory first.", ""),
+        ps("Prayer Stamina", "Set stamina threshold for praying.", "float"),
+        pc("Prayer Count", "Set number of prayers to be queued. If 0 (default) then max per mind logic.", "integer"),
+        s("Stamina", "Toggle automatic sacrificing. The timeout between sacrifices can be configured separately.", ""),
+        st("Set Target", "Change the timeout between sacrifices", "timeout(in milliseconds)"),
+        sid("Sacrifice By ID", "Toggle automatic sacrifices at altar with provided id", "id"),
+        kb("Kindling Burn", "Toggle automatic burning of kindlings in player's inventory. " +
                 AssistantBot.class.getSimpleName() + " will combine the kindlings and burn them using selected forge. " +
                 "The timeout of burns can be configured separately", ""),
-        kbt("Change the timeout between kindling burns", "timeout(in milliseconds)"),
-        kbid("Toggle automatic kindling burns at forge with provided id", "id"),
-        cwov("Toggle automatic casts of Wisdom of Vynora spell", ""),
-        cleanup("Toggle automatic trash cleanings. The timeout between cleanings can be configured separately", ""),
-        cleanupt("Change the timeout between trash cleanings", "timeout(in milliseconds)"),
-        cleanupid("Toggle automatic cleaning of items inside trash bin with provided id", "id"),
-        l("Toggle automatic lockpicking. The target chest should be beneath the user's mouse", ""),
-        lt("Change the timeout between lockpickings", "timeout(in milliseconds)"),
-        lid("Toggle automatic lockpicking of target chest with provided id", "id"),
-        b("Toggle butchering of corpses on the ground", ""),
-        bu("Toggle burying of corpses on the ground", ""),
-        bua("Toggle burying corpses with normal bury action vs bury all", ""),
-        bud("Set delay before burying corpses (to allow other bots time to move items)", "msecs"),
-        bub("Add keyword to corpse blacklist -- e.g. to prevent bot burying Rift creatures which is set by default", "keyword"),
-        bubc("Clear corpse blacklist", ""),
-        groom("Toggle grooming of creatures", ""),
-        v("Toggle verbose mode. In verbose mode the " + AssistantBot.class.getSimpleName() + " will output additional info to the console", ""),
-        pave("Paving helper that activates new materials", "item name"),
-        pavec("Pave command for tile corners", "item name"),
-        paveclear("Forget which items have already been used for paving", ""),
-        notarget("Automatically clear targeted creature if it is too far away", ""),
-        lumpheating("Toggle automatic lump heating by swapping lumps into/out of hovered container", ""),
-        lumpcombine("Toggle automatic combining of (hot) lumps", ""),
+        kbt("Kindling Timeout", "Change the timeout between kindling burns", "timeout(in milliseconds)"),
+        kbid("Kindling By Forge ID", "Toggle automatic kindling burns at forge with provided id", "id"),
+        cwov("Wisdom of Vynora", "Toggle automatic casts of Wisdom of Vynora spell", ""),
+        cleanup("Trash Cleaning", "Toggle automatic trash cleanings. The timeout between cleanings can be configured separately", ""),
+        cleanupt("Trash Timeout", "Change the timeout between trash cleanings", "timeout(in milliseconds)"),
+        cleanupid("Trash By ID", "Toggle automatic cleaning of items inside trash bin with provided id", "id"),
+        l("Levelling", "Toggle automatic lockpicking. The target chest should be beneath the user's mouse", ""),
+        lt("Lockpick Timeout", "Change the timeout between lockpickings", "timeout(in milliseconds)"),
+        lid("Lockpick By ID", "Toggle automatic lockpicking of target chest with provided id", "id"),
+        b("Botanizing", "Toggle butchering of corpses on the ground", ""),
+        bu("Burying", "Toggle burying of corpses on the ground", ""),
+        bua("Bury All", "Toggle burying corpses with normal bury action vs bury all", ""),
+        bud("Bury Delay", "Set delay before burying corpses (to allow other bots time to move items)", "msecs"),
+        bub("Corpse Blacklist", "Add keyword to corpse blacklist -- e.g. to prevent bot burying Rift creatures which is set by default", "keyword"),
+        bubc("Clear Blacklist", "Clear corpse blacklist", ""),
+        groom("Grooming", "Toggle grooming of creatures", ""),
+        v("Verbose", "Toggle verbose mode. In verbose mode the " + AssistantBot.class.getSimpleName() + " will output additional info to the console", ""),
+        pave("Paving", "Paving helper that activates new materials", "item name"),
+        pavec("Paving Corners", "Pave command for tile corners", "item name"),
+        paveclear("Clear Paving", "Forget which items have already been used for paving", ""),
+        notarget("No Target", "Automatically clear targeted creature if it is too far away", ""),
+        lumpheating("Lump Heating", "Toggle automatic lump heating by swapping lumps into/out of hovered container", ""),
+        lumpcombine("Lump Combining", "Toggle automatic combining of (hot) lumps", ""),
         ;
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -1451,6 +1453,10 @@ public class AssistantBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

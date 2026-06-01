@@ -203,17 +203,19 @@ public class SellerBot extends Bot
     
     enum Inputs implements InputKey
     {
-        a("Add item to be sold", "name"),
-        ca("Clear list of items to sell", ""),
-        b("Add blacklisted item name", "name"),
-        cb("Clear blacklisted item names", ""),
-        st("Set token to sell to", ""),
-        sc("Set max queued sell actions", "number"),
-        gems("Set up bot to sell common (non-star) gems", "");
+        a("Area Mode", "Add item to be sold", "name"),
+        ca("Cut All Sprouts", "Clear list of items to sell", ""),
+        b("Botanizing", "Add blacklisted item name", "name"),
+        cb("Blacklisted Item", "Clear blacklisted item names", ""),
+        st("Set Target", "Set token to sell to", ""),
+        sc("Shovel Check", "Set max queued sell actions", "number"),
+        gems("Gems", "Set up bot to sell common (non-star) gems", "");
         
+        String fullName;
         String description;
         String usage;
-        Inputs(String description, String usage) {
+        Inputs(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -223,6 +225,10 @@ public class SellerBot extends Bot
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

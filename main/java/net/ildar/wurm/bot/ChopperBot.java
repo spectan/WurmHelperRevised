@@ -145,16 +145,18 @@ public class ChopperBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        d("Set the distance the bot should look around player in search for a felled tree",
+        d("Distance", "Set the distance the bot should look around player in search for a felled tree",
                 "distance(in meters)"),
-        c("Set the amount of chops the bot will do each time", "c(integer value)"),
-        tool("Set the chopping tool from selected inventory item.", "tool");
+        c("Clicks", "Set the amount of chops the bot will do each time", "c(integer value)"),
+        tool("Tool", "Set the chopping tool from selected inventory item.", "tool");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -164,6 +166,10 @@ public class ChopperBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

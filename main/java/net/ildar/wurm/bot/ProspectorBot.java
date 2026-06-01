@@ -109,14 +109,16 @@ public class ProspectorBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        c("Change the amount of clicks bot will do each time", "n(integer value)"),
-        tool("Set the prospecting tool from selected inventory item.", "tool");
+        c("Clicks", "Change the amount of clicks bot will do each time", "n(integer value)"),
+        tool("Tool", "Set the prospecting tool from selected inventory item.", "tool");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -126,6 +128,10 @@ public class ProspectorBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

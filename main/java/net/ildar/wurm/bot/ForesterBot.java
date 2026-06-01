@@ -499,26 +499,28 @@ public class ForesterBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        ca("Toggle the cutting of sprouts from all trees", ""),
-        cs("Toggle the cutting of shriveled trees", ""),
-        df("Toggle the cutting of all trees (deforestation)", ""),
-        h("Toggle the harvesting", ""),
-        p("Toggle the planting", ""),
-        scn("Set the new name for containers to put sprouts/harvest", "container_name"),
-        na("Set the number of actions bot will do each time", "number"),
-        aim("Add new item name for moving into containers", "item_name"),
-        atw("Add whitelisted tree type", "tree_name"),
-        ctw("Clear whitelisted tree types", ""),
-        atb("Add blacklisted tree type", "tree_name"),
-        ctb("Clear blacklisted tree types", ""),
-        asb("Add blacklisted tree type for sprout picking", "tree_name"),
-        csb("Clear blacklisted tree types for sprout picking", "");
+        ca("Cut All Sprouts", "Toggle the cutting of sprouts from all trees", ""),
+        cs("Clear Sources", "Toggle the cutting of shriveled trees", ""),
+        df("Deforestation", "Toggle the cutting of all trees (deforestation)", ""),
+        h("Harvest Mode", "Toggle the harvesting", ""),
+        p("Path To", "Toggle the planting", ""),
+        scn("Container Name", "Set the new name for containers to put sprouts/harvest", "container_name"),
+        na("Max Actions", "Set the number of actions bot will do each time", "number"),
+        aim("Add Move Item", "Add new item name for moving into containers", "item_name"),
+        atw("Add Tree Whitelist", "Add whitelisted tree type", "tree_name"),
+        ctw("Clear Tree Whitelist", "Clear whitelisted tree types", ""),
+        atb("Add Tree Blacklist", "Add blacklisted tree type", "tree_name"),
+        ctb("Clear Tree Blacklist", "Clear blacklisted tree types", ""),
+        asb("Add Sprout Blacklist", "Add blacklisted tree type for sprout picking", "tree_name"),
+        csb("Clear Sprout Blacklist", "Clear blacklisted tree types for sprout picking", "");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -528,6 +530,10 @@ public class ForesterBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

@@ -813,20 +813,22 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
 
     private enum Inputs implements Bot.InputKey
     {
-        s("Toggle server mode, allowing sending commands to other characters", ""),
-        c("Toggle client mode, allowing remote control of this character", ""),
+        s("Stamina", "Toggle server mode, allowing sending commands to other characters", ""),
+        c("Clicks", "Toggle client mode, allowing remote control of this character", ""),
         
-        sl("Server: list known clients", ""),
-        slr("Server: refresh list of clients", ""),
-        sr("Server: dispatch commands", "..."),
+        sl("Server: List", "Server: list known clients", ""),
+        slr("Server: Refresh", "Server: refresh list of clients", ""),
+        sr("Server: Dispatch", "Server: dispatch commands", "..."),
         
-        regaddr("Set hostname and port of RMI registry", "host:port"),
+        regaddr("Regaddr", "Set hostname and port of RMI registry", "host:port"),
         ;
         
         
+        String fullName;
         String description;
         String usage;
-        Inputs(String description, String usage) {
+        Inputs(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -836,6 +838,10 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

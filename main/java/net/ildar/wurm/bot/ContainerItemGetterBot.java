@@ -178,16 +178,18 @@ public class ContainerItemGetterBot extends Bot
     
     enum Inputs implements InputKey
     {
-        a("Add item to be pulled", "name"),
-        c("Clear list of items to pull", ""),
-        ss("Add source container to pull from", ""),
-        cs("Clear list of source containers", ""),
-        v("Toggle verbose messages", ""),
+        a("Area Mode", "Add item to be pulled", "name"),
+        c("Clicks", "Clear list of items to pull", ""),
+        ss("Add Source", "Add source container to pull from", ""),
+        cs("Clear Sources", "Clear list of source containers", ""),
+        v("Verbose", "Toggle verbose messages", ""),
         ;
         
+        String fullName;
         String description;
         String usage;
-        Inputs(String description, String usage) {
+        Inputs(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -197,6 +199,10 @@ public class ContainerItemGetterBot extends Bot
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

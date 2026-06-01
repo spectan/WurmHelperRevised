@@ -514,27 +514,29 @@ public class ForagerBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        g("Toggle the grass gathering", ""),
-        f("Toggle the foraging", ""),
-        ftl("Show the list of foraging types", ""),
-        ft("Set the foraging type", "type"),
-        b("Toggle the botanizing", ""),
-        btl("Show the list of botanizing types", ""),
-        bt("Set the botanizing type", "type"),
-        d("Toggle the dropping of collected items to the ground", ""),
-        dwf("Change drop mode between drop when full inventory or drop after every action", ""),
-        dfa("Add item to drop filter. Drop filter items won't be dropped", "name(string)"),
-        dfc("Clear filter", ""),
-        v("Toggle the verbose mode. " +
+        g("Groom", "Toggle the grass gathering", ""),
+        f("Follow", "Toggle the foraging", ""),
+        ftl("Forage Types", "Show the list of foraging types", ""),
+        ft("Forage Type", "Set the foraging type", "type"),
+        b("Botanizing", "Toggle the botanizing", ""),
+        btl("Botanize Types", "Show the list of botanizing types", ""),
+        bt("Botanize Type", "Set the botanizing type", "type"),
+        d("Distance", "Toggle the dropping of collected items to the ground", ""),
+        dwf("Drop When Full", "Change drop mode between drop when full inventory or drop after every action", ""),
+        dfa("Add Drop Filter", "Add item to drop filter. Drop filter items won't be dropped", "name(string)"),
+        dfc("Clear Filter", "Clear filter", ""),
+        v("Verbose", "Toggle the verbose mode. " +
                 "Additional information will be shown in console during the work of the bot in verbose mode", ""),
-        scn("Set the new name for containers to put sprouts/harvest", "container_name"),
-        na("Set the number of actions bot will do each time", "number");
+        scn("Container Name", "Set the new name for containers to put sprouts/harvest", "container_name"),
+        na("Max Actions", "Set the number of actions bot will do each time", "number");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -544,6 +546,10 @@ public class ForagerBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

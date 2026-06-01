@@ -375,30 +375,32 @@ public class CrafterBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        r("Toggle the source item repairing(on the left side of crafting window). " +
+        r("Toggle Rares", "Toggle the source item repairing(on the left side of crafting window). " +
                 "Usually it is an instrument. When the source item gets 10% damage player will repair it automatically", ""),
-        st("Set the target item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the target slot(on the right side of crafting window)",
+        st("Set Target", "Set the target item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the target slot(on the right side of crafting window)",
                 "target_name"),
-        stxy("Set the target item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the target item slot(on the right side of crafting window)", ""),
-        ss("Set the source item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the source slot(on the left side of crafting window)",
+        stxy("Target XY", "Set the target item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the target item slot(on the right side of crafting window)", ""),
+        ss("Add Source", "Set the source item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the source slot(on the left side of crafting window)",
                 "source_name"),
-        ssxy("Set the source item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the source item slot(on the left side of crafting window)", ""),
-        nosort("Sorting of source and target items is enabled by default. This key toggles sorting on and off", ""),
-        cs("Combine source items(on the left side of crafting window)", ""),
-        ct("Combine target items(on the right side of crafting window)", ""),
-        ctimeout("Set the timeout for item combining", "timeout(in milliseconds)"),
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        ssxy("Source XY", "Set the source item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the source item slot(on the left side of crafting window)", ""),
+        nosort("Toggle Sorting", "Sorting of source and target items is enabled by default. This key toggles sorting on and off", ""),
+        cs("Clear Sources", "Combine source items(on the left side of crafting window)", ""),
+        ct("Combine Targets", "Combine target items(on the right side of crafting window)", ""),
+        ctimeout("Combine Timeout", "Set the timeout for item combining", "timeout(in milliseconds)"),
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        u("Toggle the special mode in which " + CrafterBot.class.getSimpleName() + " will place an item to the target item slot which is at the top of \"Needed items\" list", ""),
-        ssid("Set an item with provided id to the source slot(on the left side of crafting window)", "id"),
-        an("Set an action number. The number of crafting operations the player will do on each click on continue/create button", "number"),
-        noan("Toggles the check for action queue state before the start of each crafting operation. " +
+        u("Unfollow", "Toggle the special mode in which " + CrafterBot.class.getSimpleName() + " will place an item to the target item slot which is at the top of \"Needed items\" list", ""),
+        ssid("Source By ID", "Set an item with provided id to the source slot(on the left side of crafting window)", "id"),
+        an("Action Number", "Set an action number. The number of crafting operations the player will do on each click on continue/create button", "number"),
+        noan("Toggle Action Check", "Toggles the check for action queue state before the start of each crafting operation. " +
                 "By default " + CrafterBot.class.getSimpleName() + " will check action queue and start crafting operations only when it is empty", ""),
-        s1s("Toggles the setting of single item to source slot of crafting window", "");
+        s1s("Single Source", "Toggles the setting of single item to source slot of crafting window", "");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -408,6 +410,10 @@ public class CrafterBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

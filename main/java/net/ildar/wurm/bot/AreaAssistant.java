@@ -178,12 +178,14 @@ class AreaAssistant {
     }
 
     private enum InputKey implements Bot.InputKey {
-        area("Toggle the area processing mode. ", "tiles_ahead tiles_to_the_right"),
-        area_speed("Set the speed of moving for area mode. Default value is 1 second per tile.", "speed(float value)");
+        area("Area Mode", "Toggle the area processing mode. ", "tiles_ahead tiles_to_the_right"),
+        area_speed("Area Speed", "Set the speed of moving for area mode. Default value is 1 second per tile.", "speed(float value)");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -191,6 +193,11 @@ class AreaAssistant {
         @Override
         public String getName() {
             return name();
+        }
+
+        @Override
+        public String getFullName() {
+            return fullName;
         }
 
         @Override

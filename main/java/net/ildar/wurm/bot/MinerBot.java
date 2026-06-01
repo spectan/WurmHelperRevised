@@ -701,32 +701,34 @@ public class MinerBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        c("Change the amount of clicks bot will do each time", "n(integer value)"),
-        sc("Toggle the combining of shards lying around the player in piles", ""),
-        scn("Change the name of shards to combine. See \"" + sc.name() + "\" key", "name"),
-        fixed("Set the fixed tile mining mode. Bot will remember selected tile and mine it", ""),
-        st("Set the mining mode in which bot will mine currently selected tile", ""),
-        area("Set the area mining mode in which bot will mine 3x3 area around player", ""),
-        ft("Set the mining mode in which bot will mine a tile in front of a player", ""),
-        o("Toggle the mining of ore tiles. Enabled by default", ""),
-        m("Toggle the automatic moving forward when bot have no work", ""),
-        sm("Toggle the smelting of ores in selected pile", ""),
-        at("Add the target(under the mouse cursor) for lumps with provided minimum quality", "min_quality(0-100)"),
-        ati("Add the target inventory(under the mouse cursor) for lumps with provided minimum quality", "min_quality(0-100)"),
-        atid("Add the target with provided id for lumps with provided minimum quality", "id min_quality(0-100)"),
-        sp("Set a pile(under the mouse cursor) for smelting ores", ""),
-        ssm("Set a smelter(under the mouse cursor) for smelting ores", ""),
-        sft("Set a smelter fuelling timeout for smelting ores", "timeout(in milliseconds)"),
-        sfn("Set a name for the fuel for smelting ores", "name"),
-        v("Toggle the verbose mode. While verbose bot will show additional info in console", ""),
-        dir("Set mining direction. Possible directions are: f - forward, u - upward, d - downward. Forward is default direction.", "direction"),
-        tool("Set the mining tool from selected inventory item.", "tool");
+        c("Clicks", "Change the amount of clicks bot will do each time", "n(integer value)"),
+        sc("Shovel Check", "Toggle the combining of shards lying around the player in piles", ""),
+        scn("Container Name", "Change the name of shards to combine. See \"" + sc.name() + "\" key", "name"),
+        fixed("Fixed Tile", "Set the fixed tile mining mode. Bot will remember selected tile and mine it", ""),
+        st("Set Target", "Set the mining mode in which bot will mine currently selected tile", ""),
+        area("Area Mode", "Set the area mining mode in which bot will mine 3x3 area around player", ""),
+        ft("Forage Type", "Set the mining mode in which bot will mine a tile in front of a player", ""),
+        o("Ore Mining", "Toggle the mining of ore tiles. Enabled by default", ""),
+        m("Mount", "Toggle the automatic moving forward when bot have no work", ""),
+        sm("Surface Mining", "Toggle the smelting of ores in selected pile", ""),
+        at("Add Target", "Add the target(under the mouse cursor) for lumps with provided minimum quality", "min_quality(0-100)"),
+        ati("Add Target Inventory", "Add the target inventory(under the mouse cursor) for lumps with provided minimum quality", "min_quality(0-100)"),
+        atid("Add Target By ID", "Add the target with provided id for lumps with provided minimum quality", "id min_quality(0-100)"),
+        sp("Sprout Cutting", "Set a pile(under the mouse cursor) for smelting ores", ""),
+        ssm("Set Smelter", "Set a smelter(under the mouse cursor) for smelting ores", ""),
+        sft("Fuel Timeout", "Set a smelter fuelling timeout for smelting ores", "timeout(in milliseconds)"),
+        sfn("Fuel Name", "Set a name for the fuel for smelting ores", "name"),
+        v("Verbose", "Toggle the verbose mode. While verbose bot will show additional info in console", ""),
+        dir("Direction", "Set mining direction. Possible directions are: f - forward, u - upward, d - downward. Forward is default direction.", "direction"),
+        tool("Tool", "Set the mining tool from selected inventory item.", "tool");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -736,6 +738,10 @@ public class MinerBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

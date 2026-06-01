@@ -250,15 +250,17 @@ public class PileCollector extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        stn("Set the name for target items. Default name is \"dirt\"", "name"),
-        st("Set the target bulk inventory to put items to. Provide an optional name of containers inside inventory. Default is \"large crate\"", "[name]"),
-        stcc("Set the capacity for target container. Default value is 300", "capacity(integer value)"),
-        mq("Set minimum quality of items to be collected", "QL(0-100)"),
-        cc("Set/clear additional container name to search for target items", "name(or nothing to clear)");
+        stn("Target Name", "Set the name for target items. Default name is \"dirt\"", "name"),
+        st("Set Target", "Set the target bulk inventory to put items to. Provide an optional name of containers inside inventory. Default is \"large crate\"", "[name]"),
+        stcc("Container Capacity", "Set the capacity for target container. Default value is 300", "capacity(integer value)"),
+        mq("Min Quality", "Set minimum quality of items to be collected", "QL(0-100)"),
+        cc("Custom Container", "Set/clear additional container name to search for target items", "name(or nothing to clear)");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -268,6 +270,10 @@ public class PileCollector extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

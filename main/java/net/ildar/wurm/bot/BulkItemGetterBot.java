@@ -241,21 +241,23 @@ public class BulkItemGetterBot extends Bot
     
     enum Inputs implements Bot.InputKey
     {
-        isn("Create a new item spec", ""),
-        isd("Delete currently chosen item spec", ""),
-        isc("Choose an item spec to operate on", "number"),
-        isl("List item specs", ""),
+        isn("New Set", "Create a new item spec", ""),
+        isd("Delete Set", "Delete currently chosen item spec", ""),
+        isc("Select Set", "Choose an item spec to operate on", "number"),
+        isl("List Sets", "List item specs", ""),
         
-        c("Set quantity of source items to keep stocked in target", "number"),
-        ss("Set the source item for chosen spec (in bulk storage) to what the user is currenly pointing to", ""),
-        ssxy("Find source item(s) for chosen spec from a fixed point at current cursor position", ""),
-        st("Set the target item for chosen spec to what the user is currently pointing to", ""),
+        c("Clicks", "Set quantity of source items to keep stocked in target", "number"),
+        ss("Add Source", "Set the source item for chosen spec (in bulk storage) to what the user is currenly pointing to", ""),
+        ssxy("Source XY", "Find source item(s) for chosen spec from a fixed point at current cursor position", ""),
+        st("Set Target", "Set the target item for chosen spec to what the user is currently pointing to", ""),
         ;
         
+        String fullName;
         String description;
         String usage;
-        Inputs(String description, String usage)
+        Inputs(String fullName, String description, String usage)
         {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -266,6 +268,10 @@ public class BulkItemGetterBot extends Bot
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription()
         {

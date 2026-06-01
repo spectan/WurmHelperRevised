@@ -295,23 +295,25 @@ public class MultiItemMoverBot extends Bot
     
     private enum Inputs implements Bot.InputKey
     {
-        fl("Toggle moving of only top-level items", ""),
+        fl("First Level Only", "Toggle moving of only top-level items", ""),
         
-        isn("Create new item set", ""),
-        isd("Delete current item set", ""),
-        isc("Choose item set to operate on", "index"),
-        isl("Show item sets", ""),
+        isn("New Set", "Create new item set", ""),
+        isd("Delete Set", "Delete current item set", ""),
+        isc("Select Set", "Choose item set to operate on", "index"),
+        isl("List Sets", "Show item sets", ""),
         
-        st("Set target item for chosen set", ""),
-        str("Set target container for chosen set", ""),
-        a("Add item to chosen set", "name"),
-        clear("Clear list of items in chosen set", ""),
+        st("Set Target", "Set target item for chosen set", ""),
+        str("Target Container Root", "Set target container for chosen set", ""),
+        a("Area Mode", "Add item to chosen set", "name"),
+        clear("Clear Items", "Clear list of items in chosen set", ""),
         ;
         
         
+        String fullName;
         String description;
         String usage;
-        Inputs(String description, String usage) {
+        Inputs(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -321,6 +323,10 @@ public class MultiItemMoverBot extends Bot
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

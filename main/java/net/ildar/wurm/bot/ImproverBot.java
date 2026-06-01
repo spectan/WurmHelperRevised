@@ -400,17 +400,19 @@ public class ImproverBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        at("Add new inventory(under mouse cursor). Selected items in this inventory will be improved.", ""),
-        ls("List available improving skills", ""),
-        ss("Set the skill. Only tools from that skill will be used. You can list available skills using \"" + ls.name() + "\" key", "skill_abbreviation"),
-        g("Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
-        ci("Change previously chosen instrument by tool selected in player's inventory", "");
+        at("Add Target", "Add new inventory(under mouse cursor). Selected items in this inventory will be improved.", ""),
+        ls("List Skills", "List available improving skills", ""),
+        ss("Add Source", "Set the skill. Only tools from that skill will be used. You can list available skills using \"" + ls.name() + "\" key", "skill_abbreviation"),
+        g("Groom", "Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
+        ci("Change Instrument", "Change previously chosen instrument by tool selected in player's inventory", "");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -420,6 +422,10 @@ public class ImproverBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

@@ -99,13 +99,15 @@ public class GroundItemGetterBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        d("Set the distance the bot should look around player in search for items",
+        d("Distance", "Set the distance the bot should look around player in search for items",
                 "distance(in meters, 1 tile is 4 meters)"),
-        a("Add new item name to search list", "item_name");
+        a("Area Mode", "Add new item name to search list", "item_name");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -115,6 +117,10 @@ public class GroundItemGetterBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

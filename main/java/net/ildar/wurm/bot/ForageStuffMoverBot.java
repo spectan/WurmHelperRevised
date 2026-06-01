@@ -70,13 +70,15 @@ public class ForageStuffMoverBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        at("Add new target item. Foragable and botanizable items will be moved to that destination", ""),
-        r("Toggle moving of rare items", ""),
-        mr("Toggle moving of rocks", "");
+        at("Add Target", "Add new target item. Foragable and botanizable items will be moved to that destination", ""),
+        r("Toggle Rares", "Toggle moving of rare items", ""),
+        mr("Toggle Rocks", "Toggle moving of rocks", "");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -86,6 +88,10 @@ public class ForageStuffMoverBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

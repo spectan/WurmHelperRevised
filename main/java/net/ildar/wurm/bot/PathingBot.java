@@ -908,17 +908,19 @@ public class PathingBot extends Bot
 	
 	static enum Inputs implements Bot.InputKey
 	{
-		speed("Set speed at which bot will move, in km/h", "real"),
-		walkto("Walk to given tile coordinates", "x y"),
-		follow("Follow the given player", "name"),
-		murder("Find and murder nearby creatures", ""),
-		groom("Find and groom nearby creatures", ""),
-		shear("Find and shear nearby sheep", ""),
+		speed("Speed", "Set speed at which bot will move, in km/h", "real"),
+		walkto("Walkto", "Walk to given tile coordinates", "x y"),
+		follow("Follow", "Follow the given player", "name"),
+		murder("Murder", "Find and murder nearby creatures", ""),
+		groom("Grooming", "Find and groom nearby creatures", ""),
+		shear("Shear", "Find and shear nearby sheep", ""),
 		;
 		
-		String description;
+  String fullName;
+  String description;
         String usage;
-        Inputs(String description, String usage) {
+        Inputs(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -928,6 +930,10 @@ public class PathingBot extends Bot
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

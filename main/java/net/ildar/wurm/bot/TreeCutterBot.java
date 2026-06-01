@@ -273,19 +273,21 @@ public class TreeCutterBot extends Bot{
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        tt("Set tree types for chopping. Chop all trees by default", "birch oak"),
-        c("Set chops number", "1"),
-        a("Set minimal tree age for chopping. Chop all trees by default", "ov"),
-        tool("Set the cutting tool from selected inventory item.", "tool"),
-        al("Get ages abbreviation list", ""),
-        b("Toggle bush cutting. Enabled by default", ""),
-        sp("Toggle sprouting trees cutting. Enabled by default", "");
+        tt("Tree Type", "Set tree types for chopping. Chop all trees by default", "birch oak"),
+        c("Clicks", "Set chops number", "1"),
+        a("Area Mode", "Set minimal tree age for chopping. Chop all trees by default", "ov"),
+        tool("Tool", "Set the cutting tool from selected inventory item.", "tool"),
+        al("Age List", "Get ages abbreviation list", ""),
+        b("Botanizing", "Toggle bush cutting. Enabled by default", ""),
+        sp("Sprout Cutting", "Toggle sprouting trees cutting. Enabled by default", "");
 
+        public String fullName;
         public String description;
         public String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -295,6 +297,10 @@ public class TreeCutterBot extends Bot{
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

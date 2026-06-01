@@ -135,14 +135,16 @@ public class MeditationBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        c("Set the amount of actions the bot will do each time", "c(integer value)"),
-        rt("Set the meditation rug repair timeout", "timeout(in milliseconds)");
+        c("Clicks", "Set the amount of actions the bot will do each time", "c(integer value)"),
+        rt("Repair Timeout", "Set the meditation rug repair timeout", "timeout(in milliseconds)");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -152,6 +154,10 @@ public class MeditationBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

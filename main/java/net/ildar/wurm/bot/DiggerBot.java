@@ -565,21 +565,23 @@ public class DiggerBot extends Bot{
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        d("Toggle the digging until the specified height is reached", "height(in slopes)"),
-        dtp("Toogle the use of \"Dig to pile\" action", ""),
-        dtile("Toggle the digging until the specified height is reached on all 4 corners of current tile", "height(in slopes)"),
-        c("Set the amount of actions the bot will do each time", "c(integer value)"),
-        l("Toggle the levelling of selected tile", ""),
-        la("Toggle the levelling of area around player", "height(in slopes)"),
-        tr("Toggle the repairing of the tool", ""),
-        sm("Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", ""),
-        tool("Set the digging tool from selected inventory item.", "tool");
+        d("Distance", "Toggle the digging until the specified height is reached", "height(in slopes)"),
+        dtp("Dig To Pile", "Toogle the use of \"Dig to pile\" action", ""),
+        dtile("Tile Digging", "Toggle the digging until the specified height is reached on all 4 corners of current tile", "height(in slopes)"),
+        c("Clicks", "Set the amount of actions the bot will do each time", "c(integer value)"),
+        l("Levelling", "Toggle the levelling of selected tile", ""),
+        la("Area Levelling", "Toggle the levelling of area around player", "height(in slopes)"),
+        tr("Tool Repair", "Toggle the repairing of the tool", ""),
+        sm("Surface Mining", "Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", ""),
+        tool("Tool", "Set the digging tool from selected inventory item.", "tool");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -589,6 +591,10 @@ public class DiggerBot extends Bot{
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;

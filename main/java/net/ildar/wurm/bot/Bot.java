@@ -146,13 +146,19 @@ public abstract class Bot extends Thread {
                 .append(getAbbreviation())
                 .append(" {");
         boolean firstInputKeyString = true;
-        List<String> sortedInputKeys = inputHandlers.keySet().stream().map(InputKey::getName).sorted(Comparator.naturalOrder()).collect(Collectors.toList());
-        for (String inputKey : sortedInputKeys) {
+        List<InputKey> sortedInputKeys = inputHandlers.keySet().stream()
+                .sorted(Comparator.comparing(InputKey::getName))
+                .collect(Collectors.toList());
+        for (InputKey inputKey : sortedInputKeys) {
             if (firstInputKeyString)
                 firstInputKeyString = false;
             else
                 output.append("|");
-            output.append(inputKey);
+            String displayName = inputKey.getFullName();
+            if (displayName == null || displayName.isEmpty())
+                output.append(inputKey.getName());
+            else
+                output.append(displayName).append(" (").append(inputKey.getName()).append(")");
         }
         output.append("}");
         return output.toString();
@@ -229,9 +235,15 @@ public abstract class Bot extends Thread {
     }
 
     private InputKey getInputKey(String key) {
-        for (InputKey inputKey : inputHandlers.keySet())
-            if (inputKey.getName().equals(key))
+        if (key == null) return null;
+        String lower = key.toLowerCase();
+        for (InputKey inputKey : inputHandlers.keySet()) {
+            if (inputKey.getName().equals(lower))
                 return inputKey;
+            String fullName = inputKey.getFullName();
+            if (fullName != null && !fullName.isEmpty() && fullName.equalsIgnoreCase(lower))
+                return inputKey;
+        }
         return null;
     }
 
@@ -254,21 +266,28 @@ public abstract class Bot extends Thread {
     }
 
     private enum InputKeyBase implements InputKey {
-        t("Set the timeout for bot. The bot will wait for specified time(in milliseconds) after each iteration/update",
+        t("Timeout", "Set the timeout for bot. The bot will wait for specified time(in milliseconds) after each iteration/update",
                 "timeout(in milliseconds)"),
-        off("Deactivate the bot",
+        off("Off", "Deactivate the bot",
                 ""),
-        pause("Pause/resume the bot",
+        pause("Pause", "Pause/resume the bot",
                 ""),
-        info("Get information about configuration key",
+        info("Info", "Get information about configuration key",
                 "key");
 
+        private String fullName;
         private String description;
         private String usage;
 
-        InputKeyBase(String description, String usage) {
+        InputKeyBase(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
+        }
+
+        @Override
+        public String getFullName() {
+            return fullName;
         }
 
         @Override
@@ -293,6 +312,8 @@ public abstract class Bot extends Thread {
 
     interface InputKey {
         String getName();
+
+        String getFullName();
 
         String getDescription();
 

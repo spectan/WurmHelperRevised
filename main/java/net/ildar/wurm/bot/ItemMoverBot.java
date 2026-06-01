@@ -270,25 +270,27 @@ public class ItemMoverBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        clear("Clear item list",""),
-        st("Set the target item(under mouse pointer). Items from your inventory will be moved inside this item if it is a container or next to it otherwise.", ""),
-        stid("Set the id of target item. Items from your inventory will be moved inside this item if it is a container or next to it otherwise.", "id"),
-        str("Set the target container(under mouse pointer). Items from your inventory will be moved to the root directory of that container.", ""),
-        stcn("Set the number of items to put inside each container. Use with \"stc\" key", "number"),
-        stc("Set the target container(under mouse pointer) with another containers inside. " +
+        clear("Clear Items", "Clear item list",""),
+        st("Set Target", "Set the target item(under mouse pointer). Items from your inventory will be moved inside this item if it is a container or next to it otherwise.", ""),
+        stid("Target By ID", "Set the id of target item. Items from your inventory will be moved inside this item if it is a container or next to it otherwise.", "id"),
+        str("Target Container Root", "Set the target container(under mouse pointer). Items from your inventory will be moved to the root directory of that container.", ""),
+        stcn("Container Volume", "Set the number of items to put inside each container. Use with \"stc\" key", "number"),
+        stc("Target Container", "Set the target container(under mouse pointer) with another containers inside. " +
                 "Items from your inventory will be moved to containers with provided name. " +
                 "Bot will try to put 100 items inside each container. But you can change this value using \"" + stcn.name() + "\" key.", "container_name"),
-        sw("Set the maximum weight for item to be moved. Affects the last added item name.", "weight(float number)"),
-        a("Add new item name to move to the targets. " +
+        sw("Max Weight", "Set the maximum weight for item to be moved. Affects the last added item name.", "weight(float number)"),
+        a("Area Mode", "Add new item name to move to the targets. " +
                 "The maximum weight of moved item can be configured with \"" + sw.name() + "\" key", "name"),
-        r("Toggle the moving of rare items. Disabled by default.", ""),
-        fl("Toggle the moving of only first level items of your inventory. " +
+        r("Toggle Rares", "Toggle the moving of rare items. Disabled by default.", ""),
+        fl("First Level Only", "Toggle the moving of only first level items of your inventory. " +
                 "Items that match added keywords but lying inside a group or a container will not be touched. " +
                 "Enabled by default", "");
 
+        private String fullName;
         private String description;
         private String usage;
-        InputKey(String description, String usage) {
+        InputKey(String fullName, String description, String usage) {
+            this.fullName = fullName;
             this.description = description;
             this.usage = usage;
         }
@@ -298,6 +300,10 @@ public class ItemMoverBot extends Bot {
             return name();
         }
 
+        @Override
+        public String getFullName() {
+            return fullName;
+        }
         @Override
         public String getDescription() {
             return description;
