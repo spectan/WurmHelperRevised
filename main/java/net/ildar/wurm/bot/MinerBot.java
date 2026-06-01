@@ -100,8 +100,7 @@ public class MinerBot extends Bot {
 
                     List<ItemListWindow> piles = new ArrayList<>();
                     for (WurmComponent wurmComponent : WurmHelper.getInstance().components)
-                        if (wurmComponent instanceof ItemListWindow
-                                && !(wurmComponent instanceof InventoryWindow)) {
+                        if (wurmComponent instanceof ItemListWindow) {
                             InventoryMetaItem root = Utils.getRootItem(Utils.getField(wurmComponent, "component"));
                             if (root != null && root.getBaseName().toLowerCase().contains("pile of"))
                                 piles.add((ItemListWindow) wurmComponent);
@@ -118,35 +117,47 @@ public class MinerBot extends Bot {
                         GroundItemData groundItemData = Utils.getField(groundItem, "item");
                         int itemX = (int) (groundItemData.getX()/4);
                         int itemY = (int) (groundItemData.getY()/4);
-                        if (itemX == tileX && itemY == tileY && groundItem.getHoverName().toLowerCase().contains("pile of ")) {
-                            closePileIds.add(groundItem.getId());
-                            if (piles.stream().noneMatch(pile -> {
+                        String groundName = groundItemData.getName().toLowerCase();
+                        if (itemX == tileX && itemY == tileY && groundName.contains("pile of")) {
+                            long pileId = groundItemData.getId();
+                            closePileIds.add(pileId);
+                            boolean windowOpen = piles.stream().anyMatch(pile -> {
                                 try {
                                     InventoryListComponent ilc = Utils.getField(pile, "component");
                                     InventoryMetaItem rootItem = Utils.getRootItem(ilc);
                                     if (rootItem != null)
-                                        return rootItem.getId() == groundItem.getId();
+                                        return rootItem.getId() == pileId;
                                 } catch (IllegalAccessException | NoSuchFieldException e) {
                                     e.printStackTrace();
                                 }
                                 return false;
-                            })) {
+                            });
+                            if (!windowOpen) {
                                 if (verbose)
-                                    Utils.consolePrint("Opening " + groundItem.getHoverName() + " " + groundItem.getId());
-                                WurmHelper.hud.sendAction(PlayerAction.OPEN, groundItem.getId());
+                                    Utils.consolePrint("Opening pile: " + groundItemData.getName() + " [id=" + pileId + "]");
+                                WurmHelper.hud.sendAction(PlayerAction.OPEN, pileId);
+                            } else if (verbose) {
+                                Utils.consolePrint("Pile already open: " + groundItemData.getName() + " [id=" + pileId + "]");
                             }
                         }
                     }
+                    if (verbose && closePileIds.isEmpty())
+                        Utils.consolePrint("No piles of " + shards + " found on tile (" + tileX + "," + tileY + ")");
 
                     List<InventoryMetaItem> pileShards = new ArrayList<>();
                     for (ItemListWindow wurmComponent : piles) {
                         InventoryListComponent ilc = Utils.getField(wurmComponent, "component");
                         InventoryMetaItem rootItem = Utils.getRootItem(ilc);
+                        if (rootItem == null) continue;
                         if (!groundItemEntries.isEmpty() && !closePileIds.contains(rootItem.getId())) {
+                            if (verbose)
+                                Utils.consolePrint("Closing distant pile window: " + rootItem.getBaseName() + " [id=" + rootItem.getId() + "]");
                             WurmHelper.hud.sendAction(PlayerAction.CLOSE, rootItem.getId());
                             continue;
                         }
                         List<InventoryMetaItem> componentItems = Utils.getInventoryItems(ilc, shards);
+                        if (verbose)
+                            Utils.consolePrint("Found " + (componentItems == null ? 0 : componentItems.size()) + " " + shards + " in pile " + rootItem.getBaseName());
                         if (componentItems != null)
                             for (InventoryMetaItem item : componentItems)
                                 if (item.getRarity() == 0)
