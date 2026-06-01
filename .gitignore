@@ -30,3 +30,6 @@ desktop.ini
 !.env.example
 local.properties
 *.local
+
+# Local deployment script
+deploy.bat
