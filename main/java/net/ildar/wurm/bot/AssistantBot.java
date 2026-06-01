@@ -1392,7 +1392,7 @@ public class AssistantBot extends Bot {
     {
         for(HashSet<Long> set: usedPavers.values())
             set.clear();
-        Utils.consolePrint("");
+        Utils.consolePrint("Paver usage history cleared");
     }
     
     private enum InputKey implements Bot.InputKey {

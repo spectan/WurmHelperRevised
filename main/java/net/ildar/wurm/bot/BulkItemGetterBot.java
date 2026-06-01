@@ -333,8 +333,12 @@ class ItemSpec
     
     private void targetPlayerInventory()
     {
-        target = Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent())
-            .getChildren()
+        InventoryMetaItem root = Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent());
+        if (root == null || root.getChildren() == null) {
+            target = null;
+            return;
+        }
+        target = root.getChildren()
             .stream()
             // target specifically the main inventory sub-item, so counting works
             .filter(item -> item.getBaseName().equals("inventory"))

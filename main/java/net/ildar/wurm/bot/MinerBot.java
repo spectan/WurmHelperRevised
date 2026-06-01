@@ -90,7 +90,8 @@ public class MinerBot extends Bot {
                 for (WurmComponent wurmComponent : WurmHelper.getInstance().components)
                     if (wurmComponent instanceof ItemListWindow
                             && !(wurmComponent instanceof InventoryWindow)) {
-                        if (Utils.getRootItem(Utils.getField(wurmComponent, "component")).getBaseName().toLowerCase().contains("pile of"))
+                        InventoryMetaItem root = Utils.getRootItem(Utils.getField(wurmComponent, "component"));
+                        if (root != null && root.getBaseName().toLowerCase().contains("pile of"))
                             piles.add((ItemListWindow) wurmComponent);
                     }
 
@@ -644,7 +645,7 @@ public class MinerBot extends Bot {
             InventoryListComponent ilc = Utils.getField(container, "component");
             InventoryMetaItem rootItem = Utils.getRootItem(ilc);
             if (rootItem == null) {
-                Utils.consolePrint("");
+                Utils.consolePrint("Target container has no root item");
                 return;
             }
             smeltingOptions.containers.add(new Pair<>(rootItem.getId(), minQuality));

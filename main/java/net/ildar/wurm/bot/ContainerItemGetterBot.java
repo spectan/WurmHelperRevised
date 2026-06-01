@@ -38,6 +38,11 @@ public class ContainerItemGetterBot extends Bot
         
         InventoryListComponent playerInv = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         InventoryMetaItem playerInvRoot = Utils.getRootItem(playerInv);
+        if (playerInvRoot == null) {
+            Utils.consolePrint("Could not get player inventory root item!");
+            deactivate();
+            return;
+        }
         long playerInvID = playerInvRoot.getId();
         
         List<InventoryMetaItem> srcItems = new ArrayList<>();
