@@ -405,7 +405,7 @@ public class ImproverBot extends Bot {
         at("Add Target", "Add new inventory(under mouse cursor). Selected items in this inventory will be improved.", ""),
         ls("List Skills", "List available improving skills", ""),
         ss("Add Source", "Set the skill. Only tools from that skill will be used. You can list available skills using \"" + ls.name() + "\" key", "skill_abbreviation"),
-        g("Groom", "Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
+        g("Ground", "Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
         ci("Change Instrument", "Change previously chosen instrument by tool selected in player's inventory", "");
 
         private String fullName;
