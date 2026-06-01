@@ -130,6 +130,7 @@ public class AssistantBot extends Bot {
         registerInputHandler(AssistantBot.InputKey.p, input -> togglePraying(0));
         registerInputHandler(AssistantBot.InputKey.pt, this::setPrayerTimeout);
         registerInputHandler(AssistantBot.InputKey.pid, this::togglePrayingByAltarId);
+        registerInputHandler(AssistantBot.InputKey.pis, input -> togglePrayingOnInventoryItem());
         registerInputHandler(AssistantBot.InputKey.ps, this::setPrayerStamina);
         registerInputHandler(AssistantBot.InputKey.pc, this::setPrayerCount);
         registerInputHandler(AssistantBot.InputKey.s, input -> toggleSacrificing(0));
@@ -681,6 +682,16 @@ public class AssistantBot extends Bot {
         } catch (Exception e) {
             Utils.consolePrint("Can't get altar id");
         }
+    }
+
+    private void togglePrayingOnInventoryItem() {
+        List<InventoryMetaItem> selectedItems = Utils.getSelectedItems();
+        if (selectedItems == null || selectedItems.isEmpty()) {
+            Utils.consolePrint("Select an item in your inventory first!");
+            return;
+        }
+        InventoryMetaItem item = selectedItems.get(0);
+        togglePraying(item.getId());
     }
 
     private void toggleSacrificingByAltarId(String input[]) {
@@ -1394,6 +1405,7 @@ public class AssistantBot extends Bot {
         p("Toggle automatic praying. The timeout between prayers can be configured separately.", ""),
         pt("Change the timeout between prayers", "timeout(in milliseconds)"),
         pid("Toggle automatic praying on altar with provided id", "id"),
+        pis("Toggle automatic praying on selected inventory item (e.g. prayer beads). Select the item in your inventory first.", ""),
         ps("Set stamina threshold for praying.", "float"),
         pc("Set number of prayers to be queued. If 0 (default) then max per mind logic.", "integer"),
         s("Toggle automatic sacrificing. The timeout between sacrifices can be configured separately.", ""),
