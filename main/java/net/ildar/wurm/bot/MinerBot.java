@@ -77,6 +77,15 @@ public class MinerBot extends Bot {
             deactivate();
             return;
         }
+        long playerInvId = 0;
+        try {
+            InventoryListComponent playerInv = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
+            InventoryMetaItem playerInvRoot = Utils.getRootItem(playerInv);
+            if (playerInvRoot != null)
+                playerInvId = playerInvRoot.getId();
+        } catch (Exception e) {
+            Utils.consolePrint("Could not get player inventory id");
+        }
         lastMining = System.currentTimeMillis();
         Utils.consolePrint(this.getClass().getSimpleName()
                 + " will use " + pickaxe.getDisplayName()
@@ -165,10 +174,12 @@ public class MinerBot extends Bot {
                         }
                     }
 
-                    if (itemsToTake.size() >= needed) {
+                    if (itemsToTake.size() >= needed && playerInvId != 0) {
                         if (verbose) Utils.consolePrint("Taking " + itemsToTake.stream().map(InventoryMetaItem::getId).collect(Collectors.toList()));
-                        for (InventoryMetaItem item : itemsToTake)
-                            WurmHelper.hud.sendAction(PlayerAction.TAKE, item.getId());
+                        long[] ids = new long[itemsToTake.size()];
+                        for (int i = 0; i < itemsToTake.size(); i++)
+                            ids[i] = itemsToTake.get(i).getId();
+                        WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(playerInvId, ids);
                     } else if (invShards.size() == 1) {
                         if (verbose) Utils.consolePrint("Cannot pick up enough shards to combine, dropping lone shard");
                         WurmHelper.hud.sendAction(PlayerAction.DROP, invShards.get(0).getId());
