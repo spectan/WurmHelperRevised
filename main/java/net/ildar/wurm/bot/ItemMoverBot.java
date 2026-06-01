@@ -62,8 +62,8 @@ public class ItemMoverBot extends Bot {
                             List<InventoryMetaItem> containers = Utils.getInventoryItems(targetComponent, containerName);
                             if (containers != null && containers.size() > 0) {
                                 for (InventoryMetaItem container : containers)
-                                    if (container.getChildren().size() < containerVolume) {
-                                        int quantityToMove = Math.min(containerVolume - container.getChildren().size(), sources.length);
+                                    if (container.getChildren() != null && container.getChildren().size() < containerVolume) {
+                                        int quantityToMove = Math.min(containerVolume - (container.getChildren() != null ? container.getChildren().size() : 0), sources.length);
                                         WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
                                                 container.getId(), Arrays.copyOfRange(sources, 0, quantityToMove));
                                         sources = Arrays.copyOfRange(sources, quantityToMove, sources.length);

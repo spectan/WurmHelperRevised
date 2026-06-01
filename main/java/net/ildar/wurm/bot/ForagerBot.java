@@ -223,7 +223,7 @@ public class ForagerBot extends Bot {
                     long[] foragablesIds = Utils.getItemIds(foragables);
                     if (foragablesIds != null && foragables.size() > 20) {
                         for (InventoryMetaItem container : containers) {
-                            if (container.getChildren().size() < 100) {
+                            if (container.getChildren() != null && container.getChildren().size() < 100) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
                                         container.getId(), foragablesIds);
                                 break;

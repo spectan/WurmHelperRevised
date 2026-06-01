@@ -43,10 +43,11 @@ public class ChopperBot extends Bot {
         long hatchetId;
         if (toolItem == null) {
             Utils.consolePrint("You don't have a hatchet!");
+            deactivate();
             return;
         } else {
             hatchetId = toolItem.getId();
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + toolItem.getDisplayName() + " to chop shriveled trees.");
+            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + toolItem.getDisplayName() + " to chop felled trees.");
             Utils.consolePrint("QL:" + toolItem.getQuality() + " DMG:" + toolItem.getDamage());
         }
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();

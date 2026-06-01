@@ -108,7 +108,7 @@ public class FarmerBot extends Bot {
                     if (planting) {
                         if (tileType == Tiles.Tile.TILE_DIRT) {
                             if (seeds == null || seeds.size() == 0)
-                                Utils.consolePrint("The player don't have any seeds left to plant");
+                                Utils.consolePrint("The player doesn't have any seeds left to plant");
                             else {
                                 if (usedSeeds > seeds.size() - 2)
                                     continue;
@@ -178,7 +178,7 @@ public class FarmerBot extends Bot {
         if (!cultivating) {
             shovelItem = Utils.locateToolItem("shovel");
             if (shovelItem == null) {
-                Utils.consolePrint("The player don't have a shovel!");
+                Utils.consolePrint("The player doesn't have a shovel!");
                 return;
             }
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + shovelItem.getDisplayName() + " with QL:" + shovelItem.getQuality() + " DMG:" + shovelItem.getDamage());
@@ -212,7 +212,7 @@ public class FarmerBot extends Bot {
         if (!harvesting) {
             scytheItem = Utils.locateToolItem("scythe");
             if (scytheItem == null) {
-                Utils.consolePrint("The player don't have a scythe!");
+                Utils.consolePrint("The player doesn't have a scythe!");
                 return;
             }
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + scytheItem.getDisplayName() + " with QL:" + scytheItem.getQuality() + " DMG:" + scytheItem.getDamage());
@@ -228,7 +228,7 @@ public class FarmerBot extends Bot {
         if (!farmTending) {
             rakeItem = Utils.locateToolItem("rake");
             if (rakeItem == null) {
-                Utils.consolePrint("The player don't have a rake!");
+                Utils.consolePrint("The player doesn't have a rake!");
                 return;
             }
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + rakeItem.getDisplayName() + " with QL:" + rakeItem.getQuality() + " DMG:" + rakeItem.getDamage());
