@@ -312,6 +312,8 @@ public class MinerBot extends Bot {
             }
             sleep(timeout);
         }
+        if (shardsCombining)
+            dropInventoryShards();
     }
 
     static private boolean isMinableTile(Tiles.Tile type) {
@@ -540,8 +542,19 @@ public class MinerBot extends Bot {
         shardsCombining = !shardsCombining;
         if (shardsCombining)
             Utils.consolePrint(getClass().getSimpleName() + " will combine the " + shards + " around you");
-        else
+        else {
             Utils.consolePrint("Shards combining is off");
+            dropInventoryShards();
+        }
+    }
+
+    private void dropInventoryShards() {
+        List<InventoryMetaItem> invShards = Utils.getInventoryItems(shards);
+        if (invShards.isEmpty()) return;
+        if (verbose)
+            Utils.consolePrint("Dropping " + invShards.size() + " leftover " + shards + " from inventory");
+        for (InventoryMetaItem shard : invShards)
+            WurmHelper.hud.sendAction(PlayerAction.DROP, shard.getId());
     }
 
     private void tileError() {
