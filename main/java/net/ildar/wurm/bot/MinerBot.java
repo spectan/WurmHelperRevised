@@ -86,72 +86,8 @@ public class MinerBot extends Bot {
         while (isActive()) {
             waitOnPause();
             if (shardsCombining) {
-                List<ItemListWindow> piles = new ArrayList<>();
-                for (WurmComponent wurmComponent : WurmHelper.getInstance().components)
-                    if (wurmComponent instanceof ItemListWindow
-                            && !(wurmComponent instanceof InventoryWindow)) {
-                        InventoryMetaItem root = Utils.getRootItem(Utils.getField(wurmComponent, "component"));
-                        if (root != null && root.getBaseName().toLowerCase().contains("pile of"))
-                            piles.add((ItemListWindow) wurmComponent);
-                    }
-
-                ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
-                Map<Long, GroundItemCellRenderable> groundItems = Utils.getField(sscc, "groundItems");
-                int tileX = WurmHelper.hud.getWorld().getPlayerCurrentTileX();
-                int tileY = WurmHelper.hud.getWorld().getPlayerCurrentTileY();
-                List<Long> closePileIds = new ArrayList<>();
-                List<Map.Entry<Long, GroundItemCellRenderable>> groundItemEntries = snapshotEntries(groundItems, 5);
-                for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItemEntries) {
-                    GroundItemCellRenderable groundItem = entry.getValue();
-                    GroundItemData groundItemData = Utils.getField(groundItem, "item");
-                    int itemX = (int) (groundItemData.getX()/4);
-                    int itemY = (int) (groundItemData.getY()/4);
-                    if (itemX == tileX && itemY == tileY && groundItem.getHoverName().toLowerCase().contains("pile of ")) {
-                        closePileIds.add(groundItem.getId());
-                        if (piles.stream().noneMatch(pile -> {
-                            try {
-                                InventoryListComponent ilc = Utils.getField(pile, "component");
-                                InventoryMetaItem rootItem = Utils.getRootItem(ilc);
-                                if (rootItem != null)
-                                    return rootItem.getId() == groundItem.getId();
-                            } catch (IllegalAccessException | NoSuchFieldException e) {
-                                e.printStackTrace();
-                            }
-                            return false;
-                        })) {
-                            if (verbose)
-                                Utils.consolePrint("Opening " + groundItem.getHoverName() + " " + groundItem.getId());
-                            WurmHelper.hud.sendAction(PlayerAction.OPEN, groundItem.getId());
-                        }
-                    }
-                }
-                float freeSpace = Utils.getMaxWeight() - Utils.getTotalWeight();
-                List<InventoryMetaItem> itemsToTake = new ArrayList<>();
-                for (ItemListWindow wurmComponent : piles) {
-                    InventoryListComponent ilc = Utils.getField(wurmComponent, "component");
-                    InventoryMetaItem rootItem = Utils.getRootItem(ilc);
-                    if (!groundItemEntries.isEmpty() && !closePileIds.contains(rootItem.getId())) {
-                        WurmHelper.hud.sendAction(PlayerAction.CLOSE, rootItem.getId());
-                        continue;
-                    }
-                    List<InventoryMetaItem> componentItems = Utils.getInventoryItems(ilc, shards);
-                    if (componentItems != null && componentItems.size() > 0)
-                        for (InventoryMetaItem item : componentItems)
-                            if (item.getRarity() == 0
-                                    && shouldTakeShard(freeSpace, item.getWeight(), itemsToTake.size())) {
-                                itemsToTake.add(item);
-                                freeSpace -= item.getWeight();
-                                if (freeSpace < 20) break;
-                            }
-                    if (freeSpace < 20) break;
-
-                }
-                if (itemsToTake.size() > 0) {
-                    if (verbose) Utils.consolePrint("Taking " + itemsToTake.stream().map(InventoryMetaItem::getId).collect(Collectors.toList()));
-                    for (InventoryMetaItem item : itemsToTake)
-                        WurmHelper.hud.sendAction(PlayerAction.TAKE, item.getId());
-                }
                 List<InventoryMetaItem> invShards = Utils.getInventoryItems(shards);
+
                 if (invShards.size() > 1) {
                     long ids[] = new long[invShards.size()];
                     for (int i = 0; i < invShards.size(); i++)
@@ -159,8 +95,84 @@ public class MinerBot extends Bot {
                     if (verbose) Utils.consolePrint("Combining " + Arrays.toString(ids));
                     WurmHelper.hud.getWorld().getServerConnection().sendAction(
                             ids[0], ids, PlayerAction.COMBINE);
-                } else if (invShards.size() == 1) {
-                    WurmHelper.hud.sendAction(PlayerAction.DROP, invShards.get(0).getId());
+                } else {
+                    int needed = 2 - invShards.size();
+
+                    List<ItemListWindow> piles = new ArrayList<>();
+                    for (WurmComponent wurmComponent : WurmHelper.getInstance().components)
+                        if (wurmComponent instanceof ItemListWindow
+                                && !(wurmComponent instanceof InventoryWindow)) {
+                            InventoryMetaItem root = Utils.getRootItem(Utils.getField(wurmComponent, "component"));
+                            if (root != null && root.getBaseName().toLowerCase().contains("pile of"))
+                                piles.add((ItemListWindow) wurmComponent);
+                        }
+
+                    ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
+                    Map<Long, GroundItemCellRenderable> groundItems = Utils.getField(sscc, "groundItems");
+                    int tileX = WurmHelper.hud.getWorld().getPlayerCurrentTileX();
+                    int tileY = WurmHelper.hud.getWorld().getPlayerCurrentTileY();
+                    List<Long> closePileIds = new ArrayList<>();
+                    List<Map.Entry<Long, GroundItemCellRenderable>> groundItemEntries = snapshotEntries(groundItems, 5);
+                    for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItemEntries) {
+                        GroundItemCellRenderable groundItem = entry.getValue();
+                        GroundItemData groundItemData = Utils.getField(groundItem, "item");
+                        int itemX = (int) (groundItemData.getX()/4);
+                        int itemY = (int) (groundItemData.getY()/4);
+                        if (itemX == tileX && itemY == tileY && groundItem.getHoverName().toLowerCase().contains("pile of ")) {
+                            closePileIds.add(groundItem.getId());
+                            if (piles.stream().noneMatch(pile -> {
+                                try {
+                                    InventoryListComponent ilc = Utils.getField(pile, "component");
+                                    InventoryMetaItem rootItem = Utils.getRootItem(ilc);
+                                    if (rootItem != null)
+                                        return rootItem.getId() == groundItem.getId();
+                                } catch (IllegalAccessException | NoSuchFieldException e) {
+                                    e.printStackTrace();
+                                }
+                                return false;
+                            })) {
+                                if (verbose)
+                                    Utils.consolePrint("Opening " + groundItem.getHoverName() + " " + groundItem.getId());
+                                WurmHelper.hud.sendAction(PlayerAction.OPEN, groundItem.getId());
+                            }
+                        }
+                    }
+
+                    List<InventoryMetaItem> pileShards = new ArrayList<>();
+                    for (ItemListWindow wurmComponent : piles) {
+                        InventoryListComponent ilc = Utils.getField(wurmComponent, "component");
+                        InventoryMetaItem rootItem = Utils.getRootItem(ilc);
+                        if (!groundItemEntries.isEmpty() && !closePileIds.contains(rootItem.getId())) {
+                            WurmHelper.hud.sendAction(PlayerAction.CLOSE, rootItem.getId());
+                            continue;
+                        }
+                        List<InventoryMetaItem> componentItems = Utils.getInventoryItems(ilc, shards);
+                        if (componentItems != null)
+                            for (InventoryMetaItem item : componentItems)
+                                if (item.getRarity() == 0)
+                                    pileShards.add(item);
+                    }
+
+                    pileShards.sort(Comparator.comparingDouble(InventoryMetaItem::getWeight));
+                    float freeSpace = Utils.getMaxWeight() - Utils.getTotalWeight();
+                    List<InventoryMetaItem> itemsToTake = new ArrayList<>();
+                    for (InventoryMetaItem shard : pileShards) {
+                        if (shard.getWeight() < freeSpace) {
+                            itemsToTake.add(shard);
+                            freeSpace -= shard.getWeight();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if (itemsToTake.size() >= needed) {
+                        if (verbose) Utils.consolePrint("Taking " + itemsToTake.stream().map(InventoryMetaItem::getId).collect(Collectors.toList()));
+                        for (InventoryMetaItem item : itemsToTake)
+                            WurmHelper.hud.sendAction(PlayerAction.TAKE, item.getId());
+                    } else if (invShards.size() == 1) {
+                        if (verbose) Utils.consolePrint("Cannot pick up enough shards to combine, dropping lone shard");
+                        WurmHelper.hud.sendAction(PlayerAction.DROP, invShards.get(0).getId());
+                    }
                 }
             }
 
