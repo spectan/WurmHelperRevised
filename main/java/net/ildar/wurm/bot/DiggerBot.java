@@ -118,6 +118,7 @@ public class DiggerBot extends Bot{
                             boolean actionsMade = doDigActions();
                             if (!actionsMade) {
                                 workMode = WorkMode.Unknown;
+                                slopeMovement.stopClimbing();
                                 Utils.showOnScreenMessage("Digging is over");
                                 clearInvalidCorners();
                             }
@@ -143,6 +144,7 @@ public class DiggerBot extends Bot{
                                     } else {
                                         Utils.showOnScreenMessage("The digging is over");
                                         workMode = WorkMode.Unknown;
+                                        slopeMovement.stopClimbing();
                                     }
                                 }
                             }
@@ -199,6 +201,7 @@ public class DiggerBot extends Bot{
 
     private void finishLeveling() {
         workMode = WorkMode.Unknown;
+        slopeMovement.stopClimbing();
         Utils.showOnScreenMessage("The levelling is over");
         levellingDone = false;
     }
@@ -367,6 +370,7 @@ public class DiggerBot extends Bot{
         int y = Math.round(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
         if (Math.abs(x - diggingTileInfo.x) > 1 || Math.abs(y - diggingTileInfo.y) > 1) {
             workMode = WorkMode.Unknown;
+            slopeMovement.stopClimbing();
             Utils.showOnScreenMessage("You moved from tile too far away");
             return;
         }
