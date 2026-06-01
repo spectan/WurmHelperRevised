@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Forage Stuff Mover", description =
         "Moves foragable and botanizable items from your inventory to the target inventories. " +
         "Optionally you can toggle the moving of rocks or rare items on and off.",
         abbreviation = "fsm")

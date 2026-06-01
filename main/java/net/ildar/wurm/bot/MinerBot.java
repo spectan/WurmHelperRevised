@@ -16,7 +16,7 @@ import net.ildar.wurm.annotations.BotInfo;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Miner", description =
         "Mines rocks and smelts ores.",
         abbreviation = "m")
 public class MinerBot extends Bot {

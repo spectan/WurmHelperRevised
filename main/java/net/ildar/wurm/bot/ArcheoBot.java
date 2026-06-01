@@ -27,8 +27,7 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils.Vec2i;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(
-	description = "Investigates tiles and identifies fragments",
+@BotInfo(name = "Archeo", description = "Investigates tiles and identifies fragments",
 	abbreviation = "ac"
 )
 public class ArcheoBot extends Bot {

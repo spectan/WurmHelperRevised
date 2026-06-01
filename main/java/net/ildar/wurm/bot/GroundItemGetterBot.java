@@ -11,7 +11,7 @@ import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
 
-@BotInfo(description =
+@BotInfo(name = "Ground Item Getter", description =
         "Collects items from the ground around player.",
         abbreviation = "gig")
 public class GroundItemGetterBot extends Bot {

@@ -7,7 +7,7 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description =
+@BotInfo(name = "Meditation", description =
         "Meditates on the carpet. Assumes that there are no restrictions on meditation skill.",
         abbreviation = "md")
 public class MeditationBot extends Bot {

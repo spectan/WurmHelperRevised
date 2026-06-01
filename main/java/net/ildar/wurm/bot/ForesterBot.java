@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Forester", description =
         "A forester bot. Can pick and plant sprouts, cut trees/bushes and gather the harvest in 3x3 area around player. " +
         "Bot can be configured to process rectangular area of any size. " +
         "Sprouts, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. " +

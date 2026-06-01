@@ -37,7 +37,7 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 import net.ildar.wurm.bot.MinerBot.Direction;
 
-@BotInfo(description = "Remotely control other clients", abbreviation = "rmi")
+@BotInfo(name = "RMI", description = "Remotely control other clients", abbreviation = "rmi")
 public class RMIBot extends Bot implements BotServer, BotClient, Executor
 {
     final HeadsUpDisplay hud = WurmHelper.hud;

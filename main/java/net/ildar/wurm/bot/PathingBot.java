@@ -42,7 +42,7 @@ import net.ildar.wurm.Utils.Cell;
 import net.ildar.wurm.Utils.Vec2i;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(abbreviation = "pt", description = "Bot that can perform pathfinding to accomplish its various tasks")
+@BotInfo(name = "Pathing", abbreviation = "pt", description = "Bot that can perform pathfinding to accomplish its various tasks")
 public class PathingBot extends Bot
 {
 	final ForkJoinPool pool = new ForkJoinPool(

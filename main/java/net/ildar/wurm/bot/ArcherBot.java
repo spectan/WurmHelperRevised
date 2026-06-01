@@ -15,7 +15,7 @@ import net.ildar.wurm.annotations.BotInfo;
 import java.util.ConcurrentModificationException;
 import java.util.Map;
 
-@BotInfo(description =
+@BotInfo(name = "Archer", description =
         "Automatically shoots at selected target with currently equipped bow. " +
         "When the string breaks tries to place a new one. " +
         "Deactivates on target death.",

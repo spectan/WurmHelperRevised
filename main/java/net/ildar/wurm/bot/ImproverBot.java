@@ -15,7 +15,7 @@ import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
 
-@BotInfo(description =
+@BotInfo(name = "Improver", description =
         "Improves selected items in provided inventories. Tools searched from player's inventory. " +
                 "Items like water or stone searched before each improve, " +
                 "actual instruments searched one time before improve of the first item that must be improved with this tool. " +

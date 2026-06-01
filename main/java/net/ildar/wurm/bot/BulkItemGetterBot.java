@@ -14,7 +14,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description =
+@BotInfo(name = "Bulk Item Getter", description =
         "Automatically transfers items to player's inventory from configured bulk storages. " +
         "The n-th  source item will be transferred to the n-th target item",
         abbreviation = "big")

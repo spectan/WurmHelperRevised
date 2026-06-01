@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Tree Cutter", description =
         "Cuts trees",
         abbreviation = "tc")
 public class TreeCutterBot extends Bot{

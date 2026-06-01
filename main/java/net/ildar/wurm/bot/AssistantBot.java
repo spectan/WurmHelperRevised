@@ -32,7 +32,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description =
+@BotInfo(name = "Assistant", description =
         "Assists player in various ways",
         abbreviation = "a")
 public class AssistantBot extends Bot {

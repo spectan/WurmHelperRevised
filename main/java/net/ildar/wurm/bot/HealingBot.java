@@ -9,7 +9,7 @@ import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
 
-@BotInfo(description =
+@BotInfo(name = "Healing", description =
         "Heals the player's wounds with cotton found in inventory",
         abbreviation = "h")
 public class HealingBot extends Bot {

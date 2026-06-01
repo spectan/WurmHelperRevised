@@ -21,7 +21,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description =
+@BotInfo(name = "Pile Collector", description =
         "Collects piles of items to bulk containers. Default name for target items is \"dirt\"",
         abbreviation = "pc")
 public class PileCollector extends Bot {

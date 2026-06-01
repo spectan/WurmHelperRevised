@@ -13,7 +13,7 @@ import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 import java.lang.reflect.Method;
 import java.util.List;
 
-@BotInfo(description =
+@BotInfo(name = "Flower Planter", description =
         "Skills up player's gardening skill by planting and picking flowers in surrounding area",
         abbreviation = "fp")
 public class FlowerPlanterBot extends Bot {

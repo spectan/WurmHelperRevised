@@ -8,7 +8,7 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description =
+@BotInfo(name = "Prospector", description =
         "Prospects selected tile",
         abbreviation = "pr")
 public class ProspectorBot extends Bot {

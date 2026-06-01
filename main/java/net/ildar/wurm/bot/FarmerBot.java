@@ -14,7 +14,7 @@ import net.ildar.wurm.annotations.BotInfo;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Farmer", description =
         "Tends the fields, plants the seeds, cultivates the ground, collects harvests",
         abbreviation = "f")
 public class FarmerBot extends Bot {

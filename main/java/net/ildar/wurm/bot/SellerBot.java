@@ -14,7 +14,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description = "Sells items to tokens", abbreviation = "s")
+@BotInfo(name = "Seller", description = "Sells items to tokens", abbreviation = "s")
 public class SellerBot extends Bot
 {
     HashSet<String> items = new HashSet<>();

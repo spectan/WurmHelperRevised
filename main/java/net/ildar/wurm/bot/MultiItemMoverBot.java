@@ -14,7 +14,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(abbreviation = "mim", description = "Moves many sets of items to their own containers")
+@BotInfo(name = "Multi Item Mover", abbreviation = "mim", description = "Moves many sets of items to their own containers")
 public class MultiItemMoverBot extends Bot
 {
     boolean toplevelOnly = true;

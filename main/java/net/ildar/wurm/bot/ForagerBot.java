@@ -14,7 +14,7 @@ import net.ildar.wurm.annotations.BotInfo;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Forager", description =
         "Can forage, botanize, collect grass and flowers in an area surrounding player. " +
         "Bot can be configured to process rectangular area of any size. " +
         "Picked items, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. " +

@@ -8,7 +8,7 @@ import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
 
-@BotInfo(description =
+@BotInfo(name = "Item Mover", description =
         "Moves items from your inventory to the target destination.",
         abbreviation = "im")
 public class ItemMoverBot extends Bot {

@@ -13,7 +13,7 @@ import net.ildar.wurm.annotations.BotInfo;
 import java.util.ConcurrentModificationException;
 import java.util.Map;
 
-@BotInfo(description =
+@BotInfo(name = "Chopper", description =
         "Automatically chops felled trees near player",
         abbreviation = "ch")
 public class ChopperBot extends Bot {

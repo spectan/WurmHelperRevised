@@ -14,7 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Crafter", description =
         "Automatically does crafting operations using items from crafting window. " +
         "New crafting operations are not starting until an action queue becomes empty. This behaviour can be disabled. ",
         abbreviation = "c")

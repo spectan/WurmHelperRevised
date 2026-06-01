@@ -15,7 +15,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(description = "Retrieves items from containers", abbreviation = "cig")
+@BotInfo(name = "Container Item Getter", description = "Retrieves items from containers", abbreviation = "cig")
 public class ContainerItemGetterBot extends Bot
 {
     HashSet<String> items = new HashSet<>();

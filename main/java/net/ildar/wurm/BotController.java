@@ -156,7 +156,7 @@ public class BotController {
         String description = "no description";
         if (botRegistration != null)
             description = botRegistration.getDescription();
-        Utils.consolePrint("=== " + botClass.getSimpleName() + " ===");
+        Utils.consolePrint("=== " + botRegistration.getName() + " ===");
         Utils.consolePrint(description);
         Bot botInstance = getActiveInstance(botClass);
         if (botInstance != null) {
@@ -215,7 +215,7 @@ public class BotController {
                     status = "ON";
                 }
             }
-            Utils.consolePrint("  %s (%s) [%s]", botClass.getSimpleName(), reg.getAbbreviation(), status);
+            Utils.consolePrint("  %s (%s) [%s]", reg.getName(), reg.getAbbreviation(), status);
         }
     }
 
