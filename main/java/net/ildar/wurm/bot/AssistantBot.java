@@ -691,7 +691,11 @@ public class AssistantBot extends Bot {
             return;
         }
         InventoryMetaItem item = selectedItems.get(0);
-        togglePraying(item.getId());
+        praying = true;
+        this.altarId = item.getId();
+        lastPrayer = 0;
+        Utils.consolePrint(this.getClass().getSimpleName() + " praying on " + item.getDisplayName() + " is on!");
+        changePrayerTimeout(1500000);
     }
 
     private void toggleSacrificingByAltarId(String input[]) {
