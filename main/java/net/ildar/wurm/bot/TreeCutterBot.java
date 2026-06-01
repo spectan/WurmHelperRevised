@@ -36,7 +36,7 @@ public class TreeCutterBot extends Bot{
     private boolean bushCutting;
     private boolean sproutingTreeCutting;
 
-    private long hatchetId;
+    private long toolId;
     private InventoryMetaItem selectedTool;
     private long lastActionFinishedTime;
     private Byte[] sproutingAgeId = {7,9,11,13};
@@ -75,12 +75,12 @@ public class TreeCutterBot extends Bot{
         if (selectedTool == null) {
             InventoryMetaItem hatchet = Utils.locateToolItem("hatchet");
             if (hatchet == null) {
-                Utils.consolePrint("You don't have a hatchet! " + this.getClass().getSimpleName() + " won't start");
+                Utils.consolePrint("You don't have a valid cutting tool! " + this.getClass().getSimpleName() + " won't start");
                 deactivate();
                 return;
             }
             selectedTool = hatchet;
-            hatchetId = hatchet.getId();
+            toolId = hatchet.getId();
         }
         Utils.consolePrint(this.getClass().getSimpleName() + " will use " + selectedTool.getDisplayName() + " with QL:" + selectedTool.getQuality() + " DMG:" + selectedTool.getDamage());
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
@@ -150,7 +150,7 @@ public class TreeCutterBot extends Bot{
                             }
                         }
                         if(isRightAge && isCutSprouts && isRightType && !isHive){
-                            world.getServerConnection().sendAction(hatchetId,
+                            world.getServerConnection().sendAction(toolId,
                                     new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
                                     PlayerAction.CUT_DOWN);
                             lastActionFinishedTime = System.currentTimeMillis();
@@ -256,7 +256,7 @@ public class TreeCutterBot extends Bot{
         InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
         if (tool != null) {
             selectedTool = tool;
-            hatchetId = tool.getId();
+            toolId = tool.getId();
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }

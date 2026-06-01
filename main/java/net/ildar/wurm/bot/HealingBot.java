@@ -39,7 +39,7 @@ public class HealingBot extends Bot {
             }
             InventoryMetaItem cottonItem = Utils.getInventoryItems("cotton").stream().filter(item -> item.getBaseName().equals("cotton")).findFirst().orElse(null);
             if (cottonItem == null) {
-                Utils.consolePrint("The player don't have a cotton!");
+                Utils.consolePrint("The player doesn't have any cotton!");
                 return;
             }
             List<InventoryMetaItem> inventoryItems = new ArrayList<>();

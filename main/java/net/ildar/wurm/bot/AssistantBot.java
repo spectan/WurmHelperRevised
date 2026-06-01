@@ -725,7 +725,7 @@ public class AssistantBot extends Bot {
         }
         if (kindlingBurning) {
             try {
-                changeKinglingBurnsTimeout(Integer.parseInt(input[0]));
+                changeKindlingBurnsTimeout(Integer.parseInt(input[0]));
             } catch (NumberFormatException e) {
                 Utils.consolePrint("Wrong timeout value!");
             }
@@ -734,7 +734,7 @@ public class AssistantBot extends Bot {
         }
     }
 
-    private void changeKinglingBurnsTimeout(int timeout) {
+    private void changeKindlingBurnsTimeout(int timeout) {
         if (timeout < 100) {
             Utils.consolePrint("Too small timeout!");
             timeout = 100;
@@ -1027,7 +1027,7 @@ public class AssistantBot extends Bot {
             this.forgeId = forgeId;
             lastBurning = 0;
             Utils.consolePrint(this.getClass().getSimpleName() + " kindling burning is on!");
-            changeKinglingBurnsTimeout(10000);
+            changeKindlingBurnsTimeout(10000);
         } else
             Utils.consolePrint("Kindling burning is off!");
 
@@ -1047,14 +1047,14 @@ public class AssistantBot extends Bot {
                     Utils.consolePrint("Couldn't find a statuette in your inventory. casting is off");
                 } else {
                     statuetteId = statuette.getId();
-                    Utils.consolePrint("Wysdom of Vynora spellcasts are on!");
+                    Utils.consolePrint("Wisdom of Vynora spellcasts are on!");
                 }
             } catch (Exception e) {
                 Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
                 Utils.consolePrint(e.toString());
             }
         } else
-            Utils.consolePrint("Wysdom of Vynora casting is off!");
+            Utils.consolePrint("Wisdom of Vynora casting is off!");
     }
 
     private void toggleLockpicking(long chestId) {
@@ -1414,9 +1414,9 @@ public class AssistantBot extends Bot {
         kb("Toggle automatic burning of kindlings in player's inventory. " +
                 AssistantBot.class.getSimpleName() + " will combine the kindlings and burn them using selected forge. " +
                 "The timeout of burns can be configured separately", ""),
-        kbt("Change the timeout between kingling burns", "timeout(in milliseconds)"),
+        kbt("Change the timeout between kindling burns", "timeout(in milliseconds)"),
         kbid("Toggle automatic kindling burns at forge with provided id", "id"),
-        cwov("Toggle automatic casts of Wysdom of Vynora spell", ""),
+        cwov("Toggle automatic casts of Wisdom of Vynora spell", ""),
         cleanup("Toggle automatic trash cleanings. The timeout between cleanings can be configured separately", ""),
         cleanupt("Change the timeout between trash cleanings", "timeout(in milliseconds)"),
         cleanupid("Toggle automatic cleaning of items inside trash bin with provided id", "id"),
