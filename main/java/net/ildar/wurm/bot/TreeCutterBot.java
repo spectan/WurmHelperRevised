@@ -58,7 +58,7 @@ public class TreeCutterBot extends Bot{
         areaAssistant.setMoveAheadDistance(1);
         areaAssistant.setMoveRightDistance(1);
 
-        bushCutting = false;
+        bushCutting = true;
         sproutingTreeCutting = true;
         minTreeAge=TreeAge.any;
         treeType="";
@@ -280,7 +280,7 @@ public class TreeCutterBot extends Bot{
         a("Set minimal tree age for chopping. Chop all trees by default", "ov"),
         tool("Set the cutting tool from selected inventory item.", "tool"),
         al("Get ages abbreviation list", ""),
-        b("Toggle bush cutting. Disabled by default", ""),
+        b("Toggle bush cutting. Enabled by default", ""),
         sp("Toggle sprouting trees cutting. Enabled by default", "");
 
         public String description;
