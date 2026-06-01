@@ -141,26 +141,18 @@ public abstract class Bot extends Thread {
 
     public String getUsageString() {
         StringBuilder output = new StringBuilder();
-        output
-                .append("Usage: bot ")
-                .append(getAbbreviation())
-                .append(" {");
-        boolean firstInputKeyString = true;
+        output.append("Usage: bot ").append(getAbbreviation()).append(" <command>");
         List<InputKey> sortedInputKeys = inputHandlers.keySet().stream()
                 .sorted(Comparator.comparing(InputKey::getName))
                 .collect(Collectors.toList());
         for (InputKey inputKey : sortedInputKeys) {
-            if (firstInputKeyString)
-                firstInputKeyString = false;
-            else
-                output.append("|");
+            output.append("\n  ");
             String displayName = inputKey.getFullName();
             if (displayName == null || displayName.isEmpty())
                 output.append(inputKey.getName());
             else
                 output.append(displayName).append(" (").append(inputKey.getName()).append(")");
         }
-        output.append("}");
         return output.toString();
     }
 

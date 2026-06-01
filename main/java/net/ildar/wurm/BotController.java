@@ -173,10 +173,10 @@ public class BotController {
     }
 
     public String getBotUsageString() {
-        StringBuilder result = new StringBuilder("Usage: " + WurmHelper.ConsoleCommand.bot.name() + " {");
+        StringBuilder result = new StringBuilder("Usage: " + WurmHelper.ConsoleCommand.bot.name() + " <bot>");
         for (BotRegistration botRegistration : botList)
-            result.append(botRegistration.getName()).append("(").append(botRegistration.getAbbreviation()).append(")|");
-        result.append("pause|off}");
+            result.append("\n  ").append(botRegistration.getName()).append(" (").append(botRegistration.getAbbreviation()).append(")");
+        result.append("\n  pause\n  off");
         return result.toString();
     }
 
