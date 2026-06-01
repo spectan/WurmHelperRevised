@@ -314,7 +314,7 @@ public class Utils {
                 return null;
             }
 
-            // first try to find by startsWith 
+            // first try to find by startsWith
             for (InventoryMetaItem invItem : items) {
                 if (invItem.getBaseName().startsWith(itemName)) {
                     return invItem;
@@ -323,8 +323,7 @@ public class Utils {
 
             // if not found by startsWith lets try to find by contains
             for (InventoryMetaItem invItem : items) {
-
-                if (invItem.getBaseName().contains(itemName) || itemName.contains("'") && invItem.getDisplayName().contains(itemName.replaceAll("'",""))) {
+                if (invItem.getBaseName().contains(itemName) || displayNameMatches(invItem, itemName)) {
                     return invItem;
                 }
             }
@@ -334,6 +333,22 @@ public class Utils {
             consolePrint( e.toString());
         }
         return null;
+    }
+
+    /**
+     * Check whether an item's display name matches a quoted pattern.
+     * Quoted patterns like "'lump, iron'" are split by comma and each
+     * part must be present in the display name. This handles parenthetical
+     * modifiers like "lump (glowing), iron".
+     */
+    private static boolean displayNameMatches(InventoryMetaItem item, String itemName) {
+        if (!itemName.contains("'")) return false;
+        String stripped = itemName.replaceAll("'", "");
+        String displayName = item.getDisplayName();
+        for (String part : stripped.split(",")) {
+            if (!displayName.contains(part.trim())) return false;
+        }
+        return true;
     }
 
     public static List<InventoryMetaItem> getInventoryItems(String itemName) {
@@ -349,8 +364,7 @@ public class Utils {
             items,
             item ->
                 item.getBaseName().contains(itemName) ||
-                itemName.contains("'") &&
-                item.getDisplayName().contains(itemName.replaceAll("'",""))
+                displayNameMatches(item, itemName)
         );
     }
     
