@@ -31,7 +31,7 @@ public class MinerBot extends Bot {
     private long lastMining;
     private int clicks = 2;
     private boolean shardsCombining;
-    private String shards = "rock shards";
+    private String shards = "rock shard";
     private String  fuel = "kindling";
     private long fuellingTimeout = 300000;
     private long lastFuelling;
@@ -146,7 +146,7 @@ public class MinerBot extends Bot {
                     if (freeSpace < 20) break;
 
                 }
-                if (itemsToTake.size() > 0 && freeSpace < 20) {
+                if (itemsToTake.size() > 0) {
                     if (verbose) Utils.consolePrint("Taking " + itemsToTake.stream().map(InventoryMetaItem::getId).collect(Collectors.toList()));
                     for (InventoryMetaItem item : itemsToTake)
                         WurmHelper.hud.sendAction(PlayerAction.TAKE, item.getId());
@@ -317,8 +317,7 @@ public class MinerBot extends Bot {
     }
 
     static boolean shouldTakeShard(float freeSpace, float shardWeight, int alreadyTaking) {
-        return shardWeight < freeSpace
-                && (freeSpace - shardWeight < 20 || alreadyTaking > 0);
+        return shardWeight < freeSpace;
     }
 
     private void selectTool() {
