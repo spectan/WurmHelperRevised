@@ -105,7 +105,7 @@ public class CrafterBot extends Bot {
                 }
             }
             if (targetName != null && targetName.length() > 0) {
-                List<InventoryMetaItem> targetItems = Utils.getInventoryItems(targetName).stream().filter(item -> item.getBaseName().equals(targetName)).collect(Collectors.toList());
+                List<InventoryMetaItem> targetItems = Utils.getInventoryItems(targetName).stream().filter(item -> Utils.normalizeBaseName(item).equals(targetName)).collect(Collectors.toList());
                 if (!noSort)
                     targetItems.sort(weightComparator);
                 Utils.setField(target, "itemList", targetItems);
@@ -113,7 +113,7 @@ public class CrafterBot extends Bot {
                     target.setTexture(targetItems.get(0));
             }
             if (sourceName != null && sourceName.length() > 0) {
-                List<InventoryMetaItem> sourceItems = Utils.getInventoryItems(sourceName).stream().filter(item -> item.getBaseName().equals(sourceName)).collect(Collectors.toList());
+                List<InventoryMetaItem> sourceItems = Utils.getInventoryItems(sourceName).stream().filter(item -> Utils.normalizeBaseName(item).equals(sourceName)).collect(Collectors.toList());
                 if (!noSort)
                     sourceItems.sort(weightComparator);
                 if (singleSourceItemMode && sourceItems != null && sourceItems.size() > 0) {
@@ -375,7 +375,7 @@ public class CrafterBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        r("Toggle Rares", "Toggle the source item repairing(on the left side of crafting window). " +
+        r("Toggle Repairing", "Toggle the source item repairing(on the left side of crafting window). " +
                 "Usually it is an instrument. When the source item gets 10% damage player will repair it automatically", ""),
         st("Set Target", "Set the target item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the target slot(on the right side of crafting window)",
                 "target_name"),
@@ -384,7 +384,7 @@ public class CrafterBot extends Bot {
                 "source_name"),
         ssxy("Source XY", "Set the source item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the source item slot(on the left side of crafting window)", ""),
         nosort("Toggle Sorting", "Sorting of source and target items is enabled by default. This key toggles sorting on and off", ""),
-        cs("Clear Sources", "Combine source items(on the left side of crafting window)", ""),
+        cs("Combine Sources", "Combine source items(on the left side of crafting window)", ""),
         ct("Combine Targets", "Combine target items(on the right side of crafting window)", ""),
         ctimeout("Combine Timeout", "Set the timeout for item combining", "timeout(in milliseconds)"),
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",

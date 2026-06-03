@@ -101,7 +101,7 @@ public class GroundItemGetterBot extends Bot {
     enum InputKey implements Bot.InputKey {
         d("Distance", "Set the distance the bot should look around player in search for items",
                 "distance(in meters, 1 tile is 4 meters)"),
-        a("Area Mode", "Add new item name to search list", "item_name");
+        a("Add Item", "Add new item name to search list", "item_name");
 
         private String fullName;
         private String description;

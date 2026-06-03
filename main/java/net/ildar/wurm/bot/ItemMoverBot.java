@@ -279,7 +279,7 @@ public class ItemMoverBot extends Bot {
                 "Items from your inventory will be moved to containers with provided name. " +
                 "Bot will try to put 100 items inside each container. But you can change this value using \"" + stcn.name() + "\" key.", "container_name"),
         sw("Max Weight", "Set the maximum weight for item to be moved. Affects the last added item name.", "weight(float number)"),
-        a("Area Mode", "Add new item name to move to the targets. " +
+        a("Add Item", "Add new item name to move to the targets. " +
                 "The maximum weight of moved item can be configured with \"" + sw.name() + "\" key", "name"),
         r("Toggle Rares", "Toggle the moving of rare items. Disabled by default.", ""),
         fl("First Level Only", "Toggle the moving of only first level items of your inventory. " +

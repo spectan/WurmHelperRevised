@@ -342,7 +342,7 @@ public class ArcheoBot extends Bot {
 		iv("Investigating", "Toggle investigating", ""),
 		id("Identifying", "Toggle identifying", ""),
 		co("Fragment Combining", "Toggle fragment combining", ""),
-		sh("Shear", "Toggle investigating with shovel", ""),
+		sh("Shovel", "Toggle investigating with shovel", ""),
 		at("Add Target", "Add target inventory to identify fragments in", ""),
 		ct("Combine Targets", "Clear inventories to identify fragments in", ""),
 		;

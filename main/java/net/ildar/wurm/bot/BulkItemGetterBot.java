@@ -347,7 +347,7 @@ class ItemSpec
         target = root.getChildren()
             .stream()
             // target specifically the main inventory sub-item, so counting works
-            .filter(item -> item.getBaseName().equals("inventory"))
+            .filter(item -> Utils.normalizeBaseName(item).equals("inventory"))
             .findFirst()
             .orElse(null)
         ;

@@ -502,7 +502,7 @@ public class ForesterBot extends Bot {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
         ca("Cut All Sprouts", "Toggle the cutting of sprouts from all trees", ""),
-        cs("Clear Sources", "Toggle the cutting of shriveled trees", ""),
+        cs("Cut Shriveled", "Toggle the cutting of shriveled trees", ""),
         df("Deforestation", "Toggle the cutting of all trees (deforestation)", ""),
         h("Harvest Mode", "Toggle the harvesting", ""),
         p("Path To", "Toggle the planting", ""),

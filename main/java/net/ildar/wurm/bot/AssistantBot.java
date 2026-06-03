@@ -531,7 +531,7 @@ public class AssistantBot extends Bot {
                             serverConnection.sendMoveSomeItems(smelterId, new long[]{item.getId()});
                             lumpDropTimes.put(item.getId(), System.currentTimeMillis());
                         } else {
-                            lumpTypesInInventory.add(item.getBaseName());
+                            lumpTypesInInventory.add(Utils.normalizeBaseName(item));
                         }
                     }
 
@@ -539,7 +539,7 @@ public class AssistantBot extends Bot {
                     long[] hotLumps = Utils.getItemIds(Utils.getInventoryItems(
                         lumpHeatingInventory,
                         item -> {
-                            final String name = item.getBaseName();
+                            final String name = Utils.normalizeBaseName(item);
                             boolean shouldTake =
                                 name.contains("lump") &&
                                 (lumpCombining || !lumpTypesInInventory.contains(name)) &&
@@ -560,9 +560,10 @@ public class AssistantBot extends Bot {
                         if(lump.getTemperature() != 5)
                             continue;
 
-                        ArrayList<Long> list = lumpsToCombine.get(lump.getBaseName());
+                        String lumpName = Utils.normalizeBaseName(lump);
+                        ArrayList<Long> list = lumpsToCombine.get(lumpName);
                         if(list == null)
-                            lumpsToCombine.put(lump.getBaseName(), list = new ArrayList<>());
+                            lumpsToCombine.put(lumpName, list = new ArrayList<>());
                         list.add(lump.getId());
                     }
 
@@ -1403,17 +1404,17 @@ public class AssistantBot extends Bot {
         w("Drinking", "Toggle automatic drinking of the liquid the user pointing at", ""),
         wid("Drink By ID", "Toggle automatic drinking of liquid with provided id", "id"),
         eat("Eating", "Toggle automatic eating of food the user is pointing at", ""),
-        ls("List Skills", "Show the list of available spells for autocasting", ""),
+        ls("List Spells", "Show the list of available spells for autocasting", ""),
         c("Clicks", "Toggle automatic casts of spells(if player has enough favor). Provide an optional spell abbreviation to change the default Dispel spell. " +
                 "You can see the list of available spell with \"" + ls.name() + "\" key", "[spell_abbreviation]"),
-        p("Path To", "Toggle automatic praying. The timeout between prayers can be configured separately.", ""),
-        pt("Path To Tile", "Change the timeout between prayers", "timeout(in milliseconds)"),
+        p("Praying", "Toggle automatic praying. The timeout between prayers can be configured separately.", ""),
+        pt("Pray Timeout", "Change the timeout between prayers", "timeout(in milliseconds)"),
         pid("Pray By Altar ID", "Toggle automatic praying on altar with provided id", "id"),
         pis("Pray By Item Select", "Toggle automatic praying on selected inventory item (e.g. prayer beads). Select the item in your inventory first.", ""),
         ps("Prayer Stamina", "Set stamina threshold for praying.", "float"),
         pc("Prayer Count", "Set number of prayers to be queued. If 0 (default) then max per mind logic.", "integer"),
-        s("Stamina", "Toggle automatic sacrificing. The timeout between sacrifices can be configured separately.", ""),
-        st("Set Target", "Change the timeout between sacrifices", "timeout(in milliseconds)"),
+        s("Sacrificing", "Toggle automatic sacrificing. The timeout between sacrifices can be configured separately.", ""),
+        st("Sacrifice Timeout", "Change the timeout between sacrifices", "timeout(in milliseconds)"),
         sid("Sacrifice By ID", "Toggle automatic sacrifices at altar with provided id", "id"),
         kb("Kindling Burn", "Toggle automatic burning of kindlings in player's inventory. " +
                 AssistantBot.class.getSimpleName() + " will combine the kindlings and burn them using selected forge. " +
@@ -1424,10 +1425,10 @@ public class AssistantBot extends Bot {
         cleanup("Trash Cleaning", "Toggle automatic trash cleanings. The timeout between cleanings can be configured separately", ""),
         cleanupt("Trash Timeout", "Change the timeout between trash cleanings", "timeout(in milliseconds)"),
         cleanupid("Trash By ID", "Toggle automatic cleaning of items inside trash bin with provided id", "id"),
-        l("Levelling", "Toggle automatic lockpicking. The target chest should be beneath the user's mouse", ""),
+        l("Lockpicking", "Toggle automatic lockpicking. The target chest should be beneath the user's mouse", ""),
         lt("Lockpick Timeout", "Change the timeout between lockpickings", "timeout(in milliseconds)"),
         lid("Lockpick By ID", "Toggle automatic lockpicking of target chest with provided id", "id"),
-        b("Botanizing", "Toggle butchering of corpses on the ground", ""),
+        b("Butchering", "Toggle butchering of corpses on the ground", ""),
         bu("Burying", "Toggle burying of corpses on the ground", ""),
         bua("Bury All", "Toggle burying corpses with normal bury action vs bury all", ""),
         bud("Bury Delay", "Set delay before burying corpses (to allow other bots time to move items)", "msecs"),

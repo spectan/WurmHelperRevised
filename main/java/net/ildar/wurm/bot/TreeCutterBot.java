@@ -277,7 +277,7 @@ public class TreeCutterBot extends Bot{
                 "threshold(float value between 0 and 1)"),
         tt("Tree Type", "Set tree types for chopping. Chop all trees by default", "birch oak"),
         c("Clicks", "Set chops number", "1"),
-        a("Area Mode", "Set minimal tree age for chopping. Chop all trees by default", "ov"),
+        a("Age Limit", "Set minimal tree age for chopping. Chop all trees by default", "ov"),
         tool("Tool", "Set the cutting tool from selected inventory item.", "tool"),
         al("Age List", "Get ages abbreviation list", ""),
         b("Botanizing", "Toggle bush cutting. Enabled by default", ""),

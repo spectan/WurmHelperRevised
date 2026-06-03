@@ -316,7 +316,7 @@ public class Utils {
 
             // first try to find by startsWith
             for (InventoryMetaItem invItem : items) {
-                if (invItem.getBaseName().startsWith(itemName)) {
+                if (normalizeBaseName(invItem).startsWith(itemName)) {
                     return invItem;
                 }
             }
@@ -349,6 +349,18 @@ public class Utils {
             if (!displayName.contains(part.trim())) return false;
         }
         return true;
+    }
+
+    /**
+     * Strip the "(glowing) " prefix from item base names so that hot metal items
+     * can be matched by their normal name (e.g. "iron lump" instead of "(glowing) iron lump").
+     */
+    public static String normalizeBaseName(InventoryMetaItem item) {
+        String baseName = item.getBaseName();
+        if (baseName.startsWith("(glowing) ")) {
+            return baseName.substring("(glowing) ".length());
+        }
+        return baseName;
     }
 
     public static List<InventoryMetaItem> getInventoryItems(String itemName) {
@@ -467,7 +479,7 @@ public class Utils {
             return null;
         }
         InventoryMetaItem item = selectedItems.get(0);
-        String baseName = item.getBaseName().toLowerCase();
+        String baseName = normalizeBaseName(item).toLowerCase();
         for (String validName : validToolNames) {
             if (baseName.equals(validName.toLowerCase())) {
                 return item;

@@ -251,7 +251,7 @@ public class ImproverBot extends Bot {
         InventoryMetaItem toolItem = null;
         if (tool.exactName) {
             Optional<InventoryMetaItem> toolOptionalItem;
-            toolOptionalItem = Utils.getInventoryItems(WurmHelper.hud.getInventoryWindow().getInventoryListComponent(), tool.name).stream().filter(item -> item.getBaseName().equals(tool.name)).findFirst();
+            toolOptionalItem = Utils.getInventoryItems(WurmHelper.hud.getInventoryWindow().getInventoryListComponent(), tool.name).stream().filter(item -> Utils.normalizeBaseName(item).equals(tool.name)).findFirst();
             if (toolOptionalItem.isPresent())
                 toolItem = toolOptionalItem.get();
         } else if (!tool.fixed) {
