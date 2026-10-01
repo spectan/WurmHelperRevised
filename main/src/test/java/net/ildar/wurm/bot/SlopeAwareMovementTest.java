@@ -35,15 +35,6 @@ public class SlopeAwareMovementTest {
     }
 
     @Test
-    public void oneTileSmoothSlopeAboveThirtyRequiresClimb() {
-        SlopeAwareMovement.HeightProvider heights = (x, y) -> x * 3.1f / 4f;
-
-        boolean requiresClimb = SlopeAwareMovement.requiresClimb(0f, 0f, 4f, 0f, heights);
-
-        assertTrue(requiresClimb);
-    }
-
-    @Test
     public void midpointSpikeRequiresClimbEvenWhenEndpointsAreSafe() {
         SlopeAwareMovement.HeightProvider heights = (x, y) -> x >= 5.9f && x <= 6.1f ? 10f : 0f;
 

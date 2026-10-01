@@ -13,6 +13,7 @@ import javassist.CtNewMethod;
 import net.ildar.wurm.bot.Bot;
 import net.ildar.wurm.bot.BulkItemGetterBot;
 import net.ildar.wurm.command.CommandRegistry;
+import net.ildar.wurm.command.ConsoleCommandHandler;
 import net.ildar.wurm.command.DevInfoCommandHandler;
 import net.ildar.wurm.command.MovementCommandHandler;
 import net.ildar.wurm.command.UtilityCommandHandler;
@@ -33,6 +34,8 @@ import java.util.logging.Logger;
 import javax.vecmath.Color3f;
 
 public class WurmHelper implements WurmClientMod, Initable, Configurable, PreInitable {
+    public static final String BOT_COMMAND = "bot";
+    private static final String INFO_COMMAND = "info";
     private final long BLESS_TIMEOUT = 1800000;
 
     public static HeadsUpDisplay hud;
@@ -43,7 +46,6 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
 
     public volatile List<WurmComponent> components;
     private Logger logger;
-    private Map<ConsoleCommand, ConsoleCommandHandler> consoleCommandHandlers;
     private CommandRegistry commandRegistry;
     private long lastBless = 0L;
     private boolean noBlessings = false;
@@ -51,14 +53,43 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
 
     public WurmHelper() {
         logger = Logger.getLogger("WurmHelper");
-        consoleCommandHandlers = new HashMap<>();
         commandRegistry = new CommandRegistry();
         MovementCommandHandler.register(commandRegistry);
         UtilityCommandHandler.register(commandRegistry);
         VisualCommandHandler.register(commandRegistry);
         DevInfoCommandHandler.register(commandRegistry);
-        consoleCommandHandlers.put(ConsoleCommand.bot, this::handleBotCommand);
-        consoleCommandHandlers.put(ConsoleCommand.info, this::handleInfoCommand);
+        commandRegistry.register(BOT_COMMAND, new ConsoleCommandHandler() {
+            @Override
+            public void handle(String[] args) {
+                BotController.getInstance().handleInput(args);
+            }
+
+            @Override
+            public String getUsage() {
+                return BotController.getInstance().getBotUsageArguments();
+            }
+
+            @Override
+            public String getDescription() {
+                return "Activates/configures the bot with provided abbreviation.";
+            }
+        });
+        commandRegistry.register(INFO_COMMAND, new ConsoleCommandHandler() {
+            @Override
+            public void handle(String[] args) {
+                handleInfoCommand(args);
+            }
+
+            @Override
+            public String getUsage() {
+                return "command|bots|abbreviation";
+            }
+
+            @Override
+            public String getDescription() {
+                return "Shows the description of a console command, lists all bots, or describes a bot by abbreviation.";
+            }
+        });
         WurmHelper.instance = this;
     }
 
@@ -71,55 +102,33 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
      */
     @SuppressWarnings("unused")
     public boolean handleInput(final String cmd, final String[] data) {
-        net.ildar.wurm.command.ConsoleCommandHandler registryHandler = commandRegistry.get(cmd);
-        if (registryHandler != null) {
-            try {
-                registryHandler.handle(Arrays.copyOfRange(data, 1, data.length));
-                if (!noBlessings && System.currentTimeMillis() - lastBless > BLESS_TIMEOUT) {
-                    hud.addOnscreenMessage("Ildar blesses you!", 1, 1, 1, (byte)1);
-                    lastBless = System.currentTimeMillis();
-                }
-            } catch (Exception e) {
-                Utils.consolePrint("Error on execution of command \"" + cmd + "\"");
-                e.printStackTrace();
-            }
-            return true;
-        }
-
-        ConsoleCommand consoleCommand = ConsoleCommand.getByName(cmd);
-        if (consoleCommand == ConsoleCommand.unknown)
-            return false;
-        ConsoleCommandHandler consoleCommandHandler = consoleCommandHandlers.get(consoleCommand);
-        if (consoleCommandHandler == null)
+        ConsoleCommandHandler registryHandler = commandRegistry.get(cmd);
+        if (registryHandler == null)
             return false;
         try {
-            consoleCommandHandler.handle(Arrays.copyOfRange(data, 1, data.length));
-            if (!noBlessings && System.currentTimeMillis() - lastBless > BLESS_TIMEOUT) {
-                hud.addOnscreenMessage("Ildar blesses you!", 1, 1, 1, (byte)1);
-                lastBless = System.currentTimeMillis();
-            }
+            registryHandler.handle(Arrays.copyOfRange(data, 1, data.length));
+            bless();
         } catch (Exception e) {
-            Utils.consolePrint("Error on execution of command \"" + consoleCommand.name() + "\"");
+            Utils.consolePrint("Error on execution of command \"" + cmd + "\"");
             e.printStackTrace();
         }
         return true;
     }
 
-    private void handleBotCommand(String[] input) {
-        BotController.getInstance().handleInput(input);
+    private void bless() {
+        if (!noBlessings && hud != null && System.currentTimeMillis() - lastBless > BLESS_TIMEOUT) {
+            hud.addOnscreenMessage("Ildar blesses you!", 1, 1, 1, (byte)1);
+            lastBless = System.currentTimeMillis();
+        }
     }
 
-    private void printConsoleCommandUsage(ConsoleCommand consoleCommand) {
-        if (consoleCommand == ConsoleCommand.bot) {
-            Utils.consolePrint(BotController.getInstance().getBotUsageString());
-            return;
-        }
-        Utils.consolePrint("Usage: " + consoleCommand.name() + " " + consoleCommand.getUsage());
+    private void printCommandUsage(String name, ConsoleCommandHandler handler) {
+        Utils.consolePrint("Usage: " + name + " " + handler.getUsage());
     }
 
     private void handleInfoCommand(String [] input) {
         if (input.length != 1) {
-            printConsoleCommandUsage(ConsoleCommand.info);
+            printCommandUsage(INFO_COMMAND, commandRegistry.get(INFO_COMMAND));
             printAvailableConsoleCommands();
             return;
         }
@@ -129,34 +138,25 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             return;
         }
 
-        net.ildar.wurm.command.ConsoleCommandHandler registryHandler = commandRegistry.get(input[0]);
+        ConsoleCommandHandler registryHandler = commandRegistry.get(input[0]);
         if (registryHandler != null) {
-            Utils.consolePrint("Usage: " + input[0] + " " + registryHandler.getUsage());
+            printCommandUsage(input[0], registryHandler);
             Utils.consolePrint(registryHandler.getDescription());
             return;
         }
 
-        ConsoleCommand command = ConsoleCommand.getByName(input[0]);
-        if (command == ConsoleCommand.unknown) {
-            Class<? extends Bot> botClass = BotController.getInstance().getBotClass(input[0]);
-            if (botClass != null) {
-                BotController.getInstance().printBotDescription(botClass);
-            } else {
-                Utils.consolePrint("Unknown console command or bot abbreviation");
-            }
-            return;
+        Class<? extends Bot> botClass = BotController.getInstance().getBotClass(input[0]);
+        if (botClass != null) {
+            BotController.getInstance().printBotDescription(botClass);
+        } else {
+            Utils.consolePrint("Unknown console command or bot abbreviation");
         }
-        printConsoleCommandUsage(command);
-        Utils.consolePrint(command.description);
     }
 
     private void printAvailableConsoleCommands() {
         StringBuilder commands = new StringBuilder();
         for (String name : commandRegistry.getCommandNames()) {
             commands.append(name).append(", ");
-        }
-        for (ConsoleCommand consoleCommand : consoleCommandHandlers.keySet()) {
-            commands.append(consoleCommand.name()).append(", ");
         }
         if (commands.length() >= 2) {
             commands.setLength(commands.length() - 2);
@@ -260,8 +260,8 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             CtClass itemCellRenderableClass = classPool.getCtClass("com.wurmonline.client.renderer.cell.GroundItemCellRenderable");
             itemCellRenderableClass.defrost();
             CtMethod itemCellRenderableInitializeMethod = CtNewMethod.make("public void initialize() {\n" +
-                    "                if (net.ildar.wurm.BotController.getInstance().isInstantiated(net.ildar.wurm.bot.GroundItemGetterBot.class)) {\n" +
-                    "                   net.ildar.wurm.bot.Bot gigBot = net.ildar.wurm.BotController.getInstance().getInstance(net.ildar.wurm.bot.GroundItemGetterBot.class);" +
+                    "                net.ildar.wurm.bot.Bot gigBot = net.ildar.wurm.BotController.getInstance().getActiveInstance(net.ildar.wurm.bot.GroundItemGetterBot.class);\n" +
+                    "                if (gigBot != null) {\n" +
                     "                   ((net.ildar.wurm.bot.GroundItemGetterBot)gigBot).processNewItem(this);\n" +
                     "                }\n" +
                     "        super.initialize();\n" +
@@ -366,36 +366,4 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             logger.log(Level.SEVERE, e.toString());
         }
     }
-
-    public enum ConsoleCommand{
-        unknown("", ""),
-        bot("abbreviation", "Activates/configures the bot with provided abbreviation."),
-        info("command|bots|abbreviation", "Shows the description of a console command, lists all bots, or describes a bot by abbreviation.");
-
-        private String usage;
-        public String description;
-
-        ConsoleCommand(String usage, String description) {
-            this.usage = usage;
-            this.description = description;
-        }
-
-        String getUsage() {
-            return usage;
-        }
-
-        static ConsoleCommand getByName(String name) {
-            try {
-                return Enum.valueOf(ConsoleCommand.class, name);
-            } catch(Exception e) {
-                return ConsoleCommand.unknown;
-            }
-        }
-    }
-
-    interface ConsoleCommandHandler {
-        void handle(String []input);
-    }
-
-
 }

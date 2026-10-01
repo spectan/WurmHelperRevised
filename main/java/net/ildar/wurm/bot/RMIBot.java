@@ -12,8 +12,10 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
@@ -37,6 +39,8 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.annotations.BotInfo;
 import net.ildar.wurm.bot.MinerBot.Direction;
 
+import static net.ildar.wurm.Utils.printExceptions;
+
 @BotInfo(name = "RMI", description = "Remotely control other clients", abbreviation = "rmi")
 public class RMIBot extends Bot implements BotServer, BotClient, Executor
 {
@@ -58,6 +62,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     static final long syncTargetDelay = 500; // doesn't need to be as fine grained
     boolean syncPosition;
     boolean syncHeading;
+    boolean syncPositionRunning; // guards against scheduling more than one syncPositionTask loop
     long syncDelay = 50;
     
     // client fields
@@ -75,26 +80,6 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         return clientRegistry != null;
     }
     
-    static boolean printExceptions(ThrowingRunnable fn, String fmt, Object... args)
-    {
-        try
-        {
-            fn.run();
-            return true;
-        }
-        catch(Exception err)
-        {
-            Utils.consolePrint(
-                String.format("%s: %s", RMIBot.class.getSimpleName(), fmt), // preserve format arg numbering
-                err.getClass().getName(),
-                err.getMessage(),
-                args
-            );
-            err.printStackTrace();
-            return false;
-        }
-    }
-
     static RegistryAddress parseRegistryAddress(String value) {
         String[] pair = value.split(":", 2);
         if(pair.length != 2 || pair[0].isEmpty() || pair[1].isEmpty())
@@ -168,7 +153,11 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public synchronized void execute(Runnable task)
     {
-        oneshotTasks.add(task);
+        if(!oneshotTasks.offer(task))
+        {
+            Utils.consolePrint("%s: task queue is full, dropping task", getClass().getSimpleName());
+            return;
+        }
         notify();
     }
     
@@ -268,13 +257,18 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         if(isServer())
         {
             for(String name: serverRegistry.list())
+            {
+                if(!name.startsWith(registryPrefix))
+                    continue; // the server's own binding is removed below
                 printExceptions(
                     () -> serverRegistry.unbind(name),
                     "Got %1$s when unbinding client %3$s: %2$s",
                     name
                 );
+            }
             
             clients = null;
+            syncTarget = false; // kill syncTargetTask
             syncPosition = false; // kill syncPositionTask
             syncHeading = false;
             
@@ -580,8 +574,8 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             case "syncpos":
             {
                 syncPosition = !syncPosition;
-                if(syncPosition && !syncHeading)
-                    execute(this::syncPositionTask);
+                if(syncPosition)
+                    startSyncPositionTask();
                 
                 Utils.consolePrint(
                     "Position synchronization %s",
@@ -593,8 +587,8 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             case "synclook":
             {
                 syncHeading = !syncHeading;
-                if(syncHeading && !syncPosition)
-                    execute(this::syncPositionTask);
+                if(syncHeading)
+                    startSyncPositionTask();
                 
                 Utils.consolePrint(
                     "Heading synchronization %s",
@@ -813,8 +807,8 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
 
     private enum Inputs implements Bot.InputKey
     {
-        s("Stamina", "Toggle server mode, allowing sending commands to other characters", ""),
-        c("Clicks", "Toggle client mode, allowing remote control of this character", ""),
+        s("Server", "Toggle server mode, allowing sending commands to other characters", ""),
+        c("Client", "Toggle client mode, allowing remote control of this character", ""),
         
         sl("Server: List", "Server: list known clients", ""),
         slr("Server: Refresh", "Server: refresh list of clients", ""),
@@ -884,8 +878,22 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         );
     }
     
+    // tasks run while holding this object's monitor (see work()), so this check can't race with the loop ending
+    synchronized void startSyncPositionTask()
+    {
+        if(syncPositionRunning)
+            return;
+        syncPositionRunning = true;
+        execute(this::syncPositionTask);
+    }
+    
     void syncPositionTask()
     {
+        if(!syncPosition && !syncHeading)
+        {
+            syncPositionRunning = false;
+            return;
+        }
         final float px = syncPosition ? world.getPlayerPosX() : -1;
         final float py = syncPosition ? world.getPlayerPosY() : -1;
         final float rx = syncHeading ? world.getPlayerRotX() : Float.NaN;
@@ -895,8 +903,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             "Got %s when setting clients' position: %s"
         );
         
-        if(syncPosition || syncHeading)
-            schedule(this::syncPositionTask, syncDelay);
+        schedule(this::syncPositionTask, syncDelay);
     }
     
     @Override
@@ -999,17 +1006,23 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         });
     }
     
-    @Override
-    public void dig() throws RemoteException
+    boolean locateShovel()
     {
         if(shovelID == -10)
         {
             InventoryMetaItem tool = Utils.locateToolItem("shovel");
             if(tool == null)
-                return;
-            else
-                shovelID = tool.getId();
+                return false;
+            shovelID = tool.getId();
         }
+        return true;
+    }
+    
+    @Override
+    public void dig() throws RemoteException
+    {
+        if(!locateShovel())
+            return;
         
         final int tx = Math.round(world.getPlayerPosX() / 4);
         final int ty = Math.round(world.getPlayerPosY() / 4);
@@ -1020,14 +1033,8 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void level(long tileID) throws RemoteException
     {
-        if(shovelID == -10)
-        {
-            InventoryMetaItem tool = Utils.locateToolItem("shovel");
-            if(tool == null)
-                return;
-            else
-                shovelID = tool.getId();
-        }
+        if(!locateShovel())
+            return;
         
         world.getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.LEVEL);
     }
@@ -1076,12 +1083,6 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     }
 }
 
-@FunctionalInterface
-interface ThrowingRunnable
-{
-    void run() throws Exception;
-}
-
 final class ScheduledTask
 {
     public Runnable task;
@@ -1128,28 +1129,31 @@ interface BotClient extends Remote
 
 final class ClientSet implements BotClient
 {
-    public ArrayList<BotClient> remotes = new ArrayList<>();
+    // refreshed from RMI threads while being iterated by the bot thread, so swap in a whole new list
+    public volatile List<BotClient> remotes = new CopyOnWriteArrayList<>();
     
     public void refreshRemotes(Registry registry) throws Exception
     {
-        remotes.clear();
+        ArrayList<BotClient> newRemotes = new ArrayList<>();
         
         String[] names = registry.list();
         for(String name: names)
         {
             if(!name.startsWith(RMIBot.registryPrefix))
                 continue;
-            remotes.add((BotClient)registry.lookup(name));
+            newRemotes.add((BotClient)registry.lookup(name));
         }
+        remotes = new CopyOnWriteArrayList<>(newRemotes);
     }
     
     @Override
     public String getPlayerName() throws RemoteException
     {
-        String[] names = new String[remotes.size()];
+        final List<BotClient> snapshot = remotes;
+        String[] names = new String[snapshot.size()];
         
         int index = 0;
-        for(BotClient remote: remotes)
+        for(BotClient remote: snapshot)
             names[index++] = remote.getPlayerName();
         
         return String.join(", ", names);

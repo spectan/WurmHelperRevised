@@ -22,10 +22,6 @@ public class CommandRegistry {
         return handlers.get(name.toLowerCase());
     }
 
-    public boolean has(String name) {
-        return handlers.containsKey(name.toLowerCase());
-    }
-
     public Set<String> getCommandNames() {
         return new LinkedHashSet<>(commandNames);
     }

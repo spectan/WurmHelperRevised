@@ -1,14 +1,14 @@
 package net.ildar.wurm;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiPredicate;
@@ -16,7 +16,6 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import org.gotti.wurmunlimited.modloader.ReflectionUtil;
-import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
 import com.wurmonline.client.game.PlayerObj;
@@ -61,12 +60,25 @@ public class Utils {
         consolePrint(message);
     }
     
+    //cache of ReflectionUtil.getField lookups, keyed by class and field name
+    private static final Map<Class<?>, Map<String, Field>> fieldCache = new ConcurrentHashMap<>();
+
+    private static Field lookupField(Class<?> cls, String field) throws NoSuchFieldException {
+        Map<String, Field> classFields = fieldCache.computeIfAbsent(cls, c -> new ConcurrentHashMap<>());
+        Field result = classFields.get(field);
+        if (result == null) {
+            result = ReflectionUtil.getField(cls, field);
+            classFields.put(field, result);
+        }
+        return result;
+    }
+
     public static <Cls, Ret> Ret getField(Cls what, String field) throws IllegalAccessException, NoSuchFieldException {
-        return ReflectionUtil.getPrivateField(what, ReflectionUtil.getField(what.getClass(), field));
+        return ReflectionUtil.getPrivateField(what, lookupField(what.getClass(), field));
     }
     
-    public static <Cls, Field> void setField(Cls what, String field, Field value) throws IllegalAccessException, NoSuchFieldException {
-        ReflectionUtil.setPrivateField(what, ReflectionUtil.getField(what.getClass(), field), value);
+    public static <Cls, Val> void setField(Cls what, String field, Val value) throws IllegalAccessException, NoSuchFieldException {
+        ReflectionUtil.setPrivateField(what, lookupField(what.getClass(), field), value);
     }
 
     /**
@@ -135,6 +147,8 @@ public class Utils {
     }
 
     public static void movePlayerBySteps(float x, float y, int steps, long duration) throws InterruptedException{
+        if (steps <= 0)
+            return;
         float curX = WurmHelper.hud.getWorld().getPlayerPosX();
         float curY = WurmHelper.hud.getWorld().getPlayerPosY();
         float xStep = (x - curX) / steps;
@@ -227,6 +241,18 @@ public class Utils {
         return new ArrayList<>(getField(node, "children"));
     }
 
+    //returns the "inventory" line among the root lines of the main inventory, falling back to the second line
+    private static Object getInventoryNode(List<Object> rootLines) throws NoSuchFieldException, IllegalAccessException {
+        int lineNum = 1;
+        for (int i = 0; i < rootLines.size(); i++) {
+            Object item = getField(rootLines.get(i), "item");
+            String itemName = getField(item, "itemName");
+            if (itemName.equals("inventory"))
+                lineNum = i;
+        }
+        return rootLines.get(lineNum);
+    }
+
     public static List<InventoryMetaItem>  getSelectedItems() {
         return getSelectedItems(false, true);
     }
@@ -234,18 +260,7 @@ public class Utils {
         InventoryListComponent ilc = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         List<InventoryMetaItem> selItems = new ArrayList<>();
         try {
-            Object rootNode = getInventoryRootNode(ilc);
-            List lines = getNodeChildren(rootNode);
-            int lineNum = 1;
-            int forEachIdx = 0;
-            for (Object line : lines) {
-                Object item = getField(line, "item");
-                String itemName = getField(item, "itemName");
-                if (itemName.equals("inventory"))
-                    lineNum = forEachIdx;
-                forEachIdx++;
-            }
-            Object invNode = lines.get(lineNum);
+            Object invNode = getInventoryNode(getNodeChildren(getInventoryRootNode(ilc)));
             List invLines = getNodeChildren(invNode);
             selItems =  getSelectedItems(invLines, getAll, recursive);
         } catch(Exception e){
@@ -436,9 +451,8 @@ public class Utils {
     public static List<InventoryMetaItem> getFirstLevelItems() {
         InventoryListComponent ilc = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         try {
-            Object rootNode = getInventoryRootNode(ilc);
-            List lines = getNodeChildren(rootNode);
-            Object nodeLineItem = getField(lines.get(1), "item");
+            Object invNode = getInventoryNode(getNodeChildren(getInventoryRootNode(ilc)));
+            Object nodeLineItem = getField(invNode, "item");
             InventoryMetaItem nodeItem = getField(nodeLineItem, "item");
             return new ArrayList<>(nodeItem.getChildren());
         } catch (Exception e) {
@@ -508,8 +522,10 @@ public class Utils {
     
     public static WurmComponent getComponentAtPoint(int x, int y, Predicate<WurmComponent> filter) {
         try {
-            for (int i = 0; i < WurmHelper.getInstance().components.size(); i++) {
-                WurmComponent wurmComponent = WurmHelper.getInstance().components.get(i);
+            List<WurmComponent> components = WurmHelper.getInstance().components;
+            if (components == null)
+                return null;
+            for (WurmComponent wurmComponent : components) {
                 if (wurmComponent.contains(x, y)) {
                     if (filter != null && !filter.test(wurmComponent))
                         continue;
@@ -593,28 +609,6 @@ public class Utils {
         return area;
     }
 
-    public static URL getResource(String r) {
-        URL url = WurmHelper.class.getClassLoader().getResource(r);
-        if (url == null && WurmHelper.class.getClassLoader() == HookManager.getInstance().getLoader()) {
-            url = HookManager.getInstance().getClassPool().find(WurmHelper.class.getName());
-            if (url != null) {
-                String path = url.toString();
-                int pos = path.lastIndexOf('!');
-                if (pos != -1) {
-                    if (r.substring(0,1).equals("/"))
-                        r = r.substring(1);
-                    path = path.substring(0, pos) + "!/" + r;
-                }
-                try {
-                    url = new URL(path);
-                } catch (MalformedURLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        return url;
-    }
-
     public static float getTotalWeight() {
         PaperDollInventory paperDollInventory = WurmHelper.hud.getPaperDollInventory();
         try {
@@ -679,12 +673,16 @@ public class Utils {
             fn.run();
             return true;
         } catch (Exception err) {
-            String callingClass = err.getStackTrace()[2].getClassName();
+            StackTraceElement[] trace = new Throwable().getStackTrace();
+            String callingClass = trace.length > 1 ? trace[1].getClassName() : Utils.class.getName();
+            callingClass = callingClass.substring(callingClass.lastIndexOf('.') + 1);
+            Object[] fmtArgs = new Object[args.length + 2];
+            fmtArgs[0] = err.getClass().getName();
+            fmtArgs[1] = err.getMessage();
+            System.arraycopy(args, 0, fmtArgs, 2, args.length);
             Utils.consolePrint(
                 String.format("%s: %s", callingClass, fmt), // preserve format arg numbering
-                err.getClass().getName(),
-                err.getMessage(),
-                args
+                fmtArgs
             );
             err.printStackTrace();
             return false;
