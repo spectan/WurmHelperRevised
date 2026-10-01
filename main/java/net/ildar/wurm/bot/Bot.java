@@ -66,8 +66,10 @@ public abstract class Bot extends Thread {
             } catch (Exception ignored) {
                 // hud may be unavailable during early crash
             }
-            unregisterMessageProcessors();
+            // leave the active list first, so console commands can't reach this bot (and register
+            // chat processors on it) after its processors were removed
             BotController.getInstance().onBotInterruption(this);
+            unregisterMessageProcessors();
             if (stopRequested) {
                 Utils.feedback(this.getClass().getSimpleName() + " was stopped");
             } else {
@@ -330,11 +332,12 @@ public abstract class Bot extends Thread {
     }
 
     private void handleInfoCommand(String[] input) {
-        if (input == null || input.length != 1) {
+        String keyName = joinArgs(input);
+        if (keyName == null) {
             printInputKeyUsageString(InputKeyBase.info);
             return;
         }
-        InputKey inputKey = getInputKey(input[0]);
+        InputKey inputKey = getInputKey(keyName);
         if (inputKey == null) {
             Utils.consolePrint("Unknown key");
             Utils.consolePrint(getUsageString());

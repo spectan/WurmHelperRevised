@@ -233,7 +233,8 @@ public class BotController {
             String status = botInstance.getPaused() ? " (paused)" : "";
             Utils.consolePrint("Status: ON%s", status);
         } else {
-            botInstance = getStagedInstance(botClass);
+            // show the keys of the configured instance if there is one; just looking doesn't configure the bot
+            botInstance = stagedBots.containsKey(botClass) ? stagedBots.get(botClass) : newBot(botClass);
             Utils.consolePrint("Status: OFF. Type \"bot " + getAbbreviation(botClass) + " on\" to activate the bot. Keys can be set before turning it on");
         }
         if (botInstance != null)

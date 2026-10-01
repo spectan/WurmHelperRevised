@@ -143,7 +143,8 @@ class AreaAssistant {
 
     /**
      * Without arguments: stop the running tour (or print usage when there is none).
-     * With a size: start a tour of that size, or change the size of the running tour and keep it going
+     * With a size: start a tour of that size. While a tour runs, the same size stops it (so one keybind
+     * toggles the tour) and a different size resizes it
      */
     void toggleAreaTour(String[] input) {
         if (!bot.requireRunning()) return;
@@ -174,7 +175,10 @@ class AreaAssistant {
             bot.printInputKeyUsageString(InputKey.area);
             return;
         }
-        if (areaTourActivated()) {
+        if (areaTourActivated() && tilesForward == height && tilesToRight == width) {
+            resetAreaTour();
+            Utils.feedback("Area mode is off for " + botName);
+        } else if (areaTourActivated()) {
             // keep the start point and the progress, only the bounds change
             height = tilesForward;
             width = tilesToRight;
@@ -208,7 +212,7 @@ class AreaAssistant {
 
     private enum InputKey implements Bot.InputKey {
         area("Area Mode", "Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. " +
-                "With a size while it is running the area is resized. Without arguments the area mode is stopped", "[<tiles ahead> <tiles to the right>]"),
+                "While it is running, the same size (or no arguments) stops it and a different size resizes it", "[<tiles ahead> <tiles to the right>]"),
         area_speed("Area Speed", "Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second.", "<tiles per second>");
 
         private final Bot.KeyInfo keyInfo;

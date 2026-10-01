@@ -54,7 +54,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `at` | Add Target | Add the inventory under the mouse cursor to identify fragments in |
 | `co` | Fragment Combining | Toggle fragment combining |
@@ -138,7 +138,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `c <clicks>` | Clicks | Set the amount of chops the bot will do each time |
 | `d <distance>` | Distance | Set the distance (in meters) the bot should look around player in search for a felled tree |
@@ -185,7 +185,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `c <clicks>` | Clicks | Set the amount of actions the bot will do each time |
 | `d [<height>]` | Dig | Dig until the specified height (in slopes) is reached. With a height it sets the height and turns digging on; without one it turns digging off |
@@ -205,7 +205,7 @@ is turned on. See the README for the general usage.
 | Key | Name | Description |
 |---|---|---|
 | `and <item name>` | Add Drop Item | Add item names to drop on the ground. Separate several names with commas |
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `c` | Cultivation | Toggle the dirt cultivation |
 | `d` | Dropping | Toggle the dropping of harvested items. Add item names to drop by "and" key |
@@ -230,7 +230,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
-| `at` | Add Target | Add the container under the mouse as a target. Foragable and botanizable items will be moved to the first target added |
+| `at` | Set Target | Set the container under the mouse as the target. Foragable and botanizable items will be moved to it. Using it again switches to the new container |
 | `mr` | Toggle Rocks | Toggle moving of rocks |
 | `r` | Toggle Rares | Toggle moving of rare items |
 
@@ -240,7 +240,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `b` | Botanizing | Toggle the botanizing |
 | `bt <type>` | Botanize Type | Set the botanizing type. Use the "btl" key to see the available types |
@@ -265,7 +265,7 @@ is turned on. See the README for the general usage.
 | Key | Name | Description |
 |---|---|---|
 | `aim <item name>[, <item name>...]` | Add Item | Add item name(s), separated by commas, to move into the containers along with sprouts |
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `asb <tree name>[, <tree name>...]` | Add Sprout Blacklist | Add tree type(s), separated by commas, to not pick sprouts from |
 | `atb <tree name>[, <tree name>...]` | Add Tree Blacklist | Add blacklisted tree type(s), separated by commas. Those trees are skipped |
@@ -452,9 +452,9 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
-| `a <age>` | Age Limit | Set minimal tree age for chopping by name or abbreviation, e.g. "ov" or "old" (see the "al" key). Chop all trees by default |
+| `a <age>` | Age Limit | Set minimal tree age for chopping by name or abbreviation, e.g. "oa" or "old" (see the "al" key). Chop all trees by default |
 | `al` | Age List | Show the tree ages and their abbreviations |
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. With a size while it is running the area is resized. Without arguments the area mode is stopped |
+| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `b` | Bush Cutting | Toggle bush cutting. Enabled by default |
 | `c <clicks>` | Clicks | Set the number of chops queued each time |

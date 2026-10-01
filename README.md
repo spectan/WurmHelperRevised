@@ -20,7 +20,8 @@ Bots are controlled with `bot <bot> <key> [arguments]`:
   * keys can be typed by their short name or full name: `bot ch s 0.9` is the same as `bot ch stamina 0.9`
   * bots can be configured before they are started: `bot m c 3` on a stopped miner remembers the setting
     for when you run `bot m on`. You can also configure and start in one go: `bot m on c 3`
-  * stamina thresholds take a value between 0 and 1, or a percentage: `bot ch s 90`
+  * stamina thresholds are compared with stamina + damage, so they take a value between 0 and 2,
+    or a percentage: `bot ch s 90` is the same as `bot ch s 0.9`
   * names can be several words, and lists are comma separated: `bot cig a small barrel, large crate`
   * `bot list` shows all bots and their state, `bot pause` pauses/resumes all running bots, `bot off` stops them
 
