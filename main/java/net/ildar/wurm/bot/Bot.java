@@ -20,6 +20,7 @@ public abstract class Bot extends Thread {
      * Store all registered message processors here to unregister them on bot deactivation to prevent memory leaks
      */
     private List<Chat.MessageProcessor> registeredMessageProcessors = new ArrayList<>();
+    private final List<Runnable> pendingMessageProcessors = new ArrayList<>();
     private volatile boolean paused = false;
     /**
      * Effective stamina (stamina + damage) the player must exceed before work.
@@ -48,6 +49,10 @@ public abstract class Bot extends Thread {
     public final void run() {
         String failure = null;
         try {
+            synchronized (this) {
+                pendingMessageProcessors.forEach(Runnable::run);
+                pendingMessageProcessors.clear();
+            }
             work();
         } catch (InterruptedException ignored) {
         } catch (Exception e) {
@@ -438,11 +443,16 @@ public abstract class Bot extends Thread {
         registerMessageProcessor(":Event", filter, callback);
     }
 
-    final void registerMessageProcessor(String tabName, Function<String, Boolean> filter, Runnable callback) {
-        registeredMessageProcessors.add(Chat.registerMessageProcessor(tabName, filter, callback));
+    final synchronized void registerMessageProcessor(String tabName, Function<String, Boolean> filter, Runnable callback) {
+        // a bot configured while off may never be started, so hold its processors until it runs
+        // (they are unregistered when the bot thread ends)
+        if (getState() == State.NEW)
+            pendingMessageProcessors.add(() -> registerMessageProcessor(tabName, filter, callback));
+        else
+            registeredMessageProcessors.add(Chat.registerMessageProcessor(tabName, filter, callback));
     }
 
-    private void unregisterMessageProcessors() {
+    private synchronized void unregisterMessageProcessors() {
         registeredMessageProcessors.forEach(Chat::unregisterMessageProcessor);
     }
 
