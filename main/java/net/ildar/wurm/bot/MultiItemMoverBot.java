@@ -25,6 +25,7 @@ public class MultiItemMoverBot extends Bot
     
     public MultiItemMoverBot()
     {
+        timeout = 5000;
         itemSets.add(new ItemSet());
         
         registerInputHandler(Inputs.fl, input -> toggleToplevelOnly());
@@ -41,8 +42,6 @@ public class MultiItemMoverBot extends Bot
     @Override
     public void work() throws Exception
     {
-        setTimeout(5000);
-        
         while(isActive())
         {
             waitOnPause();
@@ -89,10 +88,10 @@ public class MultiItemMoverBot extends Bot
     void toggleToplevelOnly()
     {
         toplevelOnly = !toplevelOnly;
-        Utils.consolePrint(String.format(
+        Utils.feedback(
             "Bot will move %s items",
             toplevelOnly ? "only top level" : "all"
-        ));
+        );
     }
     
     void newSet()
@@ -133,25 +132,12 @@ public class MultiItemMoverBot extends Bot
             return;
         }
         
-        try
-        {
-            int newSelection = Integer.parseInt(args[0]);
-            if(newSelection < 0 || newSelection >= numSets)
-            {
-                Utils.consolePrint(
-                    "Only have %d item sets, index must be in 0 .. %d",
-                    numSets, numSets - 1
-                );
-                return;
-            }
-            
-            selectedSet = newSelection;
-            Utils.consolePrint("Selected item set %d", selectedSet);
-        }
-        catch(NumberFormatException err)
-        {
-            Utils.consolePrint("`%s` is not an integer", args[0]);
-        }
+        Integer newSelection = parseIntArg(args, Inputs.isc, 0, numSets - 1);
+        if(newSelection == null)
+            return;
+        
+        selectedSet = newSelection;
+        Utils.feedback("Selected item set %d", selectedSet);
     }
     
     void listSets()
@@ -183,7 +169,8 @@ public class MultiItemMoverBot extends Bot
     
     void addItem(String[] args)
     {
-        if(args == null || args.length == 0)
+        List<String> itemNames = parseNameList(args);
+        if(itemNames.isEmpty())
         {
             printInputKeyUsageString(Inputs.a);
             return;
@@ -195,7 +182,6 @@ public class MultiItemMoverBot extends Bot
             return;
         }
         
-        String[] itemNames = String.join(" ", args).split("\\s*,\\s*");
         ItemSet selected = itemSets.get(selectedSet);
         for(String name: itemNames)
             selected.itemNames.add(name);
@@ -215,16 +201,17 @@ public class MultiItemMoverBot extends Bot
         }
         
         itemSets.get(selectedSet).itemNames.clear();
-        Utils.consolePrint("Cleared items for set %d", selectedSet);
+        Utils.feedback("Cleared items for set %d", selectedSet);
     }
     
     static class ItemSet
     {
         final Set<String> itemNames = ConcurrentHashMap.newKeySet();
         boolean isRootTarget;
-        long target;
-        InventoryListComponent targetComponent;
-        InventoryMetaItem targetRoot;
+        volatile long target;
+        volatile String targetName;
+        volatile InventoryListComponent targetComponent;
+        volatile InventoryMetaItem targetRoot;
         
         boolean haveTarget()
         {
@@ -235,6 +222,7 @@ public class MultiItemMoverBot extends Bot
         {
             isRootTarget = isRoot;
             target = -1;
+            targetName = null;
             targetComponent = null;
             targetRoot = null;
             if(isRoot)
@@ -267,7 +255,7 @@ public class MultiItemMoverBot extends Bot
                 
                 targetComponent = listComponent;
                 targetRoot = root;
-                Utils.consolePrint("New target is \"%s\"", root.getBaseName());
+                Utils.feedback("New target is \"%s\"", root.getBaseName());
             }
             else
             {
@@ -278,11 +266,24 @@ public class MultiItemMoverBot extends Bot
                 if(targets != null && targets.length > 0)
                 {
                     target = targets[0];
-                    Utils.consolePrint("New target is %d", target);
+                    targetName = ItemMoverBot.describeHoveredTarget(targets[0], x, y);
+                    Utils.feedback("New target is %s", targetName);
                 }
                 else
                     Utils.consolePrint("Couldn't find item to target");
             }
+        }
+        
+        String describeTarget()
+        {
+            if(isRootTarget)
+            {
+                InventoryMetaItem root = targetRoot;
+                return root != null ? "\"" + root.getBaseName() + "\"" : "not set";
+            }
+            if(target > 0)
+                return targetName != null ? targetName : "item with id " + target;
+            return "not set";
         }
         
         void moveItems(List<InventoryMetaItem> items)
@@ -299,18 +300,36 @@ public class MultiItemMoverBot extends Bot
         }
     }
     
+    @Override
+    void describeSettings(List<String> lines)
+    {
+        lines.add("First level items only: " + onOff(toplevelOnly));
+        List<ItemSet> sets = new ArrayList<>(itemSets);
+        for(int index = 0; index < sets.size(); index++)
+        {
+            ItemSet set = sets.get(index);
+            lines.add(String.format(
+                "Set %d%s: items: %s; target: %s",
+                index,
+                index == selectedSet ? " (selected)" : "",
+                set.itemNames.isEmpty() ? "none" : String.join(", ", set.itemNames),
+                set.describeTarget()
+            ));
+        }
+    }
+    
     private enum Inputs implements Bot.InputKey
     {
         fl("First Level Only", "Toggle moving of only top-level items", ""),
         
         isn("New Set", "Create new item set", ""),
         isd("Delete Set", "Delete current item set", ""),
-        isc("Select Set", "Choose item set to operate on", "index"),
+        isc("Select Set", "Choose item set to operate on", "<index>"),
         isl("List Sets", "Show item sets", ""),
         
         st("Set Target", "Set target item for chosen set", ""),
         str("Target Container Root", "Set target container for chosen set", ""),
-        a("Add Item", "Add item to chosen set", "name"),
+        a("Add Item", "Add item names to chosen set. Separate several names with commas", "<item name>"),
         clear("Clear Items", "Clear list of items in chosen set", ""),
         ;
 

@@ -18,21 +18,23 @@ import java.util.stream.Collectors;
         abbreviation = "f")
 public class FarmerBot extends Bot {
     private AreaAssistant areaAssistant = new AreaAssistant(this);
-    private boolean farmTending;
-    private InventoryMetaItem rakeItem;
-    private boolean harvesting;
-    private InventoryMetaItem scytheItem;
-    private boolean planting;
-    private String seedsName;
-    private boolean cultivating;
-    private InventoryMetaItem shovelItem;
-    private boolean dropping;
-    private boolean repairing = true;
+    private volatile boolean farmTending;
+    private volatile InventoryMetaItem rakeItem;
+    private volatile boolean harvesting;
+    private volatile InventoryMetaItem scytheItem;
+    private volatile boolean planting;
+    private volatile String seedsName;
+    private volatile boolean cultivating;
+    private volatile InventoryMetaItem shovelItem;
+    private volatile boolean dropping;
+    private volatile boolean repairing = true;
     private final List<String> dropNamesList = new CopyOnWriteArrayList<>();
-    private int dropLimit;
+    private volatile int dropLimit;
     private boolean noSeedsReported;
 
     public FarmerBot() {
+        staminaThreshold = 0.9f;
+        timeout = 500;
         registerStaminaThresholdHandler(FarmerBot.InputKey.s);
         registerInputHandler(FarmerBot.InputKey.ft, input -> toggleFarmTending());
         registerInputHandler(FarmerBot.InputKey.h, input -> toggleHarvesting());
@@ -46,8 +48,6 @@ public class FarmerBot extends Bot {
 
     @Override
     protected void work() throws Exception {
-        setStaminaThreshold(0.9f);
-        setTimeout(500);
         int maxActions = Utils.getMaxActionNumber();
         World world = WurmHelper.hud.getWorld();
         Set<String> cultivatedTiles = new HashSet<>(Arrays.asList(
@@ -152,21 +152,23 @@ public class FarmerBot extends Bot {
             Utils.consolePrint("The dropping is off. Can't add new item name to drop");
             return;
         }
-        if (input == null || input.length == 0) {
+        List<String> names = parseNameList(input);
+        if (names.isEmpty()) {
             printInputKeyUsageString(FarmerBot.InputKey.and);
             return;
         }
-        String name = String.join(" ", input);
-        dropNamesList.add(name);
-        Utils.consolePrint("New name of item to drop was added - \"" + name + "\"");
+        for (String name : names)
+            if (!dropNamesList.contains(name))
+                dropNamesList.add(name);
+        Utils.consolePrint("Items to drop: " + String.join(", ", dropNamesList));
     }
     private void toggleDropping() {
         dropping = !dropping;
         if (dropping) {
-            Utils.consolePrint("The dropping of harvested items is on");
+            Utils.feedback("The dropping of harvested items is on");
             dropNamesList.clear();
         } else
-            Utils.consolePrint("The dropping of harvested items is off");
+            Utils.feedback("The dropping of harvested items is off");
     }
 
     private void toggleCultivating() {
@@ -178,25 +180,26 @@ public class FarmerBot extends Bot {
             }
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + shovelItem.getDisplayName() + " with QL:" + shovelItem.getQuality() + " DMG:" + shovelItem.getDamage());
             cultivating = true;
-            Utils.consolePrint("The cultivation is on");
+            Utils.feedback("The cultivation is on");
         } else {
             cultivating = false;
-            Utils.consolePrint("The cultivation is off");
+            Utils.feedback("The cultivation is off");
         }
     }
 
     private void togglePlanting(String []input) {
-        if (!planting) {
-            if (input == null || input.length == 0) {
-                printInputKeyUsageString(FarmerBot.InputKey.p);
-                return;
-            }
-            this.seedsName = String.join(" ", input);
-            Utils.consolePrint(this.getClass().getSimpleName() + " will plant " + this.seedsName);
+        String seeds = joinArgs(input);
+        if (seeds != null) {
+            // with a name: set the seeds and make sure planting is on
+            this.seedsName = seeds;
+            noSeedsReported = false;
             planting = true;
-        } else {
+            Utils.feedback(this.getClass().getSimpleName() + " will plant " + this.seedsName);
+        } else if (planting) {
             planting = false;
-            Utils.consolePrint("Planting is off");
+            Utils.feedback("Planting is off");
+        } else {
+            printInputKeyUsageString(FarmerBot.InputKey.p);
         }
     }
 
@@ -209,10 +212,10 @@ public class FarmerBot extends Bot {
             }
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + scytheItem.getDisplayName() + " with QL:" + scytheItem.getQuality() + " DMG:" + scytheItem.getDamage());
             harvesting = true;
-            Utils.consolePrint("The harvesting is on");
+            Utils.feedback("The harvesting is on");
         } else {
             harvesting = false;
-            Utils.consolePrint("The harvesting is off");
+            Utils.feedback("The harvesting is off");
         }
     }
 
@@ -225,42 +228,54 @@ public class FarmerBot extends Bot {
             }
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + rakeItem.getDisplayName() + " with QL:" + rakeItem.getQuality() + " DMG:" + rakeItem.getDamage());
             farmTending = true;
-            Utils.consolePrint("The farm tending is on");
+            Utils.feedback("The farm tending is on");
         } else {
             farmTending = false;
-            Utils.consolePrint("The farm tending is off");
+            Utils.feedback("The farm tending is off");
         }
     }
 
     private void toggleRepairing() {
         repairing = !repairing;
-        Utils.consolePrint("The tool repairing is " + (repairing?"on":"off"));
+        Utils.feedback("The tool repairing is " + onOff(repairing));
     }
 
     private void setDropLimit(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(FarmerBot.InputKey.dl);
+        Integer limit = parseIntArg(input, FarmerBot.InputKey.dl, 0, 100000);
+        if (limit == null)
             return;
-        }
-        try{
-            dropLimit = Integer.parseInt(input[0]);
-            Utils.consolePrint("New drop limit is " + dropLimit);
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong drop limit value!");
-        }
+        dropLimit = limit;
+        Utils.consolePrint("New drop limit is " + dropLimit);
+    }
+
+    private static String toolName(InventoryMetaItem tool) {
+        return tool != null ? tool.getDisplayName() : "no tool";
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Farm tending: " + onOff(farmTending) + (farmTending ? " (" + toolName(rakeItem) + ")" : ""));
+        lines.add("Harvesting: " + onOff(harvesting) + (harvesting ? " (" + toolName(scytheItem) + ")" : ""));
+        lines.add("Planting: " + onOff(planting) + (seedsName != null ? " (seeds: " + seedsName + ")" : ""));
+        lines.add("Cultivation: " + onOff(cultivating) + (cultivating ? " (" + toolName(shovelItem) + ")" : ""));
+        lines.add("Dropping: " + onOff(dropping) + (dropping ? " (items: " + (dropNamesList.isEmpty() ? "none" : String.join(", ", dropNamesList)) + ")" : ""));
+        lines.add("Drop limit: " + dropLimit);
+        lines.add("Repair: " + onOff(repairing));
+        if (areaAssistant != null)
+            areaAssistant.describeSettings(lines);
     }
 
     enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        r("Toggle Repair", "Toggle the tool repairing", ""),
+        s("Stamina", "Set the stamina threshold (a value between 0 and 1). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        r("Repair", "Toggle the tool repairing", ""),
         ft("Farm Tending", "Toggle the farm tending", ""),
         h("Harvest Mode", "Toggle the harvesting", ""),
-        p("Planting", "Toggle the planting. Provide the name of the seeds to plant", "seeds_name"),
+        p("Planting", "Turn the planting on with the name of the seeds to plant (or change the seeds), or turn it off without a name", "[seeds name]"),
         c("Cultivation", "Toggle the dirt cultivation", ""),
-        and("Add Drop Item", "Add new item name to drop on the ground", "itemName"),
+        and("Add Drop Item", "Add item names to drop on the ground. Separate several names with commas", "<item name>"),
         d("Dropping", "Toggle the dropping of harvested items. Add item names to drop by \"" + and.name() + "\" key", ""),
-        dl("Drop Limit", "Set the drop limit, configured number of harvests won't be dropped", "number");
+        dl("Drop Limit", "Set the drop limit, configured number of harvests won't be dropped", "<count>");
 
         private final KeyInfo keyInfo;
 

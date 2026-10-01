@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
@@ -29,17 +30,19 @@ import net.ildar.wurm.annotations.BotInfo;
 public class PileCollector extends Bot {
     private final float MAX_DISTANCE = 4;
     private Set<Long> openedPiles = new HashSet<>();
-    private InventoryListComponent targetLc;
-    private String containerName = "large crate";
-    private int containerCapacity = 300;
-    private String targetItemName = "dirt";
-    private float minQuality = 0;
-    private String customContainer = null;
+    private volatile InventoryListComponent targetLc;
+    private volatile String containerName = "large crate";
+    private volatile int containerCapacity = 300;
+    private volatile String targetItemName = "dirt";
+    private volatile float minQuality = 0;
+    private volatile String customContainer = null;
     
     // items picked up from ground that failed predicates and were dropped back to ground
-    private Set<Long> ignoredItems = new HashSet<>();
+    // (cleared from the console thread when the filters change)
+    private final Set<Long> ignoredItems = ConcurrentHashMap.newKeySet();
 
     public PileCollector() {
+        timeout = 500;
         registerInputHandler(PileCollector.InputKey.stn, this::setTargetName);
         registerInputHandler(PileCollector.InputKey.st, this::setTargetInventoryName);
         registerInputHandler(PileCollector.InputKey.stcc, this::setContainerCapacity);
@@ -49,7 +52,6 @@ public class PileCollector extends Bot {
 
     @Override
     protected void work() throws Exception {
-        setTimeout(500);
         ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
         Set<Long> pickedUpItems = new HashSet<>();
         while (isActive()) {
@@ -174,11 +176,12 @@ public class PileCollector extends Bot {
     }
 
     private void setTargetName(String []input) {
-        if (input == null || input.length == 0) {
+        String name = joinArgs(input);
+        if (name == null) {
             printInputKeyUsageString(PileCollector.InputKey.stn);
             return;
         }
-        this.targetItemName = String.join(" ", input);
+        this.targetItemName = name;
         Utils.consolePrint("New name for target items is \"" + this.targetItemName + "\"");
         ignoredItems.clear(); // items that didn't match previously may match now
     }
@@ -189,58 +192,49 @@ public class PileCollector extends Bot {
             Utils.consolePrint("Can't find an inventory");
             return;
         }
+        InventoryListComponent lc;
         try {
-            targetLc = Utils.getField(wurmComponent, "component");
+            lc = Utils.getField(wurmComponent, "component");
         } catch (IllegalAccessException | NoSuchFieldException e) {
             Utils.consolePrint("Error on configuring the target");
             return;
         }
-        if (input != null && input.length != 0) {
-            this.containerName = String.join(" ", input);
+        targetLc = lc;
+        String name = joinArgs(input);
+        if (name != null) {
+            this.containerName = name;
         }
-        Utils.consolePrint("The target was set with container name - \"" + containerName + "\"");
+        InventoryMetaItem rootItem = Utils.getRootItem(lc);
+        Utils.feedback("Items will go to \"" + containerName + "\" containers inside \""
+                + (rootItem != null ? rootItem.getBaseName() : "the target inventory") + "\"");
     }
 
     private void setContainerCapacity(String []input) {
-        if (input == null || input.length == 0) {
-            printInputKeyUsageString(PileCollector.InputKey.stcc);
+        Integer capacity = parseIntArg(input, PileCollector.InputKey.stcc, 1, 100000);
+        if (capacity == null)
             return;
-        }
-        try {
-            containerCapacity = Integer.parseInt(input[0]);
-            Utils.consolePrint("New container capacity is " + containerCapacity);
-        }catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong value!");
-        }
+        containerCapacity = capacity;
+        Utils.consolePrint("New container capacity is " + containerCapacity);
     }
     
     private void setMinQuality(String[] input) {
-        if (input == null || input.length == 0) {
-            printInputKeyUsageString(PileCollector.InputKey.mq);
+        Float quality = parseFloatArg(input, PileCollector.InputKey.mq, 0, 100);
+        if (quality == null)
             return;
-        }
-        
-        try {
-            minQuality = Float.parseFloat(input[0]);
-            if (minQuality < 0) throw new NumberFormatException();
-            if (minQuality > 0 && minQuality < 1)
-                Utils.consolePrint(
-                    "Did you mean `%s %2$.1f` to move items >= %2$.1f QL?",
-                    PileCollector.InputKey.mq.getName(),
-                    minQuality * 100
-                );
-            Utils.consolePrint("Items with QL >= %.1f will be collected", minQuality);
-            ignoredItems.clear(); // items that didn't match previously may match now
-        } catch (NumberFormatException err) {
-            Utils.consolePrint("`%s` is not a positive real number", input[0]);
-        }
+        minQuality = quality;
+        if (minQuality > 0 && minQuality < 1)
+            Utils.consolePrint(
+                "Did you mean `%s %2$.1f` to move items >= %2$.1f QL?",
+                PileCollector.InputKey.mq.getName(),
+                minQuality * 100
+            );
+        Utils.consolePrint("Items with QL >= %.1f will be collected", minQuality);
+        ignoredItems.clear(); // items that didn't match previously may match now
     }
     
     private void setCustomContainer(String[] input) {
-        if (input == null || input.length == 0)
-            customContainer = null;
-        else
-            customContainer = String.join(" ", input).toLowerCase();
+        String name = joinArgs(input);
+        customContainer = name == null ? null : name.toLowerCase();
         Utils.consolePrint(
             customContainer == null ?
                 "Only piles of items will be searched" :
@@ -249,12 +243,25 @@ public class PileCollector extends Bot {
         );
     }
 
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Target items: " + targetItemName);
+        InventoryListComponent lc = targetLc;
+        InventoryMetaItem rootItem = lc != null ? Utils.getRootItem(lc) : null;
+        lines.add("Target: " + (lc == null ? "not set" : "\"" + containerName + "\" containers inside "
+                + (rootItem != null ? "\"" + rootItem.getBaseName() + "\"" : "a closed inventory window")));
+        lines.add("Container name: " + containerName);
+        lines.add("Container capacity: " + containerCapacity);
+        lines.add("Min quality: " + minQuality);
+        lines.add("Custom container: " + (customContainer != null ? customContainer : "none"));
+    }
+
     private enum InputKey implements Bot.InputKey {
-        stn("Target Name", "Set the name for target items. Default name is \"dirt\"", "name"),
-        st("Set Target", "Set the target bulk inventory to put items to. Provide an optional name of containers inside inventory. Default is \"large crate\"", "[name]"),
-        stcc("Container Capacity", "Set the capacity for target container. Default value is 300", "capacity(integer value)"),
-        mq("Min Quality", "Set minimum quality of items to be collected", "QL(0-100)"),
-        cc("Custom Container", "Set/clear additional container name to search for target items", "name(or nothing to clear)");
+        stn("Target Name", "Set the name for target items. Default name is \"dirt\"", "<item name>"),
+        st("Set Target", "Set the target bulk inventory(under mouse pointer) to put items to. Provide an optional name of containers inside inventory. Default is \"large crate\"", "[container name]"),
+        stcc("Container Capacity", "Set the capacity for target container. Default value is 300", "<capacity>"),
+        mq("Min Quality", "Set minimum quality (0 to 100) of items to be collected", "<quality>"),
+        cc("Custom Container", "Set additional container name to search for target items, or clear it when called without a name", "[container name]");
 
         private final KeyInfo keyInfo;
 

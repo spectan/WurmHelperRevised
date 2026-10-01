@@ -1,5 +1,6 @@
 package net.ildar.wurm.bot;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
@@ -26,10 +27,11 @@ public class BulkItemGetterBot extends Bot
     public static volatile int currentMoveQuantity = -1;
     // modified from the console thread while the bot thread iterates it
     final List<ItemSpec> specs = new CopyOnWriteArrayList<>();
-    int selectedSpec = 0;
+    volatile int selectedSpec = 0;
     
     public BulkItemGetterBot()
     {
+        timeout = 5000;
         specs.add(new ItemSpec());
         
         registerInputHandler(Inputs.isn, input -> newSpec());
@@ -47,7 +49,6 @@ public class BulkItemGetterBot extends Bot
     {
         closeBMLWindow = false;
         currentMoveQuantity = -1;
-        setTimeout(5000);
         registerEventProcessor(
             message -> message.contains("That item is already busy"),
             () -> closeBMLWindow = false
@@ -114,9 +115,12 @@ public class BulkItemGetterBot extends Bot
     
     void newSpec()
     {
-        specs.add(new ItemSpec());
+        ItemSpec spec = new ItemSpec();
+        specs.add(spec);
         selectedSpec = specs.size() - 1;
-        Utils.consolePrint("Created and selected new spec with index %d", selectedSpec);
+        Utils.feedback("Created and selected new spec with index %d", selectedSpec);
+        if(spec.target != null)
+            Utils.consolePrint("New item spec will move to player's inventory");
     }
     
     void deleteSpec()
@@ -150,25 +154,12 @@ public class BulkItemGetterBot extends Bot
             return;
         }
         
-        try
-        {
-            int newSelection = Integer.parseInt(args[0]);
-            if(newSelection < 0 || newSelection >= numSets)
-            {
-                Utils.consolePrint(
-                    "Only have %d specs, index must be in 0 .. %d",
-                    numSets, numSets - 1
-                );
-                return;
-            }
-            
-            selectedSpec = newSelection;
-            Utils.consolePrint("Selected spec %d", selectedSpec);
-        }
-        catch(NumberFormatException err)
-        {
-            Utils.consolePrint("`%s` is not an integer", args[0]);
-        }
+        Integer newSelection = parseIntArg(args, Inputs.isc, 0, numSets - 1);
+        if(newSelection == null)
+            return;
+        
+        selectedSpec = newSelection;
+        Utils.feedback("Selected spec %d", selectedSpec);
     }
     
     void listSpecs()
@@ -190,33 +181,22 @@ public class BulkItemGetterBot extends Bot
     
     void setQuantity(String[] args)
     {
-        if(args == null || args.length != 1)
-        {
-            printInputKeyUsageString(Inputs.c);
-            return;
-        }
-        
         if(specs.size() == 0 || selectedSpec == -1)
         {
             Utils.consolePrint("Don't have any specs (or somehow none selected) to set quantity of!");
             return;
         }
         
-        try
-        {
-            int newQuantity = Integer.parseInt(args[0]);
-            if(newQuantity <= 0) newQuantity = -1;
-            specs.get(selectedSpec).stockQuantity = newQuantity;
-            
-            if(newQuantity > 0)
-                Utils.consolePrint("Bot will keep at most %d items in stock", newQuantity);
-            else
-                Utils.consolePrint("Bot will keep as many items as possible in target");
-        }
-        catch(NumberFormatException err)
-        {
-            Utils.consolePrint("`%s` is not an integer", args[0]);
-        }
+        Integer parsed = parseIntArg(args, Inputs.c, 0, 1000000);
+        if(parsed == null)
+            return;
+        int newQuantity = parsed <= 0 ? -1 : parsed;
+        specs.get(selectedSpec).stockQuantity = newQuantity;
+        
+        if(newQuantity > 0)
+            Utils.consolePrint("Bot will keep at most %d items in stock", newQuantity);
+        else
+            Utils.consolePrint("Bot will keep as many items as possible in target");
     }
     
     void setSource(boolean fixed)
@@ -239,15 +219,34 @@ public class BulkItemGetterBot extends Bot
         specs.get(selectedSpec).setTarget();
     }
     
+    @Override
+    void describeSettings(List<String> lines)
+    {
+        List<ItemSpec> snapshot = new ArrayList<>(specs);
+        if(snapshot.isEmpty())
+            lines.add("Specs: none");
+        for(int index = 0; index < snapshot.size(); index++)
+        {
+            ItemSpec spec = snapshot.get(index);
+            lines.add(String.format(
+                "Spec %d%s: %s; stock quantity: %s",
+                index,
+                index == selectedSpec ? " (selected)" : "",
+                spec.toString(),
+                spec.stockQuantity > 0 ? String.valueOf(spec.stockQuantity) : "as many as possible"
+            ));
+        }
+    }
+    
     enum Inputs implements Bot.InputKey
     {
         isn("New Set", "Create a new item spec", ""),
         isd("Delete Set", "Delete currently chosen item spec", ""),
-        isc("Select Set", "Choose an item spec to operate on", "number"),
+        isc("Select Set", "Choose an item spec to operate on", "<index>"),
         isl("List Sets", "List item specs", ""),
         
-        c("Stock Quantity", "Set quantity of source items to keep stocked in target", "number"),
-        ss("Set Source", "Set the source item for chosen spec (in bulk storage) to what the user is currenly pointing to", ""),
+        c("Stock Quantity", "Set quantity of source items to keep stocked in target, 0 to move as many as possible", "<quantity>"),
+        ss("Set Source", "Set the source item for chosen spec (in bulk storage) to what the user is currently pointing to", ""),
         ssxy("Source XY", "Find source item(s) for chosen spec from a fixed point at current cursor position", ""),
         st("Set Target", "Set the target item for chosen spec to what the user is currently pointing to", ""),
         ;
@@ -276,10 +275,8 @@ class ItemSpec
     
     public ItemSpec()
     {
-        // move to player's inventory by default
+        // move to player's inventory by default (silently: the bot constructor creates the first spec)
         targetPlayerInventory();
-        if(target != null)
-            Utils.consolePrint("New item spec will move to player's inventory");
     }
     
     public void setSource(boolean fixed)
@@ -295,7 +292,7 @@ class ItemSpec
         {
             fixedX = mouseX;
             fixedY = mouseY;
-            Utils.consolePrint("Current item set will pull items at mouse coordinates %d,%d", fixedX, fixedY);
+            Utils.feedback("Current item spec will pull items at mouse coordinates %d,%d", fixedX, fixedY);
         }
         else
             updateSource(mouseX, mouseY);
@@ -311,7 +308,7 @@ class ItemSpec
             targetPlayerInventory();
         
         if(target != null)
-            Utils.consolePrint("New target is %s", target.getDisplayName());
+            Utils.feedback("New target is %s", target.getDisplayName());
         else
             Utils.consolePrint("Couldn't find any target containers");
     }
@@ -363,8 +360,11 @@ class ItemSpec
         else if(items.size() > 1)
             Utils.consolePrint("More than one item found, defaulting to the first");
         
+        InventoryMetaItem previous = source;
         source = items.get(0);
-        Utils.consolePrint("Source is now: %s", source.getDisplayName());
+        // the fixed point source is refreshed every iteration: only report a change
+        if(previous == null || previous.getId() != source.getId())
+            Utils.consolePrint("Source is now: %s", source.getDisplayName());
     }
     
     @Override
