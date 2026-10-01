@@ -47,20 +47,6 @@
                             <goal>run</goal>
                         </goals>
                     </execution>
-                    <execution>
-                        <id>prepare-package</id>
-                        <phase>prepare-package</phase>
-                        <configuration>
-                            <tasks>
-                                <copy todir="${project.build.directory}/classes">
-                                    <fileset dir="${project.basedir}/../annotations/target/classes" includes="**/BotRegistration.class"/>
-                                </copy>
-                            </tasks>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
                 </executions>
             </plugin>
             <plugin>

@@ -11,12 +11,13 @@
         <version>1.7.1</version>
     </parent>
     <packaging>jar</packaging>
-    <properties>
-        <maven.resources.skip>true</maven.resources.skip>
-    </properties>
-
     <build>
         <sourceDirectory>src</sourceDirectory>
+        <resources>
+            <resource>
+                <directory>resources</directory>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
