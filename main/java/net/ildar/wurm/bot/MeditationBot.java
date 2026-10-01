@@ -1,7 +1,6 @@
 package net.ildar.wurm.bot;
 
 import com.wurmonline.client.renderer.PickableUnit;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
@@ -16,6 +15,7 @@ public class MeditationBot extends Bot {
     private int clicks = 3;
     private volatile boolean repairInitiated;
     private volatile int clicked;
+    private static final int MAX_MEDITATION_ATTEMPTS = 60;
 
     public MeditationBot() {
         registerStaminaThresholdHandler(MeditationBot.InputKey.s);
@@ -36,8 +36,6 @@ public class MeditationBot extends Bot {
         setRepairTimeout(60000);
         setStaminaThreshold(0.5f);
         registerEventProcessors();
-        CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         PlayerAction meditationAction = new PlayerAction("",(short) 384, PlayerAction.ANYTHING);
         while (isActive()) {
             waitOnPause();
@@ -54,10 +52,13 @@ public class MeditationBot extends Bot {
                     Utils.consolePrint("Couldn't repair a meditation rug!");
             }
             clicked = 0;
-            while(clicked < clicks) {
-                float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-                float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-                if ((stamina+damage) > staminaThreshold) {
+            int attempts = 0;
+            while(isActive() && clicked < clicks) {
+                if (hasStamina(staminaThreshold)) {
+                    if (attempts++ >= MAX_MEDITATION_ATTEMPTS) {
+                        Utils.consolePrint("Couldn't start meditating after " + MAX_MEDITATION_ATTEMPTS + " attempts!");
+                        break;
+                    }
                     WurmHelper.hud.sendAction(meditationAction, carpetId);
                 }
                 sleep(1000);

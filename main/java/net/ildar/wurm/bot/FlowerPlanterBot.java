@@ -8,9 +8,7 @@ import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
-import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 
-import java.lang.reflect.Method;
 import java.util.List;
 
 @BotInfo(name = "Flower Planter", description =
@@ -30,9 +28,6 @@ public class FlowerPlanterBot extends Bot {
         setStaminaThreshold(0.96f);
 
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Method sendCreateAction = ReflectionUtil.getMethod(CreationWindow.class, "sendCreateAction");
-        sendCreateAction.setAccessible(true);
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         int maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
         InventoryMetaItem shovel = Utils.locateToolItem("shovel");
@@ -54,13 +49,10 @@ public class FlowerPlanterBot extends Bot {
         BotState state = BotState.PLANT;
         while (isActive()) {
             waitOnPause();
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            float progress = Utils.getField(progressBar, "progress");
             int checkedtiles[][] = Utils.getAreaCoordinates();
             int sentactions = 0;
 
-            if ((stamina+damage) > staminaThreshold && creationWindow.getActionInUse() == 0 && progress == 0f) {
+            if (canDoWork(staminaThreshold) && creationWindow.getActionInUse() == 0) {
                 switch (state) {
                     case PLANT:
                         long[] flowerIds = new long[maxActions];
@@ -71,7 +63,7 @@ public class FlowerPlanterBot extends Bot {
                             if (flowersFound >= maxActions)
                                 break;
                         }
-                        for(int i = 0; i < 9 && sentactions < maxActions; i++) {
+                        for(int i = 0; i < 9 && sentactions < flowersFound; i++) {
                             Tiles.Tile type = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(checkedtiles[i][0], checkedtiles[i][1]);
                             if (type.tilename.equals("Dirt")) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendAction(flowerIds[sentactions],

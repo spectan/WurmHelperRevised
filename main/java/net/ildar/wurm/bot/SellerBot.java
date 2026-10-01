@@ -1,9 +1,9 @@
 package net.ildar.wurm.bot;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.PickableUnit;
@@ -17,8 +17,8 @@ import net.ildar.wurm.annotations.BotInfo;
 @BotInfo(name = "Seller", description = "Sells items to tokens", abbreviation = "s")
 public class SellerBot extends Bot
 {
-    HashSet<String> items = new HashSet<>();
-    HashSet<String> blacklist = new HashSet<>();
+    final Set<String> items = ConcurrentHashMap.newKeySet();
+    final Set<String> blacklist = ConcurrentHashMap.newKeySet();
     long targetToken = -1;
     int maxSellActions = 3;
     
@@ -55,7 +55,7 @@ public class SellerBot extends Bot
         {
             waitOnPause();
             
-            while(isActive() && items.size() == 0 || targetToken < 0 || getProgress() > 0)
+            while(isActive() && (items.size() == 0 || targetToken < 0 || getProgress() > 0))
                 sleep(1000);
             if(!isActive()) break;
             
@@ -124,7 +124,7 @@ public class SellerBot extends Bot
     {
         if(args == null || args.length == 0)
         {
-            printInputKeyUsageString(Inputs.a);
+            printInputKeyUsageString(Inputs.b);
             return;
         }
         
@@ -203,12 +203,12 @@ public class SellerBot extends Bot
     
     enum Inputs implements InputKey
     {
-        a("Area Mode", "Add item to be sold", "name"),
-        ca("Cut All Sprouts", "Clear list of items to sell", ""),
-        b("Botanizing", "Add blacklisted item name", "name"),
-        cb("Blacklisted Item", "Clear blacklisted item names", ""),
+        a("Add Item", "Add item to be sold", "name"),
+        ca("Clear Items", "Clear list of items to sell", ""),
+        b("Add Blacklist", "Add blacklisted item name", "name"),
+        cb("Clear Blacklist", "Clear blacklisted item names", ""),
         st("Set Target", "Set token to sell to", ""),
-        sc("Shovel Check", "Set max queued sell actions", "number"),
+        sc("Sell Count", "Set max queued sell actions", "number"),
         gems("Gems", "Set up bot to sell common (non-star) gems", "");
 
         private final KeyInfo keyInfo;

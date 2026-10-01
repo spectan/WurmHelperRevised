@@ -61,14 +61,10 @@ public class ArcherBot extends Bot {
 
         int maxActions = Utils.getMaxActionNumber();
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         registerEventProcessors();
         while (isActive()) {
             waitOnPause();
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            float progress = Utils.getField(progressBar, "progress");
-            if ((stamina+damage) > staminaThreshold && creationWindow.getActionInUse() == 0 && progress == 0f) {
+            if (canDoWork(staminaThreshold) && creationWindow.getActionInUse() == 0) {
                 if (stringBreaks) {
                         InventoryMetaItem bowstring = Utils.getInventoryItem("bow string");
                         if (bowstring != null) {

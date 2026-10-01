@@ -5,8 +5,8 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 @BotInfo(name = "Forage Stuff Mover", description =
@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
         "Optionally you can toggle the moving of rocks or rare items on and off.",
         abbreviation = "fsm")
 public class ForageStuffMoverBot extends Bot {
-    private List<Long> targets = new ArrayList<>();
+    private final List<Long> targets = new CopyOnWriteArrayList<>();
     private boolean moveRareItems;
     private boolean notMoveRocks;
 
@@ -26,6 +26,7 @@ public class ForageStuffMoverBot extends Bot {
 
     @Override
     public void work() throws Exception{
+        String lastStatus = null;
         while (isActive()) {
             waitOnPause();
             List<InventoryMetaItem> foragables = Utils.getSelectedItems(WurmHelper.hud.getInventoryWindow().getInventoryListComponent(), true, true);
@@ -34,15 +35,19 @@ public class ForageStuffMoverBot extends Bot {
                     .filter(item -> moveRareItems || item.getRarity() == 0)
                     .limit(100)
                     .collect(Collectors.toList());
+            String status = null;
             if (moveList.size() == 0) {
-                Utils.consolePrint("Nothing to move");
+                status = "Nothing to move";
             } else if (targets.size() == 0) {
-                Utils.consolePrint("No target containers to move to");
+                status = "No target containers to move to";
             } else {
                 long[] moveIds = Utils.getItemIds(moveList);
-                for (long target : targets)
-                    WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(target, moveIds);
+                // sending the same items to every target would just shuffle them into the last one
+                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(targets.get(0), moveIds);
             }
+            if (status != null && !status.equals(lastStatus))
+                Utils.consolePrint(status);
+            lastStatus = status;
             sleep(timeout);
         }
     }

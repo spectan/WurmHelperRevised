@@ -1,5 +1,7 @@
 package net.ildar.wurm.bot;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.List;
@@ -53,7 +55,13 @@ public class PileCollector extends Bot {
         while (isActive()) {
             waitOnPause();
             Map<Long, GroundItemCellRenderable> groundItemsMap = Utils.getField(sscc, "groundItems");
-            List<GroundItemCellRenderable> groundItems = groundItemsMap.entrySet().stream().map(Map.Entry::getValue).collect(Collectors.toList());
+            List<GroundItemCellRenderable> groundItems;
+            try {
+                // the map is modified by the client thread, so take a snapshot first
+                groundItems = new ArrayList<>(groundItemsMap.values());
+            } catch (ConcurrentModificationException e) {
+                groundItems = Collections.emptyList();
+            }
             float x = WurmHelper.hud.getWorld().getPlayerPosX();
             float y = WurmHelper.hud.getWorld().getPlayerPosY();
             if (groundItems.size() > 0 && targetLc != null) {
@@ -63,7 +71,7 @@ public class PileCollector extends Bot {
                         float itemX = groundItemData.getX();
                         float itemY = groundItemData.getY();
                         long itemID = groundItemData.getId();
-                        if ((Math.sqrt(Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2)) <= MAX_DISTANCE)) {
+                        if (Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2) <= MAX_DISTANCE * MAX_DISTANCE) {
                             final boolean isContainer = shouldSearch(groundItemData.getName().toLowerCase());
                             if (isContainer && !openedPiles.contains(itemID))
                                 WurmHelper.hud.sendAction(PlayerAction.OPEN, itemID);
@@ -90,7 +98,7 @@ public class PileCollector extends Bot {
                             continue;
                             
                         InventoryMetaItem rootItem = Utils.getRootItem(ilc);
-                        if (rootItem == null || (isContainerWindow && !shouldSearch(rootItem.getBaseName().toLowerCase())))
+                        if (rootItem == null || !shouldSearch(rootItem.getBaseName().toLowerCase()))
                             continue;
                         
                         openedPiles.add(rootItem.getId());
@@ -150,7 +158,7 @@ public class PileCollector extends Bot {
                 if (containerContents != null) {
                     for(InventoryMetaItem contentItem : containerContents) {
                         String customName = contentItem.getCustomName();
-                        if (customName != null) {
+                        if (customName != null && customName.length() > 1) {
                             try {
                                 itemsCount += Integer.parseInt(customName.substring(0, customName.length() - 1));
                             } catch (NumberFormatException ignored) {}
@@ -170,11 +178,7 @@ public class PileCollector extends Bot {
             printInputKeyUsageString(PileCollector.InputKey.stn);
             return;
         }
-        StringBuilder targetName = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++) {
-            targetName.append(" ").append(input[i]);
-        }
-        this.targetItemName = targetName.toString();
+        this.targetItemName = String.join(" ", input);
         Utils.consolePrint("New name for target items is \"" + this.targetItemName + "\"");
         ignoredItems.clear(); // items that didn't match previously may match now
     }
@@ -192,11 +196,7 @@ public class PileCollector extends Bot {
             return;
         }
         if (input != null && input.length != 0) {
-            StringBuilder containerName = new StringBuilder(input[0]);
-            for (int i = 1; i < input.length; i++) {
-                containerName.append(" ").append(input[i]);
-            }
-            this.containerName = containerName.toString();
+            this.containerName = String.join(" ", input);
         }
         Utils.consolePrint("The target was set with container name - \"" + containerName + "\"");
     }

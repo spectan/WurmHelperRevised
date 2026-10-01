@@ -4,7 +4,6 @@ import com.wurmonline.client.comm.ServerConnectionListenerClass;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.GroundItemData;
 import com.wurmonline.client.renderer.cell.GroundItemCellRenderable;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
@@ -49,8 +48,6 @@ public class ChopperBot extends Bot {
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + toolItem.getDisplayName() + " to chop felled trees.");
             Utils.consolePrint("QL:" + toolItem.getQuality() + " DMG:" + toolItem.getDamage());
         }
-        CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
         while (isActive()) {
             waitOnPause();
@@ -65,7 +62,7 @@ public class ChopperBot extends Bot {
                             GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");
                             float itemX = groundItemData.getX();
                             float itemY = groundItemData.getY();
-                            if (Math.sqrt(Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2)) <= distance)
+                            if (Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2) <= distance * distance)
                                 if (groundItemData.getName().contains("felled tree")) {
                                     for (int i = 0; i < clicks; i++)
                                         WurmHelper.hud.getWorld().getServerConnection().sendAction(hatchetId, new long[]{groundItemData.getId()}, PlayerAction.CHOP_UP);
@@ -77,7 +74,7 @@ public class ChopperBot extends Bot {
                         Utils.consolePrint("Got concurrent modification exception!");
                     }
                 }
-                if (!didSomething) {
+                if (!didSomething && areaAssistant.areaTourActivated()) {
                     areaAssistant.areaNextPosition();
                     continue;
                 }

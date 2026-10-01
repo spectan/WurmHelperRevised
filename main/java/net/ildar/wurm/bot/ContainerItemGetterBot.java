@@ -1,8 +1,9 @@
 package net.ildar.wurm.bot;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
@@ -18,8 +19,8 @@ import net.ildar.wurm.annotations.BotInfo;
 @BotInfo(name = "Container Item Getter", description = "Retrieves items from containers", abbreviation = "cig")
 public class ContainerItemGetterBot extends Bot
 {
-    HashSet<String> items = new HashSet<>();
-    HashSet<InventoryListComponent> sources = new HashSet<>();
+    final Set<String> items = ConcurrentHashMap.newKeySet();
+    final Set<InventoryListComponent> sources = ConcurrentHashMap.newKeySet();
     boolean verbose = false;
     
     public ContainerItemGetterBot()
@@ -65,10 +66,19 @@ public class ContainerItemGetterBot extends Bot
             
             for(InventoryListComponent src: sources)
             {
+                InventoryMetaItem srcRoot = Utils.getRootItem(src);
+                if(srcRoot == null)
+                {
+                    // the source window was closed
+                    sources.remove(src);
+                    Utils.consolePrint("A source container is no longer available and was removed");
+                    continue;
+                }
+                
                 if(verbose)
                     Utils.consolePrint(
                         "Checking container %s for items to grab",
-                        Utils.getRootItem(src).getBaseName()
+                        srcRoot.getBaseName()
                     );
                 
                 srcItems.clear();
@@ -95,8 +105,10 @@ public class ContainerItemGetterBot extends Bot
                     );
                 
                 long[] ids = Utils.getItemIds(srcItems);
+                if(ids.length == 0)
+                    continue;
                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(playerInvID, ids);
-                if(verbose && ids.length > 0)
+                if(verbose)
                     Utils.consolePrint("Requested move of %d items", ids.length);
             }
             
@@ -159,6 +171,7 @@ public class ContainerItemGetterBot extends Bot
             "New source containers are: %s",
             sources
                 .stream()
+                .filter(lc -> Utils.getRootItem(lc) != null)
                 .map(lc -> Utils.getRootItem(lc).getBaseName())
                 .collect(Collectors.joining(", "))
         );
@@ -178,8 +191,8 @@ public class ContainerItemGetterBot extends Bot
     
     enum Inputs implements InputKey
     {
-        a("Area Mode", "Add item to be pulled", "name"),
-        c("Clicks", "Clear list of items to pull", ""),
+        a("Add Item", "Add item to be pulled", "name"),
+        c("Clear Items", "Clear list of items to pull", ""),
         ss("Add Source", "Add source container to pull from", ""),
         cs("Clear Sources", "Clear list of source containers", ""),
         v("Verbose", "Toggle verbose messages", ""),

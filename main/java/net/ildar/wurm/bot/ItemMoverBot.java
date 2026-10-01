@@ -7,14 +7,15 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @BotInfo(name = "Item Mover", description =
         "Moves items from your inventory to the target destination.",
         abbreviation = "im")
 public class ItemMoverBot extends Bot {
-    private Set <String> itemNames;
+    private final Set <String> itemNames = ConcurrentHashMap.newKeySet();
     private TargetType targetType;
-    private Map <String, Float> itemMaximumWeights;
+    private final Map <String, Float> itemMaximumWeights = new ConcurrentHashMap<>();
     private long target;
     private InventoryListComponent targetComponent;
     private String containerName;
@@ -28,7 +29,7 @@ public class ItemMoverBot extends Bot {
         setTimeout(15000);
         while (isActive()) {
             waitOnPause();
-            if (itemNames != null && itemNames.size() > 0 && (target != 0 || targetComponent != null)) {
+            if (itemNames.size() > 0 && (target != 0 || targetComponent != null)) {
                 List<InventoryMetaItem> invItems;
                 if (onlyFirstLevelItems)
                     invItems = Utils.getFirstLevelItems();
@@ -38,11 +39,13 @@ public class ItemMoverBot extends Bot {
                 for (InventoryMetaItem invItem : invItems) {
                     boolean notRare = invItem.getRarity() == 0;
                     for (String itemName : itemNames) {
-                        float maxWeight = itemMaximumWeights.get(itemName);
+                        float maxWeight = itemMaximumWeights.getOrDefault(itemName, 0f);
                         if (invItem.getBaseName().contains(itemName)
                                 && (maxWeight == 0 || invItem.getWeight() <= maxWeight)
-                                && (!notMoveRares || notRare))
+                                && (!notMoveRares || notRare)) {
                             itemsToMove.add(invItem);
+                            break;
+                        }
                     }
                 }
                 if (itemsToMove.size() > 0) {
@@ -133,10 +136,6 @@ public class ItemMoverBot extends Bot {
         }
 
         if (lastItemName != null) {
-            if (itemMaximumWeights == null) {
-                Utils.consolePrint("Internal error. Item weights not initialized.");
-                return;
-            }
             try {
                 itemMaximumWeights.put(lastItemName, Float.parseFloat(input[0]));
                 Utils.consolePrint("Item - " + lastItemName + " will  be moved only with weight below " + input[0]);
@@ -154,11 +153,7 @@ public class ItemMoverBot extends Bot {
             printInputKeyUsageString(ItemMoverBot.InputKey.a);
             return;
         }
-        StringBuilder newItem = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            newItem.append(" ").append(input[i]);
-
-        addItem(newItem.toString());
+        addItem(String.join(" ", input));
     }
 
     private void setTargetContainerVolume(String []input) {
@@ -179,9 +174,7 @@ public class ItemMoverBot extends Bot {
             printInputKeyUsageString(ItemMoverBot.InputKey.stc);
             return;
         }
-        StringBuilder newContainer = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            newContainer.append(" ").append(input[i]);
+        String newContainer = String.join(" ", input);
 
         WurmComponent wurmComponent = Utils.getTargetComponent(c -> c instanceof ItemListWindow || c instanceof InventoryWindow);
         if (wurmComponent == null) {
@@ -190,7 +183,7 @@ public class ItemMoverBot extends Bot {
         }
         try {
             targetComponent = Utils.getField(wurmComponent, "component");
-            this.containerName = newContainer.toString();
+            this.containerName = newContainer;
             targetType = TargetType.Containers;
             Utils.consolePrint("New target component was set with container \"" + containerName + "\"");
         } catch(Exception e) {
@@ -241,10 +234,6 @@ public class ItemMoverBot extends Bot {
 
     private void addItem(String item) {
         String matchList = "(\\s*,\\s*)(?=(?:(?:[^']*'){2})*[^']*$)";
-        if (itemNames == null)
-            itemNames = new HashSet<>();
-        if (itemMaximumWeights == null)
-            itemMaximumWeights = new HashMap<>();
         if(item.contains(",")){
             String[] items = item.split(matchList);
             for(String it: items){
@@ -265,7 +254,7 @@ public class ItemMoverBot extends Bot {
     private void clearItemList(){
         itemNames.clear();
         itemMaximumWeights.clear();
-        lastItemName="";
+        lastItemName = null;
         Utils.consolePrint("Current item set - " + itemNames.toString());
     }
 

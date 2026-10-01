@@ -10,12 +10,13 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @BotInfo(name = "Ground Item Getter", description =
         "Collects items from the ground around player.",
         abbreviation = "gig")
 public class GroundItemGetterBot extends Bot {
-    private Set <String> itemNames = new HashSet<>();
+    private final Set <String> itemNames = ConcurrentHashMap.newKeySet();
     private float distance = 4;
 
     public GroundItemGetterBot() {
@@ -38,10 +39,12 @@ public class GroundItemGetterBot extends Bot {
                             GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");
                             float itemX = groundItemData.getX();
                             float itemY = groundItemData.getY();
-                            if ((Math.sqrt(Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2)) <= distance) && itemNames != null && itemNames.size() > 0)
+                            if (Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2) <= distance * distance)
                                 for (String item : itemNames)
-                                    if (groundItemData.getName().contains(item))
+                                    if (groundItemData.getName().contains(item)) {
                                         WurmHelper.hud.sendAction(PlayerAction.TAKE, groundItemData.getId());
+                                        break;
+                                    }
                         }
                     } catch (ConcurrentModificationException ignored) {
                     }
@@ -57,10 +60,12 @@ public class GroundItemGetterBot extends Bot {
             float y = WurmHelper.hud.getWorld().getPlayerPosY();
             float itemX = Utils.getField(staticModelRenderable, "x");
             float itemY = Utils.getField(staticModelRenderable, "y");
-            if ((Math.sqrt(Math.pow(itemX-x, 2)+Math.pow(itemY-y, 2)) <= distance) && itemNames != null && itemNames.size() > 0)
+            if (Math.pow(itemX-x, 2)+Math.pow(itemY-y, 2) <= distance * distance)
                 for(String item:itemNames)
-                    if (staticModelRenderable.getHoverName().contains(item))
+                    if (staticModelRenderable.getHoverName().contains(item)) {
                         WurmHelper.hud.sendAction(PlayerAction.TAKE, staticModelRenderable.getId());
+                        break;
+                    }
         }
         catch(IllegalAccessException|NoSuchFieldException e) {
             Utils.consolePrint("Got exception while processing new item in " + GroundItemGetterBot.class.getSimpleName());
@@ -72,10 +77,7 @@ public class GroundItemGetterBot extends Bot {
             printInputKeyUsageString(GroundItemGetterBot.InputKey.a);
             return;
         }
-        StringBuilder newitem = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            newitem.append(" ").append(input[i]);
-        addItem(newitem.toString());
+        addItem(String.join(" ", input));
     }
 
     private void setDistance(String []input) {
@@ -92,8 +94,6 @@ public class GroundItemGetterBot extends Bot {
     }
 
     private void addItem(String item) {
-        if (itemNames == null)
-            itemNames = new HashSet<>();
         itemNames.add(item);
         Utils.consolePrint("Current item set in " + this.getClass().getSimpleName() + " - " + itemNames.toString());
     }

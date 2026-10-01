@@ -1,8 +1,10 @@
 package net.ildar.wurm.bot;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.gui.InventoryListComponent;
@@ -18,7 +20,7 @@ import net.ildar.wurm.annotations.BotInfo;
 public class MultiItemMoverBot extends Bot
 {
     boolean toplevelOnly = true;
-    ArrayList<ItemSet> itemSets = new ArrayList<>();
+    final List<ItemSet> itemSets = new CopyOnWriteArrayList<>();
     int selectedSet = 0;
     
     public MultiItemMoverBot()
@@ -33,6 +35,7 @@ public class MultiItemMoverBot extends Bot
         registerInputHandler(Inputs.st, input -> setTarget(false));
         registerInputHandler(Inputs.str, input -> setTarget(true));
         registerInputHandler(Inputs.a, this::addItem);
+        registerInputHandler(Inputs.clear, input -> clearItems());
     }
 
     @Override
@@ -62,7 +65,10 @@ public class MultiItemMoverBot extends Bot
                     
                     for(String matchName: set.itemNames)
                         if(item.getBaseName().contains(matchName))
+                        {
                             toMove.add(item);
+                            break;
+                        }
                 }
                 
                 set.moveItems(toMove);
@@ -130,7 +136,7 @@ public class MultiItemMoverBot extends Bot
         try
         {
             int newSelection = Integer.parseInt(args[0]);
-            if(newSelection >= numSets)
+            if(newSelection < 0 || newSelection >= numSets)
             {
                 Utils.consolePrint(
                     "Only have %d item sets, index must be in 0 .. %d",
@@ -177,7 +183,7 @@ public class MultiItemMoverBot extends Bot
     
     void addItem(String[] args)
     {
-        if(args.length == 0)
+        if(args == null || args.length == 0)
         {
             printInputKeyUsageString(Inputs.a);
             return;
@@ -214,7 +220,7 @@ public class MultiItemMoverBot extends Bot
     
     static class ItemSet
     {
-        HashSet<String> itemNames = new HashSet<>();
+        final Set<String> itemNames = ConcurrentHashMap.newKeySet();
         boolean isRootTarget;
         long target;
         InventoryListComponent targetComponent;
@@ -266,7 +272,7 @@ public class MultiItemMoverBot extends Bot
             else
             {
                 int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-                int y = WurmHelper.hud.getWorld().getClient().getXMouse();
+                int y = WurmHelper.hud.getWorld().getClient().getYMouse();
                 long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
                 
                 if(targets != null && targets.length > 0)
@@ -304,7 +310,7 @@ public class MultiItemMoverBot extends Bot
         
         st("Set Target", "Set target item for chosen set", ""),
         str("Target Container Root", "Set target container for chosen set", ""),
-        a("Area Mode", "Add item to chosen set", "name"),
+        a("Add Item", "Add item to chosen set", "name"),
         clear("Clear Items", "Clear list of items in chosen set", ""),
         ;
 

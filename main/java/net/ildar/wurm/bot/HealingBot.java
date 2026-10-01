@@ -1,7 +1,6 @@
 package net.ildar.wurm.bot;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
@@ -23,12 +22,9 @@ public class HealingBot extends Bot {
     @Override
     protected void work() throws Exception{
         setTimeout(500);
-        CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         while (isActive()) {
             waitOnPause();
-            float progress = Utils.getField(progressBar, "progress");
-            if (progress != 0f) {
+            if (!isProgressZero()) {
                 sleep(timeout);
                 continue;
             }
@@ -42,18 +38,22 @@ public class HealingBot extends Bot {
                 Utils.consolePrint("The player doesn't have any cotton!");
                 return;
             }
-            List<InventoryMetaItem> inventoryItems = new ArrayList<>();
-            inventoryItems.add(Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent()));
+            InventoryMetaItem inventoryRoot = Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent());
+            if (inventoryRoot == null) {
+                sleep(timeout);
+                continue;
+            }
+            Deque<InventoryMetaItem> inventoryItems = new ArrayDeque<>();
+            inventoryItems.add(inventoryRoot);
             List<InventoryMetaItem> wounds = new ArrayList<>();
-            while (inventoryItems.size() > 0) {
-                InventoryMetaItem item = inventoryItems.get(0);
+            while (!inventoryItems.isEmpty()) {
+                InventoryMetaItem item = inventoryItems.poll();
                 if (WOUND_NAMES.contains(item.getBaseName())
                         && !item.getDisplayName().contains("bandaged")
                         && item.getDamage() > minDamage)
                     wounds.add(item);
                 if (item.getChildren() != null)
                     inventoryItems.addAll(item.getChildren());
-                inventoryItems.remove(item);
             }
             if (wounds.size() == 0) {
                 Utils.consolePrint("All wounds were treated");

@@ -2,7 +2,6 @@ package net.ildar.wurm.bot;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.PickableUnit;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
@@ -43,16 +42,11 @@ public class ProspectorBot extends Bot {
         } else
             Utils.consolePrint(this.getClass().getSimpleName() + " will prospect " + pickableUnit.getHoverName());
         long caveWallId = pickableUnit.getId();
-        CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         setStaminaThreshold(0.9f);
         setClicks(3);
         while (isActive()) {
             waitOnPause();
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            float progress = Utils.getField(progressBar, "progress");
-            if ((stamina+damage) > staminaThreshold && progress == 0f) {
+            if (canDoWork(staminaThreshold)) {
                 if (toolItem.getDamage() > 10)
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxeId);
                 for(int i = 0; i < clicks; i++)
