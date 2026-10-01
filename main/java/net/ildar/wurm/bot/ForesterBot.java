@@ -1,6 +1,5 @@
 package net.ildar.wurm.bot;
 
-import com.wurmonline.client.game.PlayerObj;
 import com.wurmonline.client.game.World;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.mesh.FoliageAge;
@@ -13,6 +12,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,14 +27,15 @@ import java.util.stream.Collectors;
         "Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. ",
         abbreviation = "fr")
 public class ForesterBot extends Bot {
-    static String DEFAULT_CONTAINER_NAME = "backpack";
+    private static final String DEFAULT_CONTAINER_NAME = "backpack";
     private int maxActions;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
 
     private long hatchetId;
-    private List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
+    // modified from both the bot thread and chat callbacks; compound operations synchronize on the list
+    private final List<Pair<Integer, Integer>> queuedTiles = Collections.synchronizedList(new ArrayList<>());
 
-    private long lastActionFinishedTime;
+    private volatile long lastActionFinishedTime;
 
     private String containerName = DEFAULT_CONTAINER_NAME;
     private List<String> itemNamesToMove= new ArrayList<>();
@@ -48,7 +49,7 @@ public class ForesterBot extends Bot {
     private boolean planting;
     private boolean shriveledTreesChopping;
     private boolean deforesting;
-    private int toHarvest;
+    private volatile int toHarvest;
 
     public ForesterBot() {
         registerStaminaThresholdHandler(ForesterBot.InputKey.s);
@@ -73,7 +74,6 @@ public class ForesterBot extends Bot {
         setStaminaThreshold(0.95f);
         setTimeout(300);
         World world = WurmHelper.hud.getWorld();
-        PlayerObj player = world.getPlayer();
         maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
         InventoryMetaItem bucket = Utils.locateToolItem("bucket");
@@ -101,7 +101,10 @@ public class ForesterBot extends Bot {
                 int checkedtiles[][] = Utils.getAreaCoordinates();
                 int tileIndex = -1;
                 Set<Long> usedSprouts = new HashSet<>();
-                while (++tileIndex < 9 && queuedTiles.size() + toHarvest < maxActions && toHarvest <= maxActions) {
+                List<InventoryMetaItem> plantableSprouts = null;
+                InventoryMetaItem shovel = null;
+                boolean shovelSearched = false;
+                while (++tileIndex < 9 && queuedTiles.size() + toHarvest < maxActions) {
                     Pair<Integer, Integer> coordsPair = new Pair<>(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1]);
                     if (queuedTiles.contains(coordsPair))
                         continue;
@@ -153,26 +156,28 @@ public class ForesterBot extends Bot {
                         }
                     }
                     if (planting && (tileType.isGrass() || tileType.tilename.equals("Mycelium") || tileType.tilename.equals("Dirt"))) {
-                        List<InventoryMetaItem> sprouts = Utils.getInventoryItems("sprout")
-                                .stream()
-                                .filter(item -> (item.getRarity() == 0))
-                                .collect(Collectors.toList());
-                        if (sprouts != null && sprouts.size() > 0) {
-                            for (InventoryMetaItem sprout : sprouts) {
-                                if (!usedSprouts.contains(sprout.getId())) {
-                                    world.getServerConnection().sendAction(sprout.getId(),
-                                            new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
-                                            PlayerAction.PLANT_CENTER);
-                                    usedSprouts.add(sprout.getId());
-                                    queuedTiles.add(coordsPair);
-                                    lastActionFinishedTime = System.currentTimeMillis();
-                                    break;
-                                }
+                        if (plantableSprouts == null)
+                            plantableSprouts = Utils.getInventoryItems("sprout")
+                                    .stream()
+                                    .filter(item -> (item.getRarity() == 0))
+                                    .collect(Collectors.toList());
+                        for (InventoryMetaItem sprout : plantableSprouts) {
+                            if (!usedSprouts.contains(sprout.getId())) {
+                                world.getServerConnection().sendAction(sprout.getId(),
+                                        new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
+                                        PlayerAction.PLANT_CENTER);
+                                usedSprouts.add(sprout.getId());
+                                queuedTiles.add(coordsPair);
+                                lastActionFinishedTime = System.currentTimeMillis();
+                                break;
                             }
                         }
                     }
                     if (planting && (tileType.tilename.equals("Steppe")||tileType.tilename.equals("Moss"))) {
-                        InventoryMetaItem shovel = Utils.locateToolItem("shovel");
+                        if (!shovelSearched) {
+                            shovel = Utils.locateToolItem("shovel");
+                            shovelSearched = true;
+                        }
                         if (shovel != null) {
                             world.getServerConnection().sendAction(shovel.getId(),
                                     new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
@@ -185,25 +190,22 @@ public class ForesterBot extends Bot {
                 if (queuedTiles.size() == 0 && toHarvest == 0 && areaAssistant.areaTourActivated())
                     areaAssistant.areaNextPosition();
 
-                List<InventoryMetaItem> sprouts =
-                        Utils.getFirstLevelItems()
+                List<InventoryMetaItem> firstLevelItems = Utils.getFirstLevelItems();
+                List<InventoryMetaItem> sprouts = firstLevelItems
                         .stream()
                         .filter(this::itemShouldBeMoved)
                         .collect(Collectors.toList());
-                if (sprouts != null && sprouts.size() > 0) {
-                    List<InventoryMetaItem> containers = Utils.getFirstLevelItems().stream()
+                if (sprouts.size() > 0) {
+                    List<InventoryMetaItem> containers = firstLevelItems.stream()
                             .filter(item->item.getBaseName().contains(containerName))
                             .collect(Collectors.toList());
-                    if (containers != null && containers.size() > 0)
-                        for (InventoryMetaItem container : containers)
-                            if (container.getChildren() != null && container.getChildren().size() < 100) {
-                                long[] sproutIds = new long[sprouts.size()];
-                                for (tileIndex = 0; tileIndex < sprouts.size(); tileIndex++)
-                                    sproutIds[tileIndex] = sprouts.get(tileIndex).getId();
-                                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
-                                        container.getId(), sproutIds);
-                                break;
-                            }
+                    for (InventoryMetaItem container : containers)
+                        if (container.getChildren() != null && container.getChildren().size() < 100) {
+                            long[] sproutIds = sprouts.stream().mapToLong(InventoryMetaItem::getId).toArray();
+                            WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
+                                    container.getId(), sproutIds);
+                            break;
+                        }
                 }
             }
             sleep(timeout);
@@ -229,7 +231,7 @@ public class ForesterBot extends Bot {
                         || message.contains("It does not make sense to prune")
                         || message.contains("You prune the ") || message.contains("You stop pruning")
                         || message.contains("You stop picking") || message.contains("has no sprout to pick")
-                        || message.contains("has no sprout to pick") || message.contains("You stop cutting down.")
+                        || message.contains("You stop cutting down.")
                         || message.contains("You cut down the ") || message.contains("You plant the sprout.")
                         || message.contains("You chip away some wood")
                         || message.contains("The ground is cultivated and ready to sow now.")),
@@ -238,7 +240,7 @@ public class ForesterBot extends Bot {
                 this::harvestedSomething);
     }
 
-    private void increaseHarvests(FoliageAge fage) {
+    private synchronized void increaseHarvests(FoliageAge fage) {
         float f = WurmHelper.hud.getWorld().getPlayer().getSkillSet().getSkillValue("forestry");
         int maxHarvest = 1;
         if (f > 80)
@@ -262,7 +264,7 @@ public class ForesterBot extends Bot {
         }
     }
 
-    private void harvestedSomething() {
+    private synchronized void harvestedSomething() {
         if (--toHarvest < 0)
             toHarvest = 0;
         lastActionFinishedTime = System.currentTimeMillis();
@@ -278,7 +280,7 @@ public class ForesterBot extends Bot {
     }
 
     private void setMaxActions(String [] input) {
-        if (input.length != 1 ){
+        if (input == null || input.length != 1 ){
             printInputKeyUsageString(ForesterBot.InputKey.na);
             return;
         }
@@ -291,7 +293,7 @@ public class ForesterBot extends Bot {
     }
 
     private void setContainerName(String []input) {
-        if (input.length != 1 ){
+        if (input == null || input.length != 1 ){
             printInputKeyUsageString(ForesterBot.InputKey.scn);
             return;
         }
@@ -324,16 +326,20 @@ public class ForesterBot extends Bot {
     }
 
     private void actionFinished() {
-        if (queuedTiles.size() > 0) {
-            queuedTiles.remove(0);
-            lastActionFinishedTime = System.currentTimeMillis();
+        synchronized (queuedTiles) {
+            if (queuedTiles.size() > 0) {
+                queuedTiles.remove(0);
+                lastActionFinishedTime = System.currentTimeMillis();
+            }
         }
     }
 
     private void actionNotQueued() {
-        if (queuedTiles.size() > 0) {
-            queuedTiles.remove(queuedTiles.size()  - 1);
-            lastActionFinishedTime = System.currentTimeMillis();
+        synchronized (queuedTiles) {
+            if (queuedTiles.size() > 0) {
+                queuedTiles.remove(queuedTiles.size()  - 1);
+                lastActionFinishedTime = System.currentTimeMillis();
+            }
         }
         toHarvest = 0;
     }
@@ -409,7 +415,7 @@ public class ForesterBot extends Bot {
     
     private void addTreeWhitelist(String[] args)
     {
-        if(args.length == 0)
+        if(args == null || args.length == 0)
         {
             printInputKeyUsageString(InputKey.atw);
             return;
@@ -417,7 +423,7 @@ public class ForesterBot extends Bot {
         
         String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
         for(String name: treeNames)
-            treeWhitelist.add(name);
+            treeWhitelist.add(name.toLowerCase());
         
         Utils.consolePrint(
             "Bot will only work on trees of type: %s",
@@ -433,7 +439,7 @@ public class ForesterBot extends Bot {
     
     private void addTreeBlacklist(String[] args)
     {
-        if(args.length == 0)
+        if(args == null || args.length == 0)
         {
             printInputKeyUsageString(InputKey.atb);
             return;
@@ -441,7 +447,7 @@ public class ForesterBot extends Bot {
         
         String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
         for(String name: treeNames)
-            treeBlacklist.add(name);
+            treeBlacklist.add(name.toLowerCase());
         
         Utils.consolePrint(
             "Bot will skip working on tree types: %s",
@@ -457,7 +463,7 @@ public class ForesterBot extends Bot {
     
     private void addSproutBlacklist(String[] args)
     {
-        if(args.length == 0)
+        if(args == null || args.length == 0)
         {
             printInputKeyUsageString(InputKey.asb);
             return;
@@ -465,7 +471,7 @@ public class ForesterBot extends Bot {
         
         String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
         for(String name: treeNames)
-            sproutBlacklist.add(name);
+            sproutBlacklist.add(name.toLowerCase());
         
         Utils.consolePrint(
             "Bot will skip picking sprouts from tree types: %s",
@@ -486,7 +492,7 @@ public class ForesterBot extends Bot {
         cs("Cut Shriveled", "Toggle the cutting of shriveled trees", ""),
         df("Deforestation", "Toggle the cutting of all trees (deforestation)", ""),
         h("Harvest Mode", "Toggle the harvesting", ""),
-        p("Path To", "Toggle the planting", ""),
+        p("Planting", "Toggle the planting", ""),
         scn("Container Name", "Set the new name for containers to put sprouts/harvest", "container_name"),
         na("Max Actions", "Set the number of actions bot will do each time", "number"),
         aim("Add Move Item", "Add new item name for moving into containers", "item_name"),

@@ -8,13 +8,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Map.Entry;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.client.renderer.gui.InventoryListComponent;
 import com.wurmonline.client.renderer.gui.InventoryWindow;
 import com.wurmonline.client.renderer.gui.ItemListWindow;
@@ -47,11 +45,12 @@ public class ArcheoBot extends Bot {
 	long chiselId = -1;
 	long brushId = -1;
 
-	List<InventoryListComponent> identifyInventories = new ArrayList<>();
+	// modified from the console thread while the bot thread iterates it
+	List<InventoryListComponent> identifyInventories = new CopyOnWriteArrayList<>();
 
 	AreaAssistant areaAssistant = new AreaAssistant(this);
 
-	boolean investigatingDone = false;
+	volatile boolean investigatingDone = false;
 
 	public ArcheoBot() {
 		registerInputHandler(InputKey.iv, this::toggleInvestigating);
@@ -140,7 +139,7 @@ public class ArcheoBot extends Bot {
 						);
 						
 						if(waitActionStarted(() -> investigatingDone))
-						waitActionFinished();
+							waitActionFinished();
 						if(investigatingDone) {
 							tilesToBeInvestigated.remove(tilesToBeInvestigated.size() - 1);
 							tilesInvestigated.add(tile);
@@ -152,20 +151,16 @@ public class ArcheoBot extends Bot {
 			if(identifying) {
 				unidentified.clear();
 				for(InventoryListComponent ilc: identifyInventories) {
-					List<InventoryMetaItem> found = Utils.getInventoryItems(
+					unidentified.addAll(Utils.getInventoryItems(
 						ilc,
 						item -> unidentifiedRegex.matcher(item.getDisplayName()).find()
-					);
-					if(found != null)
-						unidentified.addAll(found);
+					));
 				}
 				
 				Iterator<InventoryMetaItem> iter = unidentified.iterator();
 				boolean anyQueued = false;
 				for(int action = 0; action < maxActions; action++) {
 					if(!iter.hasNext()) break;
-					anyQueued = true;
-
 
 					InventoryMetaItem fragment = iter.next();
 					int improveIcon = fragment.getImproveIconId();
@@ -175,12 +170,14 @@ public class ArcheoBot extends Bot {
 							new long[]{fragment.getId()},
 							PlayerAction.IDENTIFY
 						);
+						anyQueued = true;
 					} else if(improveIcon == identifyBrush) {
 						WurmHelper.hud.getWorld().getServerConnection().sendAction(
 							brushId,
 							new long[]{fragment.getId()},
 							PlayerAction.IDENTIFY
 						);
+						anyQueued = true;
 					} else {
 						Utils.consolePrint("Don't know how to identify fragment `%s`!", fragment.getDisplayName());
 						action--;
@@ -303,16 +300,13 @@ public class ArcheoBot extends Bot {
 	}
 
 	boolean waitActionStarted(Supplier<Boolean> failed) throws Exception {
-		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
 		final long start = System.currentTimeMillis();
 		while(isActive()) {
 			if(failed != null && failed.get()) {
 				return false;
 			}
 
-			float progress = Utils.getField(progressBar, "progress");
-			if(progress != 0f) {
+			if(!isProgressZero()) {
 				return true;
 			}
 			Thread.sleep(250);
@@ -327,11 +321,8 @@ public class ArcheoBot extends Bot {
 	}
 	
 	void waitActionFinished() throws Exception {
-		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
 		while(isActive()) {
-			float progress = Utils.getField(progressBar, "progress");
-			if(progress == 0f) {
+			if(isProgressZero()) {
 				break;
 			}
 			Thread.sleep(250);
@@ -344,7 +335,7 @@ public class ArcheoBot extends Bot {
 		co("Fragment Combining", "Toggle fragment combining", ""),
 		sh("Shovel", "Toggle investigating with shovel", ""),
 		at("Add Target", "Add target inventory to identify fragments in", ""),
-		ct("Combine Targets", "Clear inventories to identify fragments in", ""),
+		ct("Clear Targets", "Clear inventories to identify fragments in", ""),
 		;
 
 		private final KeyInfo keyInfo;

@@ -26,9 +26,12 @@ import java.util.*;
 public class ImproverBot extends Bot {
     private List<Tool> tools = new ArrayList<>();
     private List<InventoryListComponent> targets = new ArrayList<>();
-    private boolean improveActionFinished;
+    private volatile boolean improveActionFinished;
     private boolean groundMode;
-    private ToolSkill toolSkill = ToolSkill.UNKNOWN;
+    /**
+     * The skill set by user. {@link ToolSkill#UNKNOWN} means the skill is determined by the material of improved item
+     */
+    private volatile ToolSkill toolSkill = ToolSkill.UNKNOWN;
 
     @SuppressWarnings("ArraysAsListWithZeroOrOneArgument")
     public ImproverBot() {
@@ -90,25 +93,18 @@ public class ImproverBot extends Bot {
         setTimeout(300);
         registerEventProcessors();
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         while (isActive()) {
             waitOnPause();
             if (targets.size() == 0 && !groundMode) {
                 sleep(timeout);
                 continue;
             }
-            float progress = Utils.getField(progressBar, "progress");
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
             boolean improveInitiated = false;
-            if ((stamina+damage) > staminaThreshold && progress == 0f && creationWindow.getActionInUse() == 0) {
+            if (canDoWork(staminaThreshold) && creationWindow.getActionInUse() == 0) {
                 if (!groundMode) {
                     List<InventoryMetaItem> selectedItems = new ArrayList<>();
-                    for (InventoryListComponent ilc : targets) {
-                        List<InventoryMetaItem> targetSelectedItems = Utils.getSelectedItems(ilc, false, true);
-                        if (targetSelectedItems != null)
-                            selectedItems.addAll(targetSelectedItems);
-                    }
+                    for (InventoryListComponent ilc : targets)
+                        selectedItems.addAll(Utils.getSelectedItems(ilc, false, true));
                     if (selectedItems.size() == 0) {
                         Utils.consolePrint("No selected items!");
                         sleep(timeout);
@@ -116,7 +112,7 @@ public class ImproverBot extends Bot {
                     }
                     selectedItems.sort(Comparator.comparingDouble(item -> item.getQuality() * (1- item.getDamage()/100)));
                     for (InventoryMetaItem itemToImprove : selectedItems) {
-                        if (itemToImprove == null || itemToImprove.getImproveIconId() < 0) {
+                        if (itemToImprove.getImproveIconId() < 0) {
                             continue;
                         }
                         Tool tool = findToolForImprove(itemToImprove);
@@ -167,17 +163,15 @@ public class ImproverBot extends Bot {
                         continue;
                     }
 
-                    ToolSkill groundSkill = ToolSkill.getSkillForItem(materialId);
+                    ToolSkill groundSkill = getEffectiveSkill(materialId);
                     if(groundSkill== ToolSkill.UNKNOWN){
                         sleep(timeout);
                         continue;
                     }
 
-                    toolSkill=(groundSkill!=ToolSkill.UNKNOWN && groundSkill!=toolSkill)?groundSkill:toolSkill;
-
                     improveActionFinished = false;
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickableUnit.getId());
-                    for (Tool tool : getToolsBySkill(toolSkill)) {
+                    for (Tool tool : getToolsBySkill(groundSkill)) {
                         if (tool.itemId == 0 || !tool.fixed) {
                             //process metal lumps
                             if(MaterialUtilities.isMetal(materialId) && !tool.name.contains(MaterialUtilities.getMaterialString(materialId)) && tool.name.contains("lump"))
@@ -218,13 +212,17 @@ public class ImproverBot extends Bot {
         return toolsBySkill;
     }
 
-    private Tool findToolForImprove(InventoryMetaItem item) {
-        if (item == null) return null;
-        Tool returnTool = null;
-        if(!this.groundMode)
-            toolSkill = ToolSkill.getSkillForItem(item.getMaterialId());
+    /**
+     * @return the skill set by user or, if it wasn't set, the skill for the given material
+     */
+    private ToolSkill getEffectiveSkill(byte materialId) {
+        ToolSkill userSkill = toolSkill;
+        return userSkill != ToolSkill.UNKNOWN ? userSkill : ToolSkill.getSkillForItem(materialId);
+    }
 
-        for(Tool tool : getToolsBySkill(toolSkill))
+    private Tool findToolForImprove(InventoryMetaItem item) {
+        Tool returnTool = null;
+        for(Tool tool : getToolsBySkill(getEffectiveSkill(item.getMaterialId())))
             if (tool.improveIconId == item.getImproveIconId()) {
                 if(MaterialUtilities.isMetal(item.getMaterialId()) && !tool.name.contains(MaterialUtilities.getMaterialString(item.getMaterialId())) && tool.name.contains("lump"))
                     continue;
@@ -344,6 +342,11 @@ public class ImproverBot extends Bot {
             printInputKeyUsageString(ImproverBot.InputKey.ss);
             return;
         }
+        if (ToolSkill.UNKNOWN.abbreviation.equals(input[0])) {
+            this.toolSkill = ToolSkill.UNKNOWN;
+            Utils.consolePrint("The skill will be determined by the material of improved item");
+            return;
+        }
         ToolSkill toolSkill = ToolSkill.getByAbbreviation(input[0]);
         if (toolSkill == ToolSkill.UNKNOWN) {
             Utils.consolePrint("Unknown skill abbreviation!");
@@ -385,7 +388,8 @@ public class ImproverBot extends Bot {
                 "threshold(float value between 0 and 1)"),
         at("Add Target", "Add new inventory(under mouse cursor). Selected items in this inventory will be improved.", ""),
         ls("List Skills", "List available improving skills", ""),
-        ss("Add Source", "Set the skill. Only tools from that skill will be used. You can list available skills using \"" + ls.name() + "\" key", "skill_abbreviation"),
+        ss("Set Skill", "Set the skill. Only tools from that skill will be used. You can list available skills using \"" + ls.name() + "\" key. " +
+                "Use \"" + ToolSkill.UNKNOWN.abbreviation + "\" to determine the skill by the material of improved item(default)", "skill_abbreviation"),
         g("Ground", "Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
         ci("Change Instrument", "Change previously chosen instrument by tool selected in player's inventory", "");
 

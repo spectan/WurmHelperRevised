@@ -1,7 +1,7 @@
 package net.ildar.wurm.bot;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,8 +24,8 @@ public class BulkItemGetterBot extends Bot
 
     public static volatile boolean closeBMLWindow;
     public static volatile int currentMoveQuantity = -1;
-    private int moveQuantity = -1;
-    ArrayList<ItemSpec> specs = new ArrayList<>();
+    // modified from the console thread while the bot thread iterates it
+    final List<ItemSpec> specs = new CopyOnWriteArrayList<>();
     int selectedSpec = 0;
     
     public BulkItemGetterBot()
@@ -47,7 +47,6 @@ public class BulkItemGetterBot extends Bot
     {
         closeBMLWindow = false;
         currentMoveQuantity = -1;
-        moveQuantity = -1;
         setTimeout(5000);
         registerEventProcessor(
             message -> message.contains("That item is already busy"),
@@ -67,6 +66,7 @@ public class BulkItemGetterBot extends Bot
                 spec.updateSource(); // ignored when not fixed point
                 if(spec.source == null) continue;
                 
+                int moveQuantity;
                 if(spec.stockQuantity <= 0)
                     moveQuantity = -1;
                 else
@@ -153,7 +153,7 @@ public class BulkItemGetterBot extends Bot
         try
         {
             int newSelection = Integer.parseInt(args[0]);
-            if(newSelection >= numSets)
+            if(newSelection < 0 || newSelection >= numSets)
             {
                 Utils.consolePrint(
                     "Only have %d specs, index must be in 0 .. %d",
@@ -184,7 +184,7 @@ public class BulkItemGetterBot extends Bot
                 "%s %d: %s",
                 index == selectedSpec ? "*" : " ",
                 index,
-                String.join(", ", specs.get(index).toString())
+                specs.get(index).toString()
             );
     }
     
@@ -192,7 +192,7 @@ public class BulkItemGetterBot extends Bot
     {
         if(args == null || args.length != 1)
         {
-            printInputKeyUsageString(Inputs.isc);
+            printInputKeyUsageString(Inputs.c);
             return;
         }
         
@@ -246,8 +246,8 @@ public class BulkItemGetterBot extends Bot
         isc("Select Set", "Choose an item spec to operate on", "number"),
         isl("List Sets", "List item specs", ""),
         
-        c("Clicks", "Set quantity of source items to keep stocked in target", "number"),
-        ss("Add Source", "Set the source item for chosen spec (in bulk storage) to what the user is currenly pointing to", ""),
+        c("Stock Quantity", "Set quantity of source items to keep stocked in target", "number"),
+        ss("Set Source", "Set the source item for chosen spec (in bulk storage) to what the user is currenly pointing to", ""),
         ssxy("Source XY", "Find source item(s) for chosen spec from a fixed point at current cursor position", ""),
         st("Set Target", "Set the target item for chosen spec to what the user is currently pointing to", ""),
         ;
@@ -357,6 +357,7 @@ class ItemSpec
         if(items.size() == 0)
         {
             Utils.consolePrint("Couldn't set source: no items found");
+            source = null;
             return;
         }
         else if(items.size() > 1)
