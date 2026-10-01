@@ -270,7 +270,7 @@ public class TreeCutterBot extends Bot{
                 "<threshold>"),
         tt("Tree Type", "Set tree types for chopping, e.g. \"birch oak\" or \"birch, oak\". Use \"all\" to chop all trees again (the default)", "<tree types>"),
         c("Clicks", "Set the number of chops queued each time", "<clicks>"),
-        a("Age Limit", "Set minimal tree age for chopping by name or abbreviation, e.g. \"ov\" or \"old\" (see the \"al\" key). Chop all trees by default", "<age>"),
+        a("Age Limit", "Set minimal tree age for chopping by name or abbreviation, e.g. \"oa\" or \"old\" (see the \"al\" key). Chop all trees by default", "<age>"),
         tool("Tool", "Use the item selected in your inventory as the cutting tool (a hatchet is looked up on start otherwise)", ""),
         al("Age List", "Show the tree ages and their abbreviations", ""),
         b("Bush Cutting", "Toggle bush cutting. Enabled by default", ""),

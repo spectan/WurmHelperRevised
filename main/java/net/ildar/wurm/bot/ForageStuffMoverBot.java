@@ -77,9 +77,11 @@ public class ForageStuffMoverBot extends Bot {
         if (targets != null && targets.length > 0) {
             long target = targets[0];
             String name = getTargetName(target, x, y);
+            // a new target replaces the previous one (items used to end up in the last target added)
+            targetNames.clear();
             targetNames.put(target, name);
-            if (!this.targets.contains(target))
-                this.targets.add(target);
+            this.targets.clear();
+            this.targets.add(target);
             Utils.feedback("New target is " + name);
         } else
             Utils.consolePrint("Can't find the target. Hover the mouse over a container and try again");
@@ -116,7 +118,7 @@ public class ForageStuffMoverBot extends Bot {
     }
 
     enum InputKey implements Bot.InputKey {
-        at("Add Target", "Add the container under the mouse as a target. Foragable and botanizable items will be moved to the first target added", ""),
+        at("Set Target", "Set the container under the mouse as the target. Foragable and botanizable items will be moved to it. Using it again switches to the new container", ""),
         r("Toggle Rares", "Toggle moving of rare items", ""),
         mr("Toggle Rocks", "Toggle moving of rocks", "");
 

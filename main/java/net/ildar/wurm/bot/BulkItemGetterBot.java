@@ -187,7 +187,7 @@ public class BulkItemGetterBot extends Bot
             return;
         }
         
-        Integer parsed = parseIntArg(args, Inputs.c, 0, 1000000);
+        Integer parsed = parseIntArg(args, Inputs.c, Integer.MIN_VALUE, 1000000);
         if(parsed == null)
             return;
         int newQuantity = parsed <= 0 ? -1 : parsed;

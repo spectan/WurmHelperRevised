@@ -374,11 +374,12 @@ public abstract class Bot extends Thread {
                 printInputKeyUsageString(key);
                 return;
             }
-            // accept percentages too: "90" means 0.9
-            if (threshold > 1 && threshold <= 100)
+            // the threshold is compared with stamina + damage, so values up to 2 are meaningful.
+            // Larger values are taken as percentages: "90" means 0.9
+            if (threshold > 2 && threshold <= 100)
                 threshold /= 100;
-            if (Float.isNaN(threshold) || threshold < 0 || threshold > 1) {
-                Utils.consolePrint("The stamina threshold must be between 0 and 1 (or 0 to 100 percent)");
+            if (Float.isNaN(threshold) || threshold < 0 || threshold > 2) {
+                Utils.consolePrint("The stamina threshold must be between 0 and 2 (stamina + damage), or a percentage from 3 to 100");
                 return;
             }
             setStaminaThreshold(threshold);

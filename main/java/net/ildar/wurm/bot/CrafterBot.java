@@ -112,7 +112,9 @@ public class CrafterBot extends Bot {
             waitOnPause();
 
             if (repairInstrument) {
-                List<InventoryMetaItem> sourceItems = Utils.getField(source, "itemList");
+                // snapshot: the client thread may change the live list
+                List<InventoryMetaItem> liveItems = Utils.getField(source, "itemList");
+                List<InventoryMetaItem> sourceItems = liveItems != null ? new ArrayList<>(liveItems) : null;
                 if (sourceItems != null && sourceItems.size() > 0 && sourceItems.get(0).getDamage() > 10)
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, sourceItems.get(0).getId());
             }
@@ -282,7 +284,7 @@ public class CrafterBot extends Bot {
     }
 
     private void setCombineTimeout(String input[]) {
-        Integer value = parseIntArg(input, CrafterBot.InputKey.ctimeout, 100, 3600000);
+        Integer value = parseIntArg(input, CrafterBot.InputKey.ctimeout, 0, 3600000);
         if (value != null)
             setCombineTimeout(value);
     }
