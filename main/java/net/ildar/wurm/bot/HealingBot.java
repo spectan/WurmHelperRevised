@@ -13,15 +13,20 @@ import java.util.*;
         abbreviation = "h")
 public class HealingBot extends Bot {
     private final Set<String> WOUND_NAMES = new HashSet<>(Arrays.asList("Cut", "Bite", "Bruise", "Burn", "Hole", "Acid", "Infection"));
-    private float minDamage = 0;
+    private volatile float minDamage = 0;
 
     public HealingBot() {
         registerInputHandler(HealingBot.InputKey.md, this::setMinimumDamage);
+        timeout = 500;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add(String.format("Minimum wound damage: %.2f", minDamage));
     }
 
     @Override
     protected void work() throws Exception{
-        setTimeout(500);
         while (isActive()) {
             waitOnPause();
             if (!isProgressZero()) {
@@ -72,21 +77,16 @@ public class HealingBot extends Bot {
     }
 
     private void setMinimumDamage(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(HealingBot.InputKey.md);
+        Float value = parseFloatArg(input, HealingBot.InputKey.md, 0, 100);
+        if (value == null)
             return;
-        }
-        try {
-            minDamage = Float.parseFloat(input[0]);
-            Utils.consolePrint(String.format("The wound must have damage greater than %.2f in order to be treated", minDamage));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong value!");
-        }
+        minDamage = value;
+        Utils.consolePrint(String.format("The wound must have damage greater than %.2f in order to be treated", minDamage));
     }
 
 
     private enum InputKey implements Bot.InputKey {
-        md("Min Damage", "Set the minimum damage of the wound to be treated", "min_damage");
+        md("Min Damage", "Only treat wounds with damage greater than this value (0 to 100)", "<damage>");
 
         private final KeyInfo keyInfo;
 

@@ -1,11 +1,18 @@
 package net.ildar.wurm.bot;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
+import com.wurmonline.client.renderer.PickableUnit;
+import com.wurmonline.client.renderer.gui.InventoryListComponent;
+import com.wurmonline.client.renderer.gui.InventoryWindow;
+import com.wurmonline.client.renderer.gui.ItemListWindow;
+import com.wurmonline.client.renderer.gui.WurmComponent;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
@@ -15,13 +22,24 @@ import java.util.stream.Collectors;
         abbreviation = "fsm")
 public class ForageStuffMoverBot extends Bot {
     private final List<Long> targets = new CopyOnWriteArrayList<>();
-    private boolean moveRareItems;
-    private boolean notMoveRocks;
+    private final Map<Long, String> targetNames = new ConcurrentHashMap<>();
+    private volatile boolean moveRareItems;
+    private volatile boolean notMoveRocks;
 
     public ForageStuffMoverBot() {
         registerInputHandler(ForageStuffMoverBot.InputKey.at, input -> addTarget());
         registerInputHandler(ForageStuffMoverBot.InputKey.r, input -> toggleMovingRareItems());
         registerInputHandler(ForageStuffMoverBot.InputKey.mr, input -> toggleMovingRocks());
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        if (targets.isEmpty())
+            lines.add("Target: none (hover over a container and use \"at\")");
+        else
+            lines.add("Target: " + targetNames.getOrDefault(targets.get(0), String.valueOf(targets.get(0))));
+        lines.add("Move rare items: " + onOff(moveRareItems));
+        lines.add("Move rocks: " + onOff(!notMoveRocks));
     }
 
     @Override
@@ -58,24 +76,47 @@ public class ForageStuffMoverBot extends Bot {
         long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
         if (targets != null && targets.length > 0) {
             long target = targets[0];
-            this.targets.add(target);
-            Utils.consolePrint("New target is " + target);
+            String name = getTargetName(target, x, y);
+            targetNames.put(target, name);
+            if (!this.targets.contains(target))
+                this.targets.add(target);
+            Utils.feedback("New target is " + name);
         } else
-            Utils.consolePrint("Can't find the target");
+            Utils.consolePrint("Can't find the target. Hover the mouse over a container and try again");
+    }
+
+    /**
+     * Find a readable name for the hovered target: a world object or an item in an opened inventory window
+     */
+    private String getTargetName(long target, int x, int y) {
+        try {
+            PickableUnit hovered = WurmHelper.hud.getWorld().getCurrentHoveredObject();
+            if (hovered != null && hovered.getId() == target)
+                return hovered.getHoverName();
+            WurmComponent window = Utils.getComponentAtPoint(x, y, c -> c instanceof ItemListWindow || c instanceof InventoryWindow);
+            if (window != null) {
+                InventoryListComponent ilc = Utils.getField(window, "component");
+                for (InventoryMetaItem item : Utils.getInventoryItemsAtPoint(ilc, x, y))
+                    if (item.getId() == target)
+                        return item.getDisplayName();
+            }
+        } catch (Exception ignored) {
+        }
+        return "item " + target;
     }
 
     private void toggleMovingRareItems() {
         moveRareItems = !moveRareItems;
-        Utils.consolePrint("Rare items will be " + (moveRareItems?"":"NOT") + " moved");
+        Utils.feedback("Rare items will " + (moveRareItems ? "" : "NOT ") + "be moved");
     }
 
     private void toggleMovingRocks() {
         notMoveRocks = !notMoveRocks;
-        Utils.consolePrint("Rocks will be " + (notMoveRocks?"NOT":"") + " moved");
+        Utils.feedback("Rocks will " + (notMoveRocks ? "NOT " : "") + "be moved");
     }
 
     enum InputKey implements Bot.InputKey {
-        at("Add Target", "Add new target item. Foragable and botanizable items will be moved to that destination", ""),
+        at("Add Target", "Add the container under the mouse as a target. Foragable and botanizable items will be moved to the first target added", ""),
         r("Toggle Rares", "Toggle moving of rare items", ""),
         mr("Toggle Rocks", "Toggle moving of rocks", "");
 

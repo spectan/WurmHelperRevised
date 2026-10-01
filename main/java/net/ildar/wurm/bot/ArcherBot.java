@@ -13,6 +13,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.ConcurrentModificationException;
+import java.util.List;
 import java.util.Map;
 
 @BotInfo(name = "Archer", description =
@@ -21,18 +22,23 @@ import java.util.Map;
         "Deactivates on target death.",
         abbreviation = "ar")
 public class ArcherBot extends Bot {
-    private boolean stringBreaks;
+    private volatile boolean stringBreaks;
 
     private InventoryMetaItem bow;
 
     public ArcherBot() {
         registerStaminaThresholdHandler(ArcherBot.InputKey.s);
         registerInputHandler(ArcherBot.InputKey.string, input -> stringTheBow());
+        staminaThreshold = 0.9f;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Restring the bow: " + (stringBreaks ? "pending" : "no"));
     }
 
     @Override
     public void work() throws Exception{
-        setStaminaThreshold(0.9f);
         PaperDollInventory pdi = Utils.getField(WurmHelper.hud, "paperdollInventory");
         Map<Long, PaperDollSlot> frameList = Utils.getField(pdi, "frameList");
         for (Map.Entry<Long, PaperDollSlot> frame : frameList.entrySet()) {
@@ -44,14 +50,14 @@ public class ArcherBot extends Bot {
             }
         }
         if (bow == null) {
-            Utils.consolePrint("Equip the bow first!");
+            Utils.consolePrint("Equip a bow first, then start the bot again");
             deactivate();
             return;
         }
 
         PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
         if (pickableUnit == null){
-            Utils.consolePrint("Select mob!");
+            Utils.consolePrint("Select a creature or an archery target (click it so it shows in the select bar), then start the bot again");
             deactivate();
             return;
         }
@@ -103,14 +109,14 @@ public class ArcherBot extends Bot {
     }
 
     private void stringTheBow() {
-        Utils.consolePrint(getClass().getSimpleName() + " will try to string the bow.");
+        Utils.feedback(getClass().getSimpleName() + " will try to string the bow" + (isAlive() ? "" : " when it starts"));
         stringBreaks = true;
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        string("String", "String the current bow with a string",
+        s("Stamina", "Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        string("String", "String the equipped bow with a bow string from the inventory",
                 "");
 
         private final KeyInfo keyInfo;

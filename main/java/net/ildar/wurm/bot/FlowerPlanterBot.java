@@ -20,13 +20,17 @@ public class FlowerPlanterBot extends Bot {
 
     public FlowerPlanterBot() {
         registerStaminaThresholdHandler(FlowerPlanterBot.InputKey.s);
+        timeout = 300;
+        staminaThreshold = 0.96f;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        // only the timeout and the stamina threshold, which the base class prints
     }
 
     @Override
     public void work() throws Exception{
-        setTimeout(300);
-        setStaminaThreshold(0.96f);
-
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
         int maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
@@ -114,8 +118,8 @@ public class FlowerPlanterBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)");
+        s("Stamina", "Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>");
 
         private final KeyInfo keyInfo;
 

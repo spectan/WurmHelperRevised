@@ -17,15 +17,22 @@ import java.util.concurrent.ConcurrentHashMap;
         abbreviation = "gig")
 public class GroundItemGetterBot extends Bot {
     private final Set <String> itemNames = ConcurrentHashMap.newKeySet();
-    private float distance = 4;
+    private volatile float distance = 4;
 
     public GroundItemGetterBot() {
         registerInputHandler(GroundItemGetterBot.InputKey.a, this::addNewItemName);
         registerInputHandler(GroundItemGetterBot.InputKey.d, this::setDistance);
+        timeout = 500;
     }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Distance: " + distance + " meters");
+        lines.add("Items: " + (itemNames.isEmpty() ? "none (add some with \"a <item name>\")" : String.join(", ", itemNames)));
+    }
+
     @Override
     public void work() throws Exception{
-        setTimeout(500);
         while (isActive()) {
             waitOnPause();
             if (itemNames.size() > 0) {
@@ -73,35 +80,27 @@ public class GroundItemGetterBot extends Bot {
     }
 
     private void addNewItemName(String []input) {
-        if (input == null || input.length < 1) {
+        List<String> names = parseNameList(input);
+        if (names.isEmpty()) {
             printInputKeyUsageString(GroundItemGetterBot.InputKey.a);
             return;
         }
-        addItem(String.join(" ", input));
-    }
-
-    private void setDistance(String []input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(GroundItemGetterBot.InputKey.d);
-            return;
-        }
-        try {
-            distance = Float.parseFloat(input[0]);
-            Utils.consolePrint("Distance was set to " + distance + " meters");
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong distance value!");
-        }
-    }
-
-    private void addItem(String item) {
-        itemNames.add(item);
+        itemNames.addAll(names);
         Utils.consolePrint("Current item set in " + this.getClass().getSimpleName() + " - " + itemNames.toString());
     }
 
+    private void setDistance(String []input) {
+        Float value = parseFloatArg(input, GroundItemGetterBot.InputKey.d, 0.1f, 100);
+        if (value == null)
+            return;
+        distance = value;
+        Utils.consolePrint("Distance was set to " + distance + " meters");
+    }
+
     enum InputKey implements Bot.InputKey {
-        d("Distance", "Set the distance the bot should look around player in search for items",
-                "distance(in meters, 1 tile is 4 meters)"),
-        a("Add Item", "Add new item name to search list", "item_name");
+        d("Distance", "Set the distance (in meters, 1 tile is 4 meters) the bot should look around player in search for items",
+                "<distance>"),
+        a("Add Item", "Add item names to the search list. Separate several names with commas, e.g. \"log, small rock\"", "<item name>");
 
         private final KeyInfo keyInfo;
 

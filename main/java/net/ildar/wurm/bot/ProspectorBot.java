@@ -7,18 +7,29 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
+import java.util.List;
+
 @BotInfo(name = "Prospector", description =
         "Prospects selected tile",
         abbreviation = "pr")
 public class ProspectorBot extends Bot {
-    private int clicks;
-    private InventoryMetaItem toolItem;
+    private volatile int clicks;
+    private volatile InventoryMetaItem toolItem;
     private static final String[] VALID_TOOLS = {"pickaxe"};
 
     public ProspectorBot() {
         registerStaminaThresholdHandler(ProspectorBot.InputKey.s);
         registerInputHandler(ProspectorBot.InputKey.c, this::setClicksNumber);
         registerInputHandler(ProspectorBot.InputKey.tool, input -> selectTool());
+        staminaThreshold = 0.9f;
+        clicks = 3;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + clicks);
+        InventoryMetaItem tool = toolItem;
+        lines.add("Tool: " + (tool != null ? tool.getDisplayName() : "any pickaxe in the inventory"));
     }
 
     @Override
@@ -27,7 +38,7 @@ public class ProspectorBot extends Bot {
             toolItem = Utils.locateToolItem("pickaxe");
         long pickaxeId;
         if (toolItem == null) {
-            Utils.consolePrint("You don't have a pickaxe");
+            Utils.consolePrint("You don't have a pickaxe! Put one in your inventory, or select one and use \"bot pr tool\", then start the bot again");
             deactivate();
             return;
         } else {
@@ -36,14 +47,12 @@ public class ProspectorBot extends Bot {
         }
         PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
         if (pickableUnit == null) {
-            Utils.consolePrint("Select cave wall!");
+            Utils.consolePrint("Select a cave wall (click it so it shows in the select bar), then start the bot again");
             deactivate();
             return;
         } else
             Utils.consolePrint(this.getClass().getSimpleName() + " will prospect " + pickableUnit.getHoverName());
         long caveWallId = pickableUnit.getId();
-        setStaminaThreshold(0.9f);
-        setClicks(3);
         while (isActive()) {
             waitOnPause();
             if (canDoWork(staminaThreshold)) {
@@ -60,34 +69,23 @@ public class ProspectorBot extends Bot {
         InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
         if (tool != null) {
             toolItem = tool;
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+            Utils.feedback(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }
 
     private void setClicksNumber(String []input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(ProspectorBot.InputKey.c);
+        Integer value = parseIntArg(input, ProspectorBot.InputKey.c, 1, 10);
+        if (value == null)
             return;
-        }
-        try {
-            setClicks(Integer.parseInt(input[0]));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Bad value!");
-        }
-    }
-
-    private void setClicks(int n) {
-        if (n < 1) n = 1;
-        if (n > 10) n = 10;
-        clicks = n;
+        clicks = value;
         Utils.consolePrint(getClass().getSimpleName() + " will do " + clicks + " clicks each time");
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        c("Clicks", "Change the amount of clicks bot will do each time", "n(integer value)"),
-        tool("Tool", "Set the prospecting tool from selected inventory item.", "tool");
+        s("Stamina", "Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        c("Clicks", "Change the amount of clicks (1 to 10) the bot will do each time", "<clicks>"),
+        tool("Tool", "Set the prospecting tool from the selected inventory item", "");
 
         private final KeyInfo keyInfo;
 

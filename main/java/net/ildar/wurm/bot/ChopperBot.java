@@ -10,16 +10,17 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.ConcurrentModificationException;
+import java.util.List;
 import java.util.Map;
 
 @BotInfo(name = "Chopper", description =
         "Automatically chops felled trees near player",
         abbreviation = "ch")
 public class ChopperBot extends Bot {
-    private float distance = 4;
+    private volatile float distance = 4;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
-    private int clicks;
-    private InventoryMetaItem toolItem;
+    private volatile int clicks;
+    private volatile InventoryMetaItem toolItem;
     private static final String[] VALID_TOOLS = {"hatchet"};
 
     public ChopperBot() {
@@ -30,17 +31,26 @@ public class ChopperBot extends Bot {
 
         areaAssistant.setMoveAheadDistance(1);
         areaAssistant.setMoveRightDistance(1);
+        staminaThreshold = 0.96f;
+        clicks = Math.max(1, Utils.getMaxActionNumber());
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Distance: " + distance + " meters");
+        lines.add("Clicks: " + clicks);
+        InventoryMetaItem tool = toolItem;
+        lines.add("Tool: " + (tool != null ? tool.getDisplayName() : "any hatchet in the inventory"));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception{
-        setStaminaThreshold(0.96f);
-        setClicks(Utils.getMaxActionNumber());
         if (toolItem == null)
             toolItem = Utils.locateToolItem("hatchet");
         long hatchetId;
         if (toolItem == null) {
-            Utils.consolePrint("You don't have a hatchet!");
+            Utils.consolePrint("You don't have a hatchet! Put one in your inventory, or select one and use \"bot ch tool\", then start the bot again");
             deactivate();
             return;
         } else {
@@ -84,29 +94,17 @@ public class ChopperBot extends Bot {
     }
 
     private void setDistance(String[] input) {
-        if (input == null || input.length == 0) {
-            printInputKeyUsageString(ChopperBot.InputKey.d);
+        Float value = parseFloatArg(input, ChopperBot.InputKey.d, 0.1f, 100);
+        if (value == null)
             return;
-        }
-        try {
-            distance = Float.parseFloat(input[0]);
-            Utils.consolePrint("New lookup distance is " + distance + " meters");
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong distance value!");
-        }
+        distance = value;
+        Utils.consolePrint("New lookup distance is " + distance + " meters");
     }
 
     private void setClickNumber(String[] input) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ChopperBot.InputKey.c);
-        else {
-            try {
-                int clicks = Integer.parseInt(input[0]);
-                setClicks(clicks);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong value!");
-            }
-        }
+        Integer value = parseIntArg(input, ChopperBot.InputKey.c, 1, 100);
+        if (value != null)
+            setClicks(value);
     }
 
     private void setClicks(int clicks) {
@@ -118,17 +116,17 @@ public class ChopperBot extends Bot {
         InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
         if (tool != null) {
             toolItem = tool;
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+            Utils.feedback(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        d("Distance", "Set the distance the bot should look around player in search for a felled tree",
-                "distance(in meters)"),
-        c("Clicks", "Set the amount of chops the bot will do each time", "c(integer value)"),
-        tool("Tool", "Set the chopping tool from selected inventory item.", "tool");
+        s("Stamina", "Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        d("Distance", "Set the distance (in meters) the bot should look around player in search for a felled tree",
+                "<distance>"),
+        c("Clicks", "Set the amount of chops the bot will do each time", "<clicks>"),
+        tool("Tool", "Set the chopping tool from the selected inventory item", "");
 
         private final KeyInfo keyInfo;
 
