@@ -1,7 +1,6 @@
 package net.ildar.wurm.bot;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -40,7 +39,7 @@ import net.ildar.wurm.annotations.BotInfo;
         "Assists player in various ways",
         abbreviation = "a")
 public class AssistantBot extends Bot {
-    private Enchant spellToCast = Enchant.DISPEL;
+    private volatile Enchant spellToCast = Enchant.DISPEL;
     private volatile boolean casting;
     private long statuetteId;
     private long bodyId;
@@ -53,7 +52,7 @@ public class AssistantBot extends Bot {
     private volatile boolean lockpicking;
     private long chestId;
     private long lastLockpicking;
-    private long lockpickingTimeout;
+    private volatile long lockpickingTimeout = 610000;
     private volatile boolean successfullStartOfLockpicking;
     private volatile int lockpickingResult;
     private volatile boolean successfullLocking;
@@ -70,23 +69,26 @@ public class AssistantBot extends Bot {
     private volatile boolean successfullEating;
 
     private volatile boolean trashCleaning;
-    private long trashCleaningTimeout;
+    private volatile long trashCleaningTimeout = 5000;
     private long lastTrashCleaning;
     private long trashBinId;
+    private volatile String trashBinName;
     private volatile boolean successfullStartTrashCleaning;
 
     private volatile boolean praying;
     private long altarId;
+    private volatile String altarName;
     private long lastPrayer;
-    private long prayingTimeout;
-    private int prayCount = 0;
-    private float prayStamina = 0.5f;
+    private volatile long prayingTimeout = 1500000;
+    private volatile int prayCount = 0;
+    private volatile float prayStamina = 0.5f;
     private volatile boolean successfullStartOfPraying;
 
     private volatile boolean sacrificing;
     private long sacrificeAltarId;
+    private volatile String sacrificeAltarName;
     private long lastSacrifice;
-    private long sacrificeTimeout;
+    private volatile long sacrificeTimeout = 1230000;
     private volatile boolean successfullStartOfSacrificing;
     
     private volatile boolean butchering;
@@ -95,16 +97,17 @@ public class AssistantBot extends Bot {
     private volatile boolean burying;
     private long shovel = -10;
     private long pickaxe = -10;
-    private volatile boolean buryAll;
-    private long buryDelay = 2500;
+    private volatile boolean buryAll = true;
+    private volatile long buryDelay = 2500;
     // modified by the console thread while the bot thread iterates them
     private final Map<Long, Long> corpseTimes = new ConcurrentHashMap<>();
     private final Set<String> blacklistedCorpseNames = ConcurrentHashMap.newKeySet();
 
     private volatile boolean kindlingBurning;
     private long forgeId;
+    private volatile String forgeName;
     private long lastBurning;
-    private long kindlingBurningTimeout;
+    private volatile long kindlingBurningTimeout = 10000;
     private volatile boolean successfullStartOfBurning;
     
     private volatile boolean grooming;
@@ -127,51 +130,49 @@ public class AssistantBot extends Bot {
     private volatile boolean verbose = false;
 
     public AssistantBot() {
-        registerInputHandler(AssistantBot.InputKey.w, input -> toggleDrinking(0));
+        // the corpses of rift creatures can't be buried, skip them unless the user clears the blacklist
+        blacklistedCorpseNames.add("rift");
+        registerInputHandler(AssistantBot.InputKey.w, input -> toggleDrinking());
         registerInputHandler(AssistantBot.InputKey.wid,
-            input -> toggleByTargetId(input, InputKey.wid, "water", this::toggleDrinking));
+            input -> enableByTargetId(input, InputKey.wid, "water", this::enableDrinking));
         registerInputHandler(AssistantBot.InputKey.eat, input -> toggleEating());
         registerInputHandler(AssistantBot.InputKey.ls, input -> showSpellList());
-        registerInputHandler(AssistantBot.InputKey.c, this::toggleAutocasting);
-        registerInputHandler(AssistantBot.InputKey.p, input -> togglePraying(0));
+        registerInputHandler(AssistantBot.InputKey.c, this::handleCasting);
+        registerInputHandler(AssistantBot.InputKey.p, input -> togglePraying());
         registerInputHandler(AssistantBot.InputKey.pt,
-            input -> handleTimeoutInput(input, InputKey.pt, praying, "Automatic praying is off!", this::changePrayerTimeout));
+            input -> handleTimeoutInput(input, InputKey.pt, this::changePrayerTimeout));
         registerInputHandler(AssistantBot.InputKey.pid,
-            input -> toggleByTargetId(input, InputKey.pid, "altar", this::togglePraying));
-        registerInputHandler(AssistantBot.InputKey.pis, input -> togglePrayingOnInventoryItem());
+            input -> enableByTargetId(input, InputKey.pid, "altar", this::enablePraying));
+        registerInputHandler(AssistantBot.InputKey.pis, input -> prayOnSelectedInventoryItem());
         registerInputHandler(AssistantBot.InputKey.ps, this::setPrayerStamina);
         registerInputHandler(AssistantBot.InputKey.pc, this::setPrayerCount);
-        registerInputHandler(AssistantBot.InputKey.s, input -> toggleSacrificing(0));
+        registerInputHandler(AssistantBot.InputKey.s, input -> toggleSacrificing());
         registerInputHandler(AssistantBot.InputKey.st,
-            input -> handleTimeoutInput(input, InputKey.st, sacrificing, "Automatic sacrificing is off!", this::changeSacrificeTimeout));
+            input -> handleTimeoutInput(input, InputKey.st, this::changeSacrificeTimeout));
         registerInputHandler(AssistantBot.InputKey.sid,
-            input -> toggleByTargetId(input, InputKey.sid, "altar", this::toggleSacrificing));
-        registerInputHandler(AssistantBot.InputKey.kb, input -> toggleKindlingBurns(0));
+            input -> enableByTargetId(input, InputKey.sid, "altar", this::enableSacrificing));
+        registerInputHandler(AssistantBot.InputKey.kb, input -> toggleKindlingBurns());
         registerInputHandler(AssistantBot.InputKey.kbt,
-            input -> handleTimeoutInput(input, InputKey.kbt, kindlingBurning, "Kindling burning is off!", this::changeKindlingBurnsTimeout));
+            input -> handleTimeoutInput(input, InputKey.kbt, this::changeKindlingBurnsTimeout));
         registerInputHandler(AssistantBot.InputKey.kbid,
-            input -> toggleByTargetId(input, InputKey.kbid, "forge", this::toggleKindlingBurns));
+            input -> enableByTargetId(input, InputKey.kbid, "forge", this::enableKindlingBurns));
         registerInputHandler(AssistantBot.InputKey.cwov, input -> toggleWOVCasting());
-        registerInputHandler(AssistantBot.InputKey.cleanup, input -> toggleTrashCleaning(0));
+        registerInputHandler(AssistantBot.InputKey.cleanup, input -> toggleTrashCleaning());
         registerInputHandler(AssistantBot.InputKey.cleanupt,
-            input -> handleTimeoutInput(input, InputKey.cleanupt, trashCleaning, "Trash cleaning is off!", this::changeTrashCleaningTimeout));
+            input -> handleTimeoutInput(input, InputKey.cleanupt, this::changeTrashCleaningTimeout));
         registerInputHandler(AssistantBot.InputKey.cleanupid,
-            input -> toggleByTargetId(input, InputKey.cleanupid, "trash bin", this::toggleTrashCleaning));
-        registerInputHandler(AssistantBot.InputKey.l, input -> toggleLockpicking(0));
+            input -> enableByTargetId(input, InputKey.cleanupid, "trash bin", this::enableTrashCleaning));
+        registerInputHandler(AssistantBot.InputKey.l, input -> toggleLockpicking());
         registerInputHandler(AssistantBot.InputKey.lt,
-            input -> handleTimeoutInput(input, InputKey.lt, lockpicking, "Automatic lockpicking is off!", this::changeLockpickingTimeout));
+            input -> handleTimeoutInput(input, InputKey.lt, this::changeLockpickingTimeout));
         registerInputHandler(AssistantBot.InputKey.lid,
-            input -> toggleByTargetId(input, InputKey.lid, "chest", this::toggleLockpicking));
+            input -> enableByTargetId(input, InputKey.lid, "chest", this::enableLockpicking));
         registerInputHandler(AssistantBot.InputKey.b, input -> toggleButchering());
         registerInputHandler(AssistantBot.InputKey.bu, input -> toggleBurying());
         registerInputHandler(AssistantBot.InputKey.bua, input -> toggleBuryAll());
         registerInputHandler(AssistantBot.InputKey.bud, this::setBuryDelay);
-        registerInputHandler(AssistantBot.InputKey.bub, input -> addCorpseBlacklist(
-            Arrays
-                .stream(input != null ? input : new String[]{})
-                .collect(Collectors.joining(" "))
-        ));
-        registerInputHandler(AssistantBot.InputKey.bubc, input -> addCorpseBlacklist(null));
+        registerInputHandler(AssistantBot.InputKey.bub, this::addCorpseBlacklist);
+        registerInputHandler(AssistantBot.InputKey.bubc, input -> clearCorpseBlacklist());
         registerInputHandler(AssistantBot.InputKey.groom, input -> toggleGrooming());
         registerInputHandler(AssistantBot.InputKey.v, input -> toggleVerbosity());
         registerInputHandler(AssistantBot.InputKey.pave,
@@ -665,487 +666,530 @@ public class AssistantBot extends Bot {
         );
     }
 
-    private void toggleByTargetId(String[] input, InputKey key, String targetName, LongConsumer toggle) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(key);
-            return;
-        }
-        try {
-            toggle.accept(Long.parseLong(input[0]));
-        } catch (Exception e) {
-            Utils.consolePrint("Can't get " + targetName + " id");
-        }
-    }
-
-    private void handleTimeoutInput(String[] input, InputKey key, boolean enabled, String disabledMessage, IntConsumer changeTimeout) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(key);
-            return;
-        }
-        if (enabled) {
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Casting: " + onOff(casting) + " (spell: " + spellToCast.displayName() + ")");
+        lines.add("Wisdom of Vynora casting: " + onOff(wovCasting));
+        lines.add("Drinking: " + onOff(drinking) + (drinking ? " (target id: " + waterId + ")" : ""));
+        lines.add("Eating: " + onOff(eating) + (eating ? " (target id: " + foodId + ")" : ""));
+        lines.add("Praying: " + onOff(praying)
+                + " (" + (praying ? "altar: " + describeTarget(altarName, altarId) + ", " : "")
+                + "timeout: " + prayingTimeout + " ms, stamina: " + prayStamina
+                + ", count: " + (prayCount == 0 ? "max" : String.valueOf(prayCount)) + ")");
+        lines.add("Sacrificing: " + onOff(sacrificing)
+                + " (" + (sacrificing ? "altar: " + describeTarget(sacrificeAltarName, sacrificeAltarId) + ", " : "")
+                + "timeout: " + sacrificeTimeout + " ms)");
+        lines.add("Kindling burning: " + onOff(kindlingBurning)
+                + " (" + (kindlingBurning ? "forge: " + describeTarget(forgeName, forgeId) + ", " : "")
+                + "timeout: " + kindlingBurningTimeout + " ms)");
+        lines.add("Trash cleaning: " + onOff(trashCleaning)
+                + " (" + (trashCleaning ? "trash bin: " + describeTarget(trashBinName, trashBinId) + ", " : "")
+                + "timeout: " + trashCleaningTimeout + " ms)");
+        lines.add("Lockpicking: " + onOff(lockpicking)
+                + " (" + (lockpicking ? "target id: " + chestId + ", " : "")
+                + "timeout: " + lockpickingTimeout + " ms)");
+        lines.add("Butchering: " + onOff(butchering));
+        lines.add("Burying: " + onOff(burying) + " (bury all: " + onOff(buryAll) + ", delay: " + buryDelay + " ms)");
+        lines.add("Corpse blacklist: " + (blacklistedCorpseNames.isEmpty() ? "empty" : String.join(", ", blacklistedCorpseNames)));
+        lines.add("Grooming: " + onOff(grooming));
+        lines.add("No target: " + onOff(notarget));
+        InventoryListComponent heatingInventory = lumpHeatingInventory;
+        String heatingName = null;
+        if (heatingInventory != null) {
             try {
-                changeTimeout.accept(Integer.parseInt(input[0]));
-            } catch (NumberFormatException e) {
-                Utils.consolePrint("Wrong timeout value!");
+                heatingName = Utils.getRootItem(heatingInventory).getDisplayName();
+            } catch (Exception ignored) {
             }
-        } else {
-            Utils.consolePrint(disabledMessage);
+        }
+        lines.add("Lump heating: " + onOff(heatingInventory != null)
+                + (heatingInventory != null ? " (container: " + (heatingName != null ? heatingName : "unknown") + ")" : ""));
+        lines.add("Lump combining: " + onOff(lumpCombining));
+        lines.add("Verbose: " + onOff(verbose));
+    }
+
+    private static String describeTarget(String name, long id) {
+        return name != null ? name + " (id " + id + ")" : "id " + id;
+    }
+
+    /**
+     * Turn a feature on for the target with the given id. Calling it again while the feature is on just changes the target
+     */
+    private void enableByTargetId(String[] input, InputKey key, String targetName, LongConsumer enable) {
+        if (input == null || input.length != 1) {
+            printInputKeyUsageString(key);
+            return;
+        }
+        long id;
+        try {
+            id = Long.parseLong(input[0]);
+        } catch (NumberFormatException e) {
+            Utils.consolePrint("`" + input[0] + "` is not a valid " + targetName + " id");
+            printInputKeyUsageString(key);
+            return;
+        }
+        if (id <= 0) {
+            Utils.consolePrint("`" + input[0] + "` is not a valid " + targetName + " id");
+            printInputKeyUsageString(key);
+            return;
+        }
+        enable.accept(id);
+    }
+
+    private void handleTimeoutInput(String[] input, InputKey key, IntConsumer changeTimeout) {
+        Integer timeout = parseIntArg(input, key, 100, Integer.MAX_VALUE);
+        if (timeout != null)
+            changeTimeout.accept(timeout);
+    }
+
+    /**
+     * @return the object selected in the select bar if its name contains the filter (null filter accepts any), otherwise null
+     */
+    private PickableUnit getSelectedUnit(String nameFilter) {
+        try {
+            PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
+            if (pickableUnit == null)
+                return null;
+            if (nameFilter != null && !pickableUnit.getHoverName().toLowerCase().contains(nameFilter))
+                return null;
+            return pickableUnit;
+        } catch (Exception e) {
+            Utils.consolePrint("Can't get the selected object - " + e.getMessage());
+            return null;
         }
     }
 
-    private static int clampTimeout(int timeout) {
-        if (timeout < 100) {
-            Utils.consolePrint("Too small timeout!");
-            return 100;
-        }
-        return timeout;
+    /**
+     * @return the id of the object under the mouse cursor, or 0 when there is none
+     */
+    private long getTargetUnderMouse() {
+        int x = WurmHelper.hud.getWorld().getClient().getXMouse();
+        int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+        long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
+        if (targets != null && targets.length > 0)
+            return targets[0];
+        return 0;
     }
 
-    private void togglePrayingOnInventoryItem() {
+    private void prayOnSelectedInventoryItem() {
         List<InventoryMetaItem> selectedItems = Utils.getSelectedItems();
         if (selectedItems == null || selectedItems.isEmpty()) {
             Utils.consolePrint("Select an item in your inventory first!");
             return;
         }
         InventoryMetaItem item = selectedItems.get(0);
-        praying = true;
         this.altarId = item.getId();
+        this.altarName = item.getDisplayName();
         lastPrayer = 0;
-        Utils.consolePrint(this.getClass().getSimpleName() + " praying on " + item.getDisplayName() + " is on!");
-        changePrayerTimeout(1500000);
+        praying = true;
+        Utils.feedback(this.getClass().getSimpleName() + " praying on " + item.getDisplayName() + " is on!");
     }
 
     private void changeKindlingBurnsTimeout(int timeout) {
-        kindlingBurningTimeout = clampTimeout(timeout);
-        Utils.consolePrint("Current kindling burn timeout is " + kindlingBurningTimeout);
+        kindlingBurningTimeout = timeout;
+        Utils.consolePrint("Current kindling burn timeout is " + kindlingBurningTimeout + " milliseconds");
     }
 
     private void changePrayerTimeout(int timeout) {
-        prayingTimeout = clampTimeout(timeout);
-        Utils.consolePrint("Current prayer timeout is " + prayingTimeout);
+        prayingTimeout = timeout;
+        Utils.consolePrint("Current prayer timeout is " + prayingTimeout + " milliseconds");
     }
-    
+
     private void setPrayerStamina(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(AssistantBot.InputKey.ps);
+        Float newStamina = parseFloatArg(input, AssistantBot.InputKey.ps, 0f, 1f);
+        if (newStamina == null)
             return;
-        }
-        
-        if (!praying) {
-            Utils.consolePrint("Automatic praying is off!");
-            return;
-        }
-        
-        try {
-            float newStamina = Float.parseFloat(input[0]);
-            if (newStamina < 0f || newStamina > 1f) {
-                Utils.consolePrint("Stamina must be a number between 0..1");
-                return;
-            }
-            prayStamina = newStamina;
-        } catch(NumberFormatException exception) {
-            Utils.consolePrint("`%s` is not a real number", input[0]);
-        }
+        prayStamina = newStamina;
+        Utils.consolePrint("The bot will pray when stamina is at least " + prayStamina);
     }
-    
+
     private void setPrayerCount(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(AssistantBot.InputKey.pc);
+        Integer newCount = parseIntArg(input, AssistantBot.InputKey.pc, 0, 1000);
+        if (newCount == null)
             return;
-        }
-        
-        if (!praying) {
-            Utils.consolePrint("Automatic praying is off!");
-            return;
-        }
-        
-        try {
-            int newCount = Integer.parseInt(input[0]);
-            if (newCount < 0) {
-                Utils.consolePrint("Prayer count must be a positive integer");
-                return;
-            }
-            prayCount = newCount;
-        } catch(NumberFormatException exception) {
-            Utils.consolePrint("`%s` is not an integer", input[0]);
-        }
+        prayCount = newCount;
+        if (prayCount == 0)
+            Utils.consolePrint("The bot will queue as many prayers as possible");
+        else
+            Utils.consolePrint("The bot will queue " + prayCount + " prayer(s) at a time");
     }
 
     private void changeTrashCleaningTimeout(int timeout) {
-        trashCleaningTimeout = clampTimeout(timeout);
-        Utils.consolePrint("Current trash cleaning timeout is " + trashCleaningTimeout);
+        trashCleaningTimeout = timeout;
+        Utils.consolePrint("Current trash cleaning timeout is " + trashCleaningTimeout + " milliseconds");
     }
 
     private void changeSacrificeTimeout(int timeout) {
-        sacrificeTimeout = clampTimeout(timeout);
-        Utils.consolePrint("Current sacrifice timeout is " + sacrificeTimeout);
+        sacrificeTimeout = timeout;
+        Utils.consolePrint("Current sacrifice timeout is " + sacrificeTimeout + " milliseconds");
     }
 
     private void changeLockpickingTimeout(int timeout) {
-        lockpickingTimeout = clampTimeout(timeout);
-        Utils.consolePrint("Current lockpicking timeout is " + lockpickingTimeout);
+        lockpickingTimeout = timeout;
+        Utils.consolePrint("Current lockpicking timeout is " + lockpickingTimeout + " milliseconds");
     }
 
-    private void toggleTrashCleaning(long trashBinId) {
-        trashCleaning = !trashCleaning;
+    private void toggleTrashCleaning() {
         if (trashCleaning) {
-            if (trashBinId == 0) {
-                try {
-                    PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
-                    if (pickableUnit == null || !pickableUnit.getHoverName().contains("trash heap")) {
-                        Utils.consolePrint("Select trash bin!");
-                        trashCleaning = false;
-                        return;
-                    }
-                    trashBinId = pickableUnit.getId();
-                } catch (Exception e) {
-                    Utils.consolePrint("Can't turn trash cleaning on!");
-                    trashCleaning = false;
-                    return;
-                }
-            }
-            this.trashBinId = trashBinId;
-            lastTrashCleaning = 0;
-            Utils.consolePrint(this.getClass().getSimpleName() + " trash cleaning is on!");
-            changeTrashCleaningTimeout(5000);
+            trashCleaning = false;
+            Utils.feedback(this.getClass().getSimpleName() + " trash cleaning is off!");
         } else
-            Utils.consolePrint(this.getClass().getSimpleName() + " trash cleaning is off!");
+            enableTrashCleaning(0);
+    }
 
+    /**
+     * @param trashBinId the trash bin to clean, 0 to take the selected one
+     */
+    private void enableTrashCleaning(long trashBinId) {
+        String name = null;
+        if (trashBinId == 0) {
+            PickableUnit pickableUnit = getSelectedUnit("trash heap");
+            if (pickableUnit == null) {
+                Utils.consolePrint("Select trash bin!");
+                return;
+            }
+            trashBinId = pickableUnit.getId();
+            name = pickableUnit.getHoverName();
+        }
+        this.trashBinId = trashBinId;
+        this.trashBinName = name;
+        lastTrashCleaning = 0;
+        trashCleaning = true;
+        Utils.feedback(this.getClass().getSimpleName() + " trash cleaning is on! Trash bin: " + describeTarget(name, trashBinId));
     }
 
     private void showSpellList() {
-        Utils.consolePrint("Spell abbreviation");
+        Utils.consolePrint("Spell - abbreviation");
         for(Enchant enchant : Enchant.values())
-            Utils.consolePrint(enchant.name() + " " + enchant.abbreviation);
+            Utils.consolePrint(enchant.displayName() + " - " + enchant.abbreviation);
     }
 
-    private void toggleAutocasting(String [] input) {
-        casting = !casting;
+    /**
+     * Without a spell: toggle casting. With a spell: choose it and make sure casting is on
+     */
+    private void handleCasting(String[] input) {
+        Enchant enchant = null;
+        if (input != null && input.length > 0) {
+            if (input.length != 1) {
+                printInputKeyUsageString(InputKey.c);
+                return;
+            }
+            enchant = Enchant.find(input[0]);
+            if (enchant == null) {
+                Utils.consolePrint("Unknown spell `" + input[0] + "`, see " + InputKey.ls.name());
+                return;
+            }
+        }
+        if (enchant == null && casting) {
+            casting = false;
+            Utils.feedback("Spellcasts are off!");
+            return;
+        }
+        if (enchant != null)
+            spellToCast = enchant;
         if (casting) {
-            try {
-                PaperDollInventory pdi = WurmHelper.hud.getPaperDollInventory();
-                PaperDollSlot pds = Utils.getField(pdi, "bodyItem");
-                bodyId = pds.getItemId();
-                InventoryMetaItem statuette = Utils.locateToolItem("statuette of");
-                if (statuette == null) {
-                    Utils.consolePrint("Can't find a statuette in your inventory");
-                    casting = false;
-                    return;
-                } else
-                    Utils.consolePrint("Spellcasts are on!");
-                statuetteId = statuette.getId();
-                Enchant enchant = Enchant.DISPEL;
-                if (input != null && input.length > 0) {
-                    enchant = Enchant.getByAbbreviation(input[0]);
-                }
-                spellToCast = enchant;
-                Utils.consolePrint("The spell " + spellToCast.name() + " will be casted");
-            } catch (Exception e) {
-                Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
-                Utils.consolePrint(e.toString());
-                casting = false;
+            Utils.feedback("The spell " + spellToCast.displayName() + " will be cast");
+            return;
+        }
+        try {
+            PaperDollInventory pdi = WurmHelper.hud.getPaperDollInventory();
+            PaperDollSlot pds = Utils.getField(pdi, "bodyItem");
+            bodyId = pds.getItemId();
+            InventoryMetaItem statuette = Utils.locateToolItem("statuette of");
+            if (statuette == null) {
+                Utils.consolePrint("Can't find a statuette in your inventory");
+                return;
             }
-        } else
-            Utils.consolePrint("Spellcasts are off!");
+            statuetteId = statuette.getId();
+            casting = true;
+            Utils.feedback("Spellcasts are on! The spell " + spellToCast.displayName() + " will be cast");
+        } catch (Exception e) {
+            Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
+            Utils.consolePrint(e.toString());
+            casting = false;
+        }
     }
 
-    private void togglePraying(long altarId) {
-        praying = !praying;
+    private void togglePraying() {
         if (praying) {
-            if (altarId == 0) {
-                try {
-                    PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
-                    if (pickableUnit == null || !pickableUnit.getHoverName().toLowerCase().contains("altar")) {
-                        Utils.consolePrint("Select an altar!");
-                        praying = false;
-                        return;
-                    }
-                    altarId = pickableUnit.getId();
-                } catch (Exception e) {
-                    Utils.consolePrint("Can't turn praying on!");
-                    praying = false;
-                    return;
-                }
-            }
-            this.altarId = altarId;
-            lastPrayer = 0;
-            Utils.consolePrint(this.getClass().getSimpleName() + " praying is on!");
-            changePrayerTimeout(1500000);
+            praying = false;
+            Utils.feedback("Praying is off!");
         } else
-            Utils.consolePrint("Praying is off!");
-
+            enablePraying(0);
     }
 
-    private void toggleSacrificing(long altarId) {
-        sacrificing = !sacrificing;
+    /**
+     * @param altarId the altar to pray at, 0 to take the selected one
+     */
+    private void enablePraying(long altarId) {
+        String name = null;
+        if (altarId == 0) {
+            PickableUnit pickableUnit = getSelectedUnit("altar");
+            if (pickableUnit == null) {
+                Utils.consolePrint("Select an altar!");
+                return;
+            }
+            altarId = pickableUnit.getId();
+            name = pickableUnit.getHoverName();
+        }
+        this.altarId = altarId;
+        this.altarName = name;
+        lastPrayer = 0;
+        praying = true;
+        Utils.feedback(this.getClass().getSimpleName() + " praying is on! Altar: " + describeTarget(name, altarId));
+    }
+
+    private void toggleSacrificing() {
         if (sacrificing) {
-            if (altarId == 0) {
-                try {
-                    PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
-                    if (pickableUnit == null || !pickableUnit.getHoverName().toLowerCase().contains("altar")) {
-                        Utils.consolePrint("Select an altar!");
-                        sacrificing = false;
-                        return;
-                    }
-                    altarId = pickableUnit.getId();
-                } catch (Exception e) {
-                    Utils.consolePrint("Can't turn sacrificing on!");
-                    sacrificing = false;
-                    return;
-                }
-            }
-            sacrificeAltarId = altarId;
-            lastSacrifice = 0;
-            Utils.consolePrint(this.getClass().getSimpleName() + " sacrificing is on!");
-            changeSacrificeTimeout(1230000);
+            sacrificing = false;
+            Utils.feedback("Sacrificing is off!");
         } else
-            Utils.consolePrint("Sacrificing is off!");
-
+            enableSacrificing(0);
     }
 
-    private void toggleKindlingBurns(long forgeId) {
-        kindlingBurning = !kindlingBurning;
-        if (kindlingBurning) {
-            if (forgeId == 0) {
-                try {
-                    PickableUnit pickableUnit = Utils.getField(WurmHelper.hud.getSelectBar(), "selectedUnit");
-                    if (pickableUnit == null) {
-                        Utils.consolePrint("Select a forge first!");
-                        kindlingBurning = false;
-                        return;
-                    }
-                    forgeId = pickableUnit.getId();
-                } catch (Exception e) {
-                    Utils.consolePrint("Can't turn kindling burning on!");
-                    kindlingBurning = false;
-                    return;
-                }
+    /**
+     * @param altarId the altar to sacrifice at, 0 to take the selected one
+     */
+    private void enableSacrificing(long altarId) {
+        String name = null;
+        if (altarId == 0) {
+            PickableUnit pickableUnit = getSelectedUnit("altar");
+            if (pickableUnit == null) {
+                Utils.consolePrint("Select an altar!");
+                return;
             }
-            this.forgeId = forgeId;
-            lastBurning = 0;
-            Utils.consolePrint(this.getClass().getSimpleName() + " kindling burning is on!");
-            changeKindlingBurnsTimeout(10000);
-        } else
-            Utils.consolePrint("Kindling burning is off!");
+            altarId = pickableUnit.getId();
+            name = pickableUnit.getHoverName();
+        }
+        sacrificeAltarId = altarId;
+        sacrificeAltarName = name;
+        lastSacrifice = 0;
+        sacrificing = true;
+        Utils.feedback(this.getClass().getSimpleName() + " sacrificing is on! Altar: " + describeTarget(name, altarId));
+    }
 
+    private void toggleKindlingBurns() {
+        if (kindlingBurning) {
+            kindlingBurning = false;
+            Utils.feedback("Kindling burning is off!");
+        } else
+            enableKindlingBurns(0);
+    }
+
+    /**
+     * @param forgeId the forge to burn kindling in, 0 to take the selected one
+     */
+    private void enableKindlingBurns(long forgeId) {
+        String name = null;
+        if (forgeId == 0) {
+            PickableUnit pickableUnit = getSelectedUnit(null);
+            if (pickableUnit == null) {
+                Utils.consolePrint("Select a forge first!");
+                return;
+            }
+            forgeId = pickableUnit.getId();
+            name = pickableUnit.getHoverName();
+        }
+        this.forgeId = forgeId;
+        this.forgeName = name;
+        lastBurning = 0;
+        kindlingBurning = true;
+        Utils.feedback(this.getClass().getSimpleName() + " kindling burning is on! Forge: " + describeTarget(name, forgeId));
     }
 
     private void toggleWOVCasting() {
-        wovCasting = !wovCasting;
         if (wovCasting) {
+            wovCasting = false;
+            Utils.feedback("Wisdom of Vynora casting is off!");
+            return;
+        }
+        try {
+            PaperDollInventory pdi = WurmHelper.hud.getPaperDollInventory();
+            PaperDollSlot pds = Utils.getField(pdi, "bodyItem");
+            bodyId = pds.getItemId();
+            InventoryMetaItem statuette = Utils.locateToolItem("statuette of");
+            if (statuette == null || bodyId == 0) {
+                Utils.consolePrint("Couldn't find a statuette in your inventory. Wisdom of Vynora casting is off");
+                return;
+            }
+            statuetteId = statuette.getId();
+            boolean wasCasting = casting;
             casting = false;
-            try {
-                PaperDollInventory pdi = WurmHelper.hud.getPaperDollInventory();
-                PaperDollSlot pds = Utils.getField(pdi, "bodyItem");
-                bodyId = pds.getItemId();
-                InventoryMetaItem statuette = Utils.locateToolItem("statuette of");
-                if (statuette == null || bodyId == 0) {
-                    wovCasting = false;
-                    Utils.consolePrint("Couldn't find a statuette in your inventory. casting is off");
-                } else {
-                    statuetteId = statuette.getId();
-                    Utils.consolePrint("Wisdom of Vynora spellcasts are on!");
-                }
-            } catch (Exception e) {
-                Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
-                Utils.consolePrint(e.toString());
-                wovCasting = false;
-            }
-        } else
-            Utils.consolePrint("Wisdom of Vynora casting is off!");
+            wovCasting = true;
+            Utils.feedback("Wisdom of Vynora spellcasts are on!" + (wasCasting ? " Other spellcasts are off" : ""));
+        } catch (Exception e) {
+            Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
+            Utils.consolePrint(e.toString());
+            wovCasting = false;
+        }
     }
 
-    private void toggleLockpicking(long chestId) {
-        lockpicking = !lockpicking;
+    private void toggleLockpicking() {
         if (lockpicking) {
-            if(chestId == 0) {
-                int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-                int y = WurmHelper.hud.getWorld().getClient().getYMouse();
-                long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
-                if (targets != null && targets.length > 0) {
-                    chestId = targets[0];
-                } else {
-                    lockpicking = false;
-                    Utils.consolePrint("Can't find the target for lockpicking");
-                    return;
-                }
-            }
-            this.chestId = chestId;
-            lastLockpicking = 0;
-            Utils.consolePrint("Lockpicking is on!");
-            changeLockpickingTimeout(610000);
+            lockpicking = false;
+            Utils.feedback("Lockpicking is off!");
         } else
-            Utils.consolePrint("Lockpicking is off!");
+            enableLockpicking(0);
     }
 
-    private void toggleDrinking(long targetId) {
-        drinking = !drinking;
-        if (drinking) {
-            if (targetId == 0) {
-                int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-                int y = WurmHelper.hud.getWorld().getClient().getYMouse();
-                long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
-                if (targets != null && targets.length > 0) {
-                    targetId = targets[0];
-                } else {
-                    drinking = false;
-                    Utils.consolePrint("Can't find the target water");
-                    return;
-                }
+    /**
+     * @param chestId the chest to pick, 0 to take the one under the mouse
+     */
+    private void enableLockpicking(long chestId) {
+        if (chestId == 0) {
+            chestId = getTargetUnderMouse();
+            if (chestId == 0) {
+                Utils.consolePrint("Can't find the target for lockpicking");
+                return;
             }
-            waterId = targetId;
-            Utils.consolePrint("Drinking is on!");
+        }
+        this.chestId = chestId;
+        lastLockpicking = 0;
+        lockpicking = true;
+        Utils.feedback("Lockpicking is on! Target id: " + chestId);
+    }
+
+    private void toggleDrinking() {
+        if (drinking) {
+            drinking = false;
+            Utils.feedback("Drinking is off!");
         } else
-            Utils.consolePrint("Drinking is off!");
+            enableDrinking(0);
+    }
+
+    /**
+     * @param targetId the liquid to drink, 0 to take the one under the mouse
+     */
+    private void enableDrinking(long targetId) {
+        if (targetId == 0) {
+            targetId = getTargetUnderMouse();
+            if (targetId == 0) {
+                Utils.consolePrint("Can't find the target water");
+                return;
+            }
+        }
+        waterId = targetId;
+        drinking = true;
+        Utils.feedback("Drinking is on! Target id: " + targetId);
     }
 
     private void toggleEating() {
-        eating = !eating;
         if (eating) {
-            int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-            int y = WurmHelper.hud.getWorld().getClient().getYMouse();
-            long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
-            if (targets != null && targets.length > 0) {
-                foodId = targets[0];
-            } else {
-                eating = false;
-                Utils.consolePrint("Can't find the target food");
-                return;
-            }
-            Utils.consolePrint("Eating is on!");
-        } else
-            Utils.consolePrint("Eating is off!");
+            eating = false;
+            Utils.feedback("Eating is off!");
+            return;
+        }
+        long targetId = getTargetUnderMouse();
+        if (targetId == 0) {
+            Utils.consolePrint("Can't find the target food");
+            return;
+        }
+        foodId = targetId;
+        eating = true;
+        Utils.feedback("Eating is on! Target id: " + targetId);
     }
-    
+
     private void toggleButchering() {
-        butchering ^= true;
-        Utils.consolePrint(
-            "Bot will%s butcher corpses",
-            butchering ?
-                "" :
-                " no longer"
-        );
-        
         if (butchering) {
-            InventoryMetaItem item = Utils.locateToolItem("butchering knife");
-            if(item == null)
-            {
-                Utils.consolePrint("Couldn't find a butchering knife, butchering is disabled.");
-                butchering = false;
-                return;
-            }
-            butcheringKnife = item.getId();
-        } else
+            butchering = false;
             butcheringKnife = -10;
+            Utils.feedback("Bot will no longer butcher corpses");
+            return;
+        }
+        InventoryMetaItem item = Utils.locateToolItem("butchering knife");
+        if (item == null) {
+            Utils.consolePrint("Couldn't find a butchering knife, butchering is disabled.");
+            return;
+        }
+        butcheringKnife = item.getId();
+        butchering = true;
+        Utils.feedback("Bot will butcher corpses");
     }
-    
+
     private void toggleBurying() {
-        burying ^= true;
         corpseTimes.clear();
-        Utils.consolePrint(
-            "Bot will%s bury corpses",
-            burying ?
-                "" :
-                " no longer"
-        );
-        
         if (burying) {
-            InventoryMetaItem item = Utils.locateToolItem("shovel");
-            if(item == null)
-            {
-                Utils.consolePrint("Couldn't find a shovel, burying is disabled.");
-                burying = false;
-                return;
-            }
-            shovel = item.getId();
-            
-            item = Utils.locateToolItem("pickaxe");
-            if(item == null)
-                Utils.consolePrint("Couldn't find a pickaxe, bot will be unable to bury on rock");
-            else
-                pickaxe = item.getId();
-            
-            buryAll = false;
-            toggleBuryAll(); // notify user that bury all is default
-            addCorpseBlacklist("rift");
-        } else {
+            burying = false;
             shovel = -10;
             pickaxe = -10;
+            Utils.feedback("Bot will no longer bury corpses");
+            return;
         }
+        InventoryMetaItem item = Utils.locateToolItem("shovel");
+        if (item == null) {
+            Utils.consolePrint("Couldn't find a shovel, burying is disabled.");
+            return;
+        }
+        shovel = item.getId();
+
+        item = Utils.locateToolItem("pickaxe");
+        if (item == null) {
+            pickaxe = -10;
+            Utils.consolePrint("Couldn't find a pickaxe, bot will be unable to bury on rock");
+        } else
+            pickaxe = item.getId();
+        burying = true;
+        Utils.feedback("Bot will bury corpses using %s", buryAll ? "\"Bury all\" action" : "normal bury action");
     }
-    
+
     private void toggleBuryAll() {
         buryAll ^= true;
-        Utils.consolePrint(
+        Utils.feedback(
             "Bot will use %s",
             buryAll ?
                 "\"Bury all\" action" :
                 "normal bury action (items will spill onto ground!)"
         );
     }
-    
+
     private void setBuryDelay(String[] input) {
-        if (input == null || input.length == 0) {
-            printInputKeyUsageString(AssistantBot.InputKey.bud);
+        Integer newBuryDelay = parseIntArg(input, AssistantBot.InputKey.bud, 0, Integer.MAX_VALUE);
+        if (newBuryDelay == null)
+            return;
+        buryDelay = newBuryDelay;
+        Utils.consolePrint("Bot will bury corpses after %d milliseconds", buryDelay);
+    }
+
+    private void addCorpseBlacklist(String[] input) {
+        List<String> keywords = parseNameList(input);
+        if (keywords.isEmpty()) {
+            Utils.consolePrint("Must specify something to blacklist!");
+            printInputKeyUsageString(InputKey.bub);
             return;
         }
-        
-        try {
-            long newBuryDelay = Long.parseLong(input[0]);
-            buryDelay = Math.max(0, newBuryDelay);
-            Utils.consolePrint("Bot will bury corpses after %d milliseconds", buryDelay);
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("`%s` is not an integer", input[0]);
-        }
-    }
-    
-    private void addCorpseBlacklist(String keyword) {
-        if (keyword != null) {
-            if (keyword.equals(""))
-            {
-                Utils.consolePrint("Must specify something to blacklist!");
-                return;
-            }
-            
+        for (String keyword : keywords)
             blacklistedCorpseNames.add(keyword.toLowerCase());
-            Utils.consolePrint(
-                "Bot will not bury corpses with names containing: %s",
-                blacklistedCorpseNames
-                    .stream()
-                    .collect(Collectors.joining(", "))
-            );
-        } else {
-            blacklistedCorpseNames.clear();
-            Utils.consolePrint("Bot will bury all corpses");
-        }
+        Utils.consolePrint(
+            "Bot will not bury corpses with names containing: %s",
+            String.join(", ", blacklistedCorpseNames)
+        );
+    }
+
+    private void clearCorpseBlacklist() {
+        blacklistedCorpseNames.clear();
+        Utils.consolePrint("Corpse blacklist cleared, bot will bury all corpses");
     }
 
     private void toggleGrooming() {
-        grooming ^= true;
         groomedCreatures.clear();
-        Utils.consolePrint(
-            "Bot will%s groom creatures",
-            grooming ?
-                "" :
-                " no longer"
-        );
-        
-        if(grooming) {
-            InventoryMetaItem item = Utils.locateToolItem("grooming brush");
-            if(item == null) {
-                Utils.consolePrint("Couldn't find a brush, grooming is disabled.");
-                grooming = false;
-                return;
-            }
-            groomingBrush = item.getId();
-        } else {
+        if (grooming) {
+            grooming = false;
             groomingBrush = -10;
+            Utils.feedback("Bot will no longer groom creatures");
+            return;
         }
+        InventoryMetaItem item = Utils.locateToolItem("grooming brush");
+        if (item == null) {
+            Utils.consolePrint("Couldn't find a brush, grooming is disabled.");
+            return;
+        }
+        groomingBrush = item.getId();
+        grooming = true;
+        Utils.feedback("Bot will groom creatures");
     }
 
     private void toggleNotarget() {
         notarget ^= true;
-        Utils.consolePrint(
+        Utils.feedback(
             "Bot will%s notarget far-away creatures",
             notarget ?
             "" :
@@ -1156,7 +1200,7 @@ public class AssistantBot extends Bot {
     private void toggleLumpHeating() {
         if(lumpHeatingInventory != null) {
             lumpHeatingInventory = null;
-            Utils.consolePrint(
+            Utils.feedback(
                 "%s will no longer keep lumps heated",
                 AssistantBot.class.getSimpleName()
             );
@@ -1165,35 +1209,33 @@ public class AssistantBot extends Bot {
 
         final int mouseX = WurmHelper.hud.getWorld().getClient().getXMouse();
         final int mouseY = WurmHelper.hud.getWorld().getClient().getYMouse();
-        lumpHeatingInventory = Utils.getInventoryAtPoint(mouseX, mouseY);
-        if(lumpHeatingInventory == null) {
-            Utils.consolePrint("couldn't find any inventory under cursor");
+        InventoryListComponent inventory = Utils.getInventoryAtPoint(mouseX, mouseY);
+        if(inventory == null) {
+            Utils.consolePrint("Couldn't find any inventory under cursor");
         } else {
-            Utils.consolePrint(
+            lumpHeatingInventory = inventory;
+            Utils.feedback(
                 "%s will use %s to keep lumps heated",
                 AssistantBot.class.getSimpleName(),
-                Utils.getRootItem(lumpHeatingInventory).getDisplayName()
+                Utils.getRootItem(inventory).getDisplayName()
             );
         }
     }
 
     private void toggleLumpCombining() {
         lumpCombining ^= true;
-        Utils.consolePrint(
+        Utils.feedback(
             "%s will %scombine lumps",
             AssistantBot.class.getSimpleName(),
             lumpCombining ? "" : "no longer "
         );
     }
-    
+
     private void toggleVerbosity() {
         verbose = !verbose;
-        if (verbose)
-            Utils.consolePrint("Verbose mode is on!");
-        else
-            Utils.consolePrint("Verbose mode is off!");
+        Utils.feedback("Verbose mode is " + onOff(verbose) + "!");
     }
-    
+
     private List<GroundItemCellRenderable> findCorpses(BiPredicate<GroundItemCellRenderable, GroundItemData> predicate) {
         predicate = ((BiPredicate<GroundItemCellRenderable, GroundItemData>)this::isCorpse)
             .and((item, data) -> Utils.isNearbyPlayer(item))
@@ -1320,46 +1362,48 @@ public class AssistantBot extends Bot {
     }
     
     private enum InputKey implements Bot.InputKey {
-        w("Drinking", "Toggle automatic drinking of the liquid the user pointing at", ""),
-        wid("Drink By ID", "Toggle automatic drinking of liquid with provided id", "id"),
-        eat("Eating", "Toggle automatic eating of food the user is pointing at", ""),
+        w("Drinking", "Toggle automatic drinking of the liquid the user is pointing at", ""),
+        wid("Drink By ID", "Turn on automatic drinking of the liquid with the provided id (changes the target if drinking is already on)", "<id>"),
+        eat("Eating", "Toggle automatic eating of the food the user is pointing at", ""),
         ls("List Spells", "Show the list of available spells for autocasting", ""),
-        c("Clicks", "Toggle automatic casts of spells(if player has enough favor). Provide an optional spell abbreviation to change the default Dispel spell. " +
-                "You can see the list of available spell with \"" + ls.name() + "\" key", "[spell_abbreviation]"),
-        p("Praying", "Toggle automatic praying. The timeout between prayers can be configured separately.", ""),
-        pt("Pray Timeout", "Change the timeout between prayers", "timeout(in milliseconds)"),
-        pid("Pray By Altar ID", "Toggle automatic praying on altar with provided id", "id"),
-        pis("Pray By Item Select", "Toggle automatic praying on selected inventory item (e.g. prayer beads). Select the item in your inventory first.", ""),
-        ps("Prayer Stamina", "Set stamina threshold for praying.", "float"),
-        pc("Prayer Count", "Set number of prayers to be queued. If 0 (default) then max per mind logic.", "integer"),
-        s("Sacrificing", "Toggle automatic sacrificing. The timeout between sacrifices can be configured separately.", ""),
-        st("Sacrifice Timeout", "Change the timeout between sacrifices", "timeout(in milliseconds)"),
-        sid("Sacrifice By ID", "Toggle automatic sacrifices at altar with provided id", "id"),
-        kb("Kindling Burn", "Toggle automatic burning of kindlings in player's inventory. " +
-                AssistantBot.class.getSimpleName() + " will combine the kindlings and burn them using selected forge. " +
+        c("Casting", "Toggle automatic casts of spells (if the player has enough favor). Needs a statuette in the inventory. " +
+                "With a spell abbreviation the spell is chosen and casting is turned on (or kept on). The default spell is Dispel. " +
+                "You can see the list of available spells with the \"" + ls.name() + "\" key", "[<spell>]"),
+        p("Praying", "Toggle automatic praying at the selected altar. The timeout between prayers can be configured separately.", ""),
+        pt("Prayer Timeout", "Change the timeout between prayers. Default is 1500000 (25 minutes)", "<milliseconds>"),
+        pid("Pray By Altar ID", "Turn on automatic praying at the altar with the provided id (changes the altar if praying is already on)", "<id>"),
+        pis("Pray On Selected Item", "Turn on automatic praying on the selected inventory item (e.g. prayer beads). Select the item in your inventory first.", ""),
+        ps("Prayer Stamina", "Set the minimal stamina (0 to 1) needed for praying. Default is 0.5", "<stamina>"),
+        pc("Prayer Count", "Set the number of prayers to be queued. If 0 (default) then as many as the action queue allows", "<count>"),
+        s("Sacrificing", "Toggle automatic sacrificing at the selected altar. The timeout between sacrifices can be configured separately.", ""),
+        st("Sacrifice Timeout", "Change the timeout between sacrifices. Default is 1230000 (20.5 minutes)", "<milliseconds>"),
+        sid("Sacrifice By ID", "Turn on automatic sacrifices at the altar with the provided id (changes the altar if sacrificing is already on)", "<id>"),
+        kb("Kindling Burning", "Toggle automatic burning of kindlings in player's inventory. " +
+                AssistantBot.class.getSimpleName() + " will combine the kindlings and burn them using the selected forge. " +
                 "The timeout of burns can be configured separately", ""),
-        kbt("Kindling Timeout", "Change the timeout between kindling burns", "timeout(in milliseconds)"),
-        kbid("Kindling By Forge ID", "Toggle automatic kindling burns at forge with provided id", "id"),
-        cwov("Wisdom of Vynora", "Toggle automatic casts of Wisdom of Vynora spell", ""),
-        cleanup("Trash Cleaning", "Toggle automatic trash cleanings. The timeout between cleanings can be configured separately", ""),
-        cleanupt("Trash Timeout", "Change the timeout between trash cleanings", "timeout(in milliseconds)"),
-        cleanupid("Trash By ID", "Toggle automatic cleaning of items inside trash bin with provided id", "id"),
+        kbt("Kindling Timeout", "Change the timeout between kindling burns. Default is 10000", "<milliseconds>"),
+        kbid("Kindling By Forge ID", "Turn on automatic kindling burns at the forge with the provided id (changes the forge if burning is already on)", "<id>"),
+        cwov("Wisdom of Vynora", "Toggle automatic casts of Wisdom of Vynora spell. Turns other spellcasts off", ""),
+        cleanup("Trash Cleaning", "Toggle automatic cleaning of the selected trash heap. The timeout between cleanings can be configured separately", ""),
+        cleanupt("Trash Timeout", "Change the timeout between trash cleanings. Default is 5000", "<milliseconds>"),
+        cleanupid("Trash By ID", "Turn on automatic cleaning of the trash bin with the provided id (changes the trash bin if cleaning is already on)", "<id>"),
         l("Lockpicking", "Toggle automatic lockpicking. The target chest should be beneath the user's mouse", ""),
-        lt("Lockpick Timeout", "Change the timeout between lockpickings", "timeout(in milliseconds)"),
-        lid("Lockpick By ID", "Toggle automatic lockpicking of target chest with provided id", "id"),
+        lt("Lockpick Timeout", "Change the timeout between lockpickings. Default is 610000", "<milliseconds>"),
+        lid("Lockpick By ID", "Turn on automatic lockpicking of the target chest with the provided id (changes the chest if lockpicking is already on)", "<id>"),
         b("Butchering", "Toggle butchering of corpses on the ground", ""),
         bu("Burying", "Toggle burying of corpses on the ground", ""),
-        bua("Bury All", "Toggle burying corpses with normal bury action vs bury all", ""),
-        bud("Bury Delay", "Set delay before burying corpses (to allow other bots time to move items)", "msecs"),
-        bub("Corpse Blacklist", "Add keyword to corpse blacklist -- e.g. to prevent bot burying Rift creatures which is set by default", "keyword"),
-        bubc("Clear Blacklist", "Clear corpse blacklist", ""),
+        bua("Bury All", "Toggle burying corpses with the \"Bury all\" action (default) vs the normal bury action", ""),
+        bud("Bury Delay", "Set the delay before burying corpses (to allow other bots time to move items). Default is 2500", "<milliseconds>"),
+        bub("Add Corpse Blacklist", "Add keywords (comma separated) to the corpse blacklist. Corpses with names containing them are not buried. " +
+                "\"rift\" is in the blacklist by default", "<keyword>"),
+        bubc("Clear Corpse Blacklist", "Clear the corpse blacklist", ""),
         groom("Grooming", "Toggle grooming of creatures", ""),
         v("Verbose", "Toggle verbose mode. In verbose mode the " + AssistantBot.class.getSimpleName() + " will output additional info to the console", ""),
-        pave("Paving", "Paving helper that activates new materials", "item name"),
-        pavec("Paving Corners", "Pave command for tile corners", "item name"),
+        pave("Pave", "Pave the hovered tile with an unused item of the given name from the inventory", "<item name>"),
+        pavec("Pave Corner", "Pave the hovered tile corner with an unused item of the given name from the inventory", "<item name>"),
         paveclear("Clear Paving", "Forget which items have already been used for paving", ""),
-        notarget("No Target", "Automatically clear targeted creature if it is too far away", ""),
-        lumpheating("Lump Heating", "Toggle automatic lump heating by swapping lumps into/out of hovered container", ""),
+        notarget("No Target", "Toggle automatic clearing of the targeted creature if it is too far away", ""),
+        lumpheating("Lump Heating", "Toggle automatic lump heating by swapping lumps into/out of the hovered container", ""),
         lumpcombine("Lump Combining", "Toggle automatic combining of (hot) lumps", ""),
         ;
 
@@ -1389,11 +1433,20 @@ public class AssistantBot extends Bot {
             this.playerAction = playerAction;
             this.abbreviation = abbreviation;
         }
-        static Enchant getByAbbreviation(String abbreviation) {
+        /**
+         * @return the spell with the given abbreviation or name ignoring case, or null when there is none
+         */
+        static Enchant find(String text) {
             for(Enchant enchant : values())
-                if (enchant.abbreviation.equals(abbreviation))
+                if (enchant.abbreviation.equalsIgnoreCase(text) || enchant.name().equalsIgnoreCase(text)
+                        || normalizeName(enchant.name()).equals(normalizeName(text)))
                     return enchant;
-            return DISPEL;
+            return null;
+        }
+
+        String displayName() {
+            String lower = name().toLowerCase().replace('_', ' ');
+            return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
         }
     }
 }
