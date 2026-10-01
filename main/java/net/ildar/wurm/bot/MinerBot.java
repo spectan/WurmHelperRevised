@@ -110,6 +110,7 @@ public class MinerBot extends Bot {
                     int tileX = WurmHelper.hud.getWorld().getPlayerCurrentTileX();
                     int tileY = WurmHelper.hud.getWorld().getPlayerCurrentTileY();
                     List<Long> closePileIds = new ArrayList<>();
+                    boolean pileOpenRequested = false;
                     List<Map.Entry<Long, GroundItemCellRenderable>> groundItemEntries = snapshotEntries(groundItems, 5);
                     for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItemEntries) {
                         GroundItemCellRenderable groundItem = entry.getValue();
@@ -135,6 +136,7 @@ public class MinerBot extends Bot {
                                 if (verbose)
                                     Utils.consolePrint("Opening pile: " + groundItemData.getName() + " [id=" + pileId + "]");
                                 WurmHelper.hud.sendAction(PlayerAction.OPEN, pileId);
+                                pileOpenRequested = true;
                             } else if (verbose) {
                                 Utils.consolePrint("Pile already open: " + groundItemData.getName() + " [id=" + pileId + "]");
                             }
@@ -167,7 +169,7 @@ public class MinerBot extends Bot {
                     float freeSpace = Utils.getMaxWeight() - Utils.getTotalWeight();
                     List<InventoryMetaItem> itemsToTake = new ArrayList<>();
                     for (InventoryMetaItem shard : pileShards) {
-                        if (shard.getWeight() < freeSpace) {
+                        if (shouldTakeShard(freeSpace, shard.getWeight())) {
                             itemsToTake.add(shard);
                             freeSpace -= shard.getWeight();
                         } else {
@@ -179,7 +181,7 @@ public class MinerBot extends Bot {
                         if (verbose) Utils.consolePrint("Taking " + itemsToTake.stream().map(InventoryMetaItem::getId).collect(Collectors.toList()));
                         for (InventoryMetaItem item : itemsToTake)
                             WurmHelper.hud.sendAction(PlayerAction.TAKE, item.getId());
-                    } else if (invShards.size() == 1) {
+                    } else if (invShards.size() == 1 && !pileOpenRequested) {
                         if (verbose) Utils.consolePrint("Cannot pick up enough shards to combine, dropping lone shard");
                         WurmHelper.hud.sendAction(PlayerAction.DROP, invShards.get(0).getId());
                     }
@@ -208,8 +210,7 @@ public class MinerBot extends Bot {
                         int area[][] = Utils.getAreaCoordinates();
                         for (int i = 1; i < area.length; i += 2) {
                             Tiles.Tile type = WurmHelper.hud.getWorld().getCaveBuffer().getTileType(area[i][0], area[i][1]);
-                            if ((type.tilename.equals("Cave wall") || type.tilename.equals("Rocksalt") || (type.isOreCave() && !noOre))
-                                    && !isErrorTile(area[i][0], area[i][1])) {
+                            if (isMineableWall(type) && !isErrorTile(area[i][0], area[i][1])) {
                                 sendMineActions(area[i]);
                                 lastTile = area[i];
                                 actionTaken = true;
@@ -222,8 +223,7 @@ public class MinerBot extends Bot {
                     case FrontTile: {
                         int area[][] = Utils.getAreaCoordinates();
                         Tiles.Tile type = WurmHelper.hud.getWorld().getCaveBuffer().getTileType(area[7][0], area[7][1]);
-                        if ((type.tilename.equals("Cave wall") || type.tilename.equals("Rocksalt") || (type.isOreCave() && !noOre))
-                                && !isErrorTile(area[7][0], area[7][1])) {
+                        if (isMineableWall(type) && !isErrorTile(area[7][0], area[7][1])) {
                             sendMineActions(area[7]);
                             actionTaken = true;
                             lastTile = area[7];
@@ -247,18 +247,21 @@ public class MinerBot extends Bot {
                         Utils.movePlayer(4);
                     else {
                         int turn = 0;
+                        boolean leftMinable = isMinableTile(leftTileType);
+                        boolean rightMinable = isMinableTile(rightTileType);
                         if (movingForwardBias >= 0) {
-                            if (isMinableTile(leftTileType))
+                            if (leftMinable)
                                 turn = -1;
-                            else if (isMinableTile(rightTileType))
+                            else if (rightMinable)
                                 turn = 1;
                         } else {
-                            if (isMinableTile(rightTileType))
+                            if (rightMinable)
                                 turn = 1;
-                            else if (isMinableTile(leftTileType))
+                            else if (leftMinable)
                                 turn = -1;
                         }
-                        if (random.nextInt(Math.abs(movingForwardBias) + 1) == 0)
+                        // Only pick the other side at random when both sides are passable
+                        if (leftMinable && rightMinable && random.nextInt(Math.abs(movingForwardBias) + 1) == 0)
                             turn = -turn;
                         if (turn == 1) {
                             Utils.turnPlayer(90);
@@ -278,6 +281,11 @@ public class MinerBot extends Bot {
                     }
                     Thread.sleep(100);
                     Utils.stabilizePlayer();
+                }
+                InventoryMetaItem smelterItem = smelting ? Utils.getRootItem(smeltingOptions.smelter) : null;
+                if (smelting && smelterItem == null) {
+                    smelting = false;
+                    Utils.consolePrint("Can't access the smelter! Smelting is off");
                 }
                 if (smelting) {
                     List<InventoryMetaItem> lumps = Utils.getInventoryItems(smeltingOptions.smelter, "lump")
@@ -305,7 +313,7 @@ public class MinerBot extends Bot {
                     if (ores.size() > 0) {
                         long[] oreIds = Utils.getItemIds(ores);
                         WurmHelper.hud.getWorld().getServerConnection()
-                                .sendMoveSomeItems(Utils.getRootItem(smeltingOptions.smelter).getId(), oreIds);
+                                .sendMoveSomeItems(smelterItem.getId(), oreIds);
                     }
 
                     if (Math.abs(lastFuelling - System.currentTimeMillis()) > fuellingTimeout) {
@@ -313,7 +321,7 @@ public class MinerBot extends Bot {
                         InventoryMetaItem item = Utils.getInventoryItem(fuel);
                         if (item != null)
                             WurmHelper.hud.getWorld().getServerConnection().sendAction(item.getId(),
-                                        new long[]{Utils.getRootItem(smeltingOptions.smelter).getId()},
+                                        new long[]{smelterItem.getId()},
                                         new PlayerAction("",(short)117, PlayerAction.ANYTHING));
                         else
                             Utils.consolePrint("No fuel in inventory!");
@@ -330,6 +338,10 @@ public class MinerBot extends Bot {
         return type.tilename.equals("Cave") || type.tilename.equals("Reinforced cave");
     }
 
+    private boolean isMineableWall(Tiles.Tile type) {
+        return type.tilename.equals("Cave wall") || type.tilename.equals("Rocksalt") || (type.isOreCave() && !noOre);
+    }
+
     static <K, V> List<Map.Entry<K, V>> snapshotEntries(Map<K, V> map, int maxTries) {
         for (int tries = 0; tries < maxTries; tries++) {
             try {
@@ -340,7 +352,7 @@ public class MinerBot extends Bot {
         return Collections.emptyList();
     }
 
-    static boolean shouldTakeShard(float freeSpace, float shardWeight, int alreadyTaking) {
+    static boolean shouldTakeShard(float freeSpace, float shardWeight) {
         return shardWeight < freeSpace;
     }
 
@@ -414,10 +426,7 @@ public class MinerBot extends Bot {
             int y = WurmHelper.hud.getWorld().getClient().getYMouse();
             long[] container = WurmHelper.hud.getCommandTargetsFrom(x, y);
             if (container != null && container.length > 0) {
-                smeltingOptions.containers.add(new Pair<>(container[0], minQuality));
-                smeltingOptions.containers.sort(Comparator.comparingDouble(Pair::getValue));
-                Utils.consolePrint("Added a new target with id - " + container[0] +
-                        " and minimum quality - " + String.format("%.2f", minQuality));
+                addSmeltingTarget(container[0], minQuality);
             } else
                 Utils.consolePrint("Couldn't find the target for " + getClass().getSimpleName());
         } catch (NumberFormatException e) {
@@ -433,10 +442,7 @@ public class MinerBot extends Bot {
         try {
             long id = Long.parseLong(input[0]);
             float q = Float.parseFloat(input[1]);
-            smeltingOptions.containers.add(new Pair<>(id,  q));
-            smeltingOptions.containers.sort(Comparator.comparingDouble(Pair::getValue));
-            Utils.consolePrint("Added a new target with id - " + id +
-                    " and minimum quality - " + String.format("%.2f", q));
+            addSmeltingTarget(id, q);
         } catch(NumberFormatException e) {
             Utils.consolePrint("Invalid values!");
         }
@@ -664,14 +670,17 @@ public class MinerBot extends Bot {
                 Utils.consolePrint("Target container has no root item");
                 return;
             }
-            smeltingOptions.containers.add(new Pair<>(rootItem.getId(), minQuality));
-            smeltingOptions.containers.sort(Comparator.comparingDouble(Pair::getValue));
-            Utils.consolePrint("Added a new target with id - " + rootItem.getId() +
-                    " and minimum quality - " + String.format("%.2f", minQuality));
-
+            addSmeltingTarget(rootItem.getId(), minQuality);
         } catch (IllegalAccessException | NoSuchFieldException e) {
             e.printStackTrace();
         }
+    }
+
+    private void addSmeltingTarget(long id, float minQuality) {
+        smeltingOptions.containers.add(new Pair<>(id, minQuality));
+        smeltingOptions.containers.sort(Comparator.comparingDouble(Pair::getValue));
+        Utils.consolePrint("Added a new target with id - " + id +
+                " and minimum quality - " + String.format("%.2f", minQuality));
     }
 
     private void setSmelter() {
@@ -721,13 +730,13 @@ public class MinerBot extends Bot {
                 "threshold(float value between 0 and 1)"),
         c("Clicks", "Change the amount of clicks bot will do each time", "n(integer value)"),
         sc("Shard Combining", "Toggle the combining of shards lying around the player in piles", ""),
-        scn("Container Name", "Change the name of shards to combine. See \"" + sc.name() + "\" key", "name"),
+        scn("Shards Name", "Change the name of shards to combine. See \"" + sc.name() + "\" key", "name"),
         fixed("Fixed Tile", "Set the fixed tile mining mode. Bot will remember selected tile and mine it", ""),
         st("Set Target", "Set the mining mode in which bot will mine currently selected tile", ""),
         area("Area Mode", "Set the area mining mode in which bot will mine 3x3 area around player", ""),
         ft("Front Tile", "Set the mining mode in which bot will mine a tile in front of a player", ""),
         o("Ore Mining", "Toggle the mining of ore tiles. Enabled by default", ""),
-        m("Mount", "Toggle the automatic moving forward when bot have no work", ""),
+        m("Moving", "Toggle the automatic moving forward when bot have no work", ""),
         sm("Smelting", "Toggle the smelting of ores in selected pile", ""),
         at("Add Target", "Add the target(under the mouse cursor) for lumps with provided minimum quality", "min_quality(0-100)"),
         ati("Add Target Inventory", "Add the target inventory(under the mouse cursor) for lumps with provided minimum quality", "min_quality(0-100)"),

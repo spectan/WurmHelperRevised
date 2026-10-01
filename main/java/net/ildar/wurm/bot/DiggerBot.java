@@ -36,7 +36,7 @@ public class DiggerBot extends Bot{
     private boolean surfaceMiningMode;
     private InventoryMetaItem pickaxeItem;
 
-    private static final Tiles.Tile[] DIRT_LIST = {Tiles.Tile.TILE_DIRT, Tiles.Tile.TILE_GRASS, Tiles.Tile.TILE_SAND, Tiles.Tile.TILE_MYCELIUM, Tiles.Tile.TILE_TUNDRA, Tiles.Tile.TILE_STEPPE};
+    private static final Set<Tiles.Tile> DIRT_TILES = new HashSet<>(Arrays.asList(Tiles.Tile.TILE_DIRT, Tiles.Tile.TILE_GRASS, Tiles.Tile.TILE_SAND, Tiles.Tile.TILE_MYCELIUM, Tiles.Tile.TILE_TUNDRA, Tiles.Tile.TILE_STEPPE));
 
     public DiggerBot() {
         registerStaminaThresholdHandler(DiggerBot.InputKey.s);
@@ -144,6 +144,7 @@ public class DiggerBot extends Bot{
                                         Utils.showOnScreenMessage("The digging is over");
                                         workMode = WorkMode.Unknown;
                                         slopeMovement.stopClimbing();
+                                        clearInvalidCorners();
                                     }
                                 }
                             }
@@ -344,12 +345,8 @@ public class DiggerBot extends Bot{
     private boolean isTileRock(Tiles.Tile t){
         return t == Tiles.Tile.TILE_ROCK;
     }
-    private boolean isTileDirt(int x, int y){
-        Tiles.Tile t = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(x,y);
-        return isTileDirt(t);
-    }
     private boolean isTileDirt(Tiles.Tile t){
-        return Arrays.asList(DIRT_LIST).contains(t);
+        return DIRT_TILES.contains(t);
     }
 
     private boolean isCornerInvalid(int x, int y) {
@@ -367,7 +364,7 @@ public class DiggerBot extends Bot{
             return;
         int x = Math.round(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
         int y = Math.round(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
-        if (Math.abs(x - diggingTileInfo.x) > 1 || Math.abs(y - diggingTileInfo.y) > 1) {
+        if (x < diggingTileInfo.x || x > diggingTileInfo.x + 1 || y < diggingTileInfo.y || y > diggingTileInfo.y + 1) {
             workMode = WorkMode.Unknown;
             slopeMovement.stopClimbing();
             Utils.showOnScreenMessage("You moved from tile too far away");
@@ -472,6 +469,7 @@ public class DiggerBot extends Bot{
             }
         } else {
             workMode = WorkMode.Unknown;
+            clearInvalidCorners();
             Utils.consolePrint("Digging was disabled");
         }
     }
@@ -492,7 +490,6 @@ public class DiggerBot extends Bot{
                 diggingTileInfo = new DiggingTileInfo();
                 diggingTileInfo.x = (int)(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
                 diggingTileInfo.y = (int)(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
-                moveToNextTileCorner();
                 workMode = WorkMode.DiggingTile;
                 Utils.consolePrint("The digging of tile (" +diggingTileInfo.x + "," + diggingTileInfo.y + ") is on");
                 areaAssistant.setMoveRightDistance(2);
@@ -501,6 +498,7 @@ public class DiggerBot extends Bot{
             }
         } else {
             workMode = WorkMode.Unknown;
+            clearInvalidCorners();
             Utils.consolePrint("Digging of tile was disabled");
         }
     }
@@ -520,7 +518,7 @@ public class DiggerBot extends Bot{
 
     private void setClicks(int clicks) {
         this.clicks = clicks;
-        Utils.consolePrint(getClass().getSimpleName() + " will do " + clicks + " chops each time");
+        Utils.consolePrint(getClass().getSimpleName() + " will do " + clicks + " actions each time");
     }
 
     private void selectTool() {
@@ -552,7 +550,7 @@ public class DiggerBot extends Bot{
     private enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        d("Distance", "Toggle the digging until the specified height is reached", "height(in slopes)"),
+        d("Dig", "Toggle the digging until the specified height is reached", "height(in slopes)"),
         dtp("Dig To Pile", "Toogle the use of \"Dig to pile\" action", ""),
         dtile("Tile Digging", "Toggle the digging until the specified height is reached on all 4 corners of current tile", "height(in slopes)"),
         c("Clicks", "Set the amount of actions the bot will do each time", "c(integer value)"),

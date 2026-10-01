@@ -3,6 +3,7 @@ package net.ildar.wurm.bot;
 import org.junit.Test;
 
 import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class MinerBotTest {
@@ -37,13 +39,14 @@ public class MinerBotTest {
     }
 
     @Test
-    public void shouldTakeShardWhenItFitsAndLeavesLessThanTwentyFree() {
-        assertTrue(MinerBot.shouldTakeShard(35f, 20f, 0));
+    public void shouldTakeShardWhenItFitsInFreeSpace() {
+        assertTrue(MinerBot.shouldTakeShard(25f, 20f));
     }
 
     @Test
-    public void shouldTakeAdditionalShardWhenItFits() {
-        assertTrue(MinerBot.shouldTakeShard(25f, 20f, 1));
+    public void shouldNotTakeShardWhenItDoesNotFit() {
+        assertFalse(MinerBot.shouldTakeShard(20f, 20f));
+        assertFalse(MinerBot.shouldTakeShard(15f, 20f));
     }
 
     private static class FlakyEntryMap<K, V> extends AbstractMap<K, V> {
@@ -61,7 +64,12 @@ public class MinerBotTest {
             return new AbstractSetWithFlakyIterator();
         }
 
-        private class AbstractSetWithFlakyIterator extends HashSet<Map.Entry<K, V>> {
+        private class AbstractSetWithFlakyIterator extends AbstractSet<Map.Entry<K, V>> {
+            @Override
+            public int size() {
+                return entries.size();
+            }
+
             @Override
             public Iterator<Map.Entry<K, V>> iterator() {
                 if (failuresRemaining-- > 0)

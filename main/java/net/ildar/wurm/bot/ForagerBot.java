@@ -12,6 +12,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @BotInfo(name = "Forager", description =
@@ -22,7 +23,7 @@ import java.util.stream.Collectors;
         "Bot can be configured to drop picked items on the floor. ",
         abbreviation = "fg")
 public class ForagerBot extends Bot {
-    static String DEFAULT_CONTAINER_NAME = "backpack";
+    private static final String DEFAULT_CONTAINER_NAME = "backpack";
     private static final Set<String> forageSet = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "oregano","rosemary","lingonberry","pumpkin",
             "thyme","tomato","lovage","fennel plant",
@@ -46,8 +47,8 @@ public class ForagerBot extends Bot {
     private final List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
     private List <Pair<Integer, Integer>> forageTilesInProcess = new ArrayList<>();
     private List <Pair<Integer, Integer>> botanizeTilesInProcess = new ArrayList<>();
-    private List <Pair<Integer, Integer>> foragedTiles = new ArrayList<>();
-    private List <Pair<Integer, Integer>> botanizedTiles = new ArrayList<>();
+    private Set<Pair<Integer, Integer>> foragedTiles = new HashSet<>();
+    private Set<Pair<Integer, Integer>> botanizedTiles = new HashSet<>();
     private String containerName = DEFAULT_CONTAINER_NAME;
     private ForageType forageType = ForageType.Default;
     private BotanizeType botanizeType = BotanizeType.Default;
@@ -96,11 +97,13 @@ public class ForagerBot extends Bot {
             float botanizeSkill = player.getSkillSet().getSkillValue("botanizing");
 
             if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 30000 && (stamina + damage) > staminaThreshold && queuedTiles.size() > 0) {
-                if (verbose)
-                    queuedTiles.forEach(tile -> Utils.consolePrint("Removing tile from queue - " + tile.getKey() + " " + tile.getValue()));
-                queuedTiles.clear();
-                forageTilesInProcess.clear();
-                botanizeTilesInProcess.clear();
+                synchronized (queuedTiles) {
+                    if (verbose)
+                        queuedTiles.forEach(tile -> Utils.consolePrint("Removing tile from queue - " + tile.getKey() + " " + tile.getValue()));
+                    queuedTiles.clear();
+                    forageTilesInProcess.clear();
+                    botanizeTilesInProcess.clear();
+                }
                 if (verbose)
                     Utils.consolePrint(getClass().getSimpleName() + " queue cleared");
             }
@@ -118,7 +121,7 @@ public class ForagerBot extends Bot {
                                 || tileType.tilename.equals("Marsh")
                                 || tileType.tilename.equals("Moss")
                                 || tileType.tilename.equals("Steppe")) {
-                            if (botanizing && !botanizedTiles.contains(coordsPair) && !botanizeTilesInProcess.contains(coordsPair) && queuedTiles.size() < maxActions
+                            if (botanizing && !botanizedTiles.contains(coordsPair) && !botanizeTilesInProcess.contains(coordsPair)
                                     && (!tileType.tilename.equals("Marsh") || botanizeSkill > 27)
                                     && (!tileType.tilename.equals("Moss") || botanizeSkill > 35)) {
                                 if (verbose)
@@ -126,14 +129,6 @@ public class ForagerBot extends Bot {
                                 WurmHelper.hud.sendAction(botanizeType.action, Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0));
                                 queuedTiles.add(coordsPair);
                                 botanizeTilesInProcess.add(coordsPair);
-                                if (tileType.isGrass()){
-                                    if (botanizeSkill > 80)
-                                        botanizeTilesInProcess.add(coordsPair);
-                                    if (botanizeSkill > 53)
-                                        botanizeTilesInProcess.add(coordsPair);
-                                    if (botanizeSkill > 26)
-                                        botanizeTilesInProcess.add(coordsPair);
-                                }
                                 lastActionFinishedTime = System.currentTimeMillis();
                             }
                         }
@@ -142,22 +137,14 @@ public class ForagerBot extends Bot {
                                 || tileType.tilename.equals("Tundra")
                                 || tileType.tilename.equals("Marsh")) {
                             if (foraging && !foragedTiles.contains(coordsPair) && !forageTilesInProcess.contains(coordsPair) && queuedTiles.size() < maxActions
-                                    && (!tileType.tilename.equals("Steppe") || botanizeSkill > 23)
-                                    && (!tileType.tilename.equals("Tundra") || botanizeSkill > 33)
-                                    && (!tileType.tilename.equals("Marsh") || botanizeSkill > 43)) {
+                                    && (!tileType.tilename.equals("Steppe") || forageSkill > 23)
+                                    && (!tileType.tilename.equals("Tundra") || forageSkill > 33)
+                                    && (!tileType.tilename.equals("Marsh") || forageSkill > 43)) {
                                 if (verbose)
                                     Utils.consolePrint("Start foraging at tile - " + checkedtiles[tileIndex][0] + " " + checkedtiles[tileIndex][1]);
                                 WurmHelper.hud.sendAction(forageType.action, Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0));
                                 queuedTiles.add(coordsPair);
                                 forageTilesInProcess.add(coordsPair);
-                                if (tileType.isGrass()) {
-                                    if (forageSkill > 80)
-                                        forageTilesInProcess.add(coordsPair);
-                                    if (forageSkill > 53)
-                                        forageTilesInProcess.add(coordsPair);
-                                    if (forageSkill > 26)
-                                        forageTilesInProcess.add(coordsPair);
-                                }
                                 lastActionFinishedTime = System.currentTimeMillis();
                             }
                         }
@@ -171,7 +158,7 @@ public class ForagerBot extends Bot {
                                     Utils.consolePrint("Start cutting flowers at tile - " + checkedtiles[tileIndex][0] + " " + checkedtiles[tileIndex][1]);
                                 lastActionFinishedTime = System.currentTimeMillis();
                             }
-                            if (grassGathering && ((tileType.isGrass() && GrassData.GrowthStage.decodeTileData(tileData) != GrassData.GrowthStage.SHORT) ||
+                            if (((tileType.isGrass() && GrassData.GrowthStage.decodeTileData(tileData) != GrassData.GrowthStage.SHORT) ||
                                     ((tileType.isTree() || tileType.isBush()) && GrassData.GrowthTreeStage.decodeTileData(tileData) != GrassData.GrowthTreeStage.LAWN
                                             && GrassData.GrowthTreeStage.decodeTileData(tileData) != GrassData.GrowthTreeStage.SHORT)) && queuedTiles.size() < maxActions) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendAction(sickleId,
@@ -198,11 +185,10 @@ public class ForagerBot extends Bot {
                             if (grassItem.getWeight()+totalWeight < 3.2) {
                                 forCombining.add(grassItem);
                                 totalWeight += grassItem.getWeight();
-                                if (totalWeight > 3.2) break;
                             }
                         if (forCombining.size() > 1) {
-                            long[] targetIds = new long[forCombining.size()];
-                            for(tileIndex = 0; tileIndex < Math.min(forCombining.size(), 64); tileIndex++)
+                            long[] targetIds = new long[Math.min(forCombining.size(), 64)];
+                            for(tileIndex = 0; tileIndex < targetIds.length; tileIndex++)
                                 targetIds[tileIndex] = forCombining.get(tileIndex).getId();
                             WurmHelper.hud.getWorld().getServerConnection().sendAction(
                                     targetIds[0], targetIds, PlayerAction.COMBINE);
@@ -252,6 +238,7 @@ public class ForagerBot extends Bot {
                     for (String name : filterItemNames) {
                         if (item.getBaseName().contains(name)) {
                             iter.remove();
+                            break;
                         }
                     }
                 }
@@ -282,15 +269,14 @@ public class ForagerBot extends Bot {
         registerEventProcessor(message -> (message.contains("inventory is full") && dropWhenFull),
                 this::dropItems);
     }
+    private static <T extends Enum<T>> void showTypes(String header, T[] types, Function<T, String> abbreviation) {
+        Utils.consolePrint(header + Arrays.stream(types)
+                .map(type -> abbreviation.apply(type) + "(" + type.name() + ")")
+                .collect(Collectors.joining(", ")));
+    }
+
     private void showForagingTypes() {
-        StringBuilder foragingTypes = new StringBuilder();
-        foragingTypes.append("Available foraging types - ");
-        for(ForageType forageType : ForageType.values())
-            foragingTypes.append(forageType.abbreviation)
-                    .append("(").append(forageType.name()).append("), ");
-        foragingTypes.deleteCharAt(foragingTypes.length() - 1);
-        foragingTypes.deleteCharAt(foragingTypes.length() - 1);
-        Utils.consolePrint(foragingTypes.toString());
+        showTypes("Available foraging types - ", ForageType.values(), type -> type.abbreviation);
     }
 
     private void setForagingType(String []input) {
@@ -308,14 +294,7 @@ public class ForagerBot extends Bot {
     }
 
     private void showBotanizingTypes() {
-        StringBuilder botanizingTypes = new StringBuilder();
-        botanizingTypes.append("Available botanizing types - ");
-        for(BotanizeType botanizingType : BotanizeType.values())
-            botanizingTypes.append(botanizingType.abbreviation)
-                    .append("(").append(botanizingType.name()).append("), ");
-        botanizingTypes.deleteCharAt(botanizingTypes.length() - 1);
-        botanizingTypes.deleteCharAt(botanizingTypes.length() - 1);
-        Utils.consolePrint(botanizingTypes.toString());
+        showTypes("Available botanizing types - ", BotanizeType.values(), type -> type.abbreviation);
     }
 
     private void setBotanizingType(String []input) {
@@ -326,14 +305,14 @@ public class ForagerBot extends Bot {
         BotanizeType botanizeType = BotanizeType.getByAbbreviation(input[0]);
         if (botanizeType == BotanizeType.Unknown) {
             Utils.consolePrint("Unknown botanizing type. Use " +
-                    "\"" + ForagerBot.InputKey.ftl.name() + "\" key to see available types");
+                    "\"" + ForagerBot.InputKey.btl.name() + "\" key to see available types");
             return;
         }
         this.botanizeType = botanizeType;
     }
 
     private void setMaxActions(String [] input) {
-        if (input.length != 1 ){
+        if (input == null || input.length != 1 ){
             printInputKeyUsageString(ForagerBot.InputKey.na);
             return;
         }
@@ -346,7 +325,7 @@ public class ForagerBot extends Bot {
     }
 
     private void setContainerName(String []input) {
-        if (input.length < 1 ){
+        if (input == null || input.length < 1 ){
             printInputKeyUsageString(ForagerBot.InputKey.scn);
             return;
         }
@@ -381,7 +360,7 @@ public class ForagerBot extends Bot {
     }
 
     private void addItemToFilter(String[] input) {
-        if (input.length < 1 ){
+        if (input == null || input.length < 1 ){
             printInputKeyUsageString(InputKey.dfa);
             return;
         }
@@ -443,25 +422,8 @@ public class ForagerBot extends Bot {
         synchronized (queuedTiles) {
             if (queuedTiles.size() > 0) {
                 Pair<Integer, Integer> tile = queuedTiles.get(queuedTiles.size() - 1);
-                float forageSkill = WurmHelper.hud.getWorld().getPlayer().getSkillSet().getSkillValue("foraging");
-                float botanizeSkill = WurmHelper.hud.getWorld().getPlayer().getSkillSet().getSkillValue("botanizing");
-                if (forageTilesInProcess.contains(tile)) {
-                    forageTilesInProcess.remove(tile);
-                    if (forageSkill > 80)
-                        forageTilesInProcess.remove(tile);
-                    if (forageSkill > 53)
-                        forageTilesInProcess.remove(tile);
-                    if(forageSkill > 26)
-                        forageTilesInProcess.remove(tile);
-                } else if (botanizeTilesInProcess.contains(tile)) {
+                if (!forageTilesInProcess.remove(tile))
                     botanizeTilesInProcess.remove(tile);
-                    if (botanizeSkill > 80)
-                        botanizeTilesInProcess.remove(tile);
-                    if (botanizeSkill > 53)
-                        botanizeTilesInProcess.remove(tile);
-                    if(botanizeSkill > 26)
-                        botanizeTilesInProcess.remove(tile);
-                }
                 if (verbose)
                     Utils.consolePrint("Too busy to queue tile - " + tile.getKey() + " " + tile.getValue());
                 queuedTiles.remove(queuedTiles.size() - 1);
@@ -497,14 +459,14 @@ public class ForagerBot extends Bot {
     enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
-        g("Groom", "Toggle the grass gathering", ""),
-        f("Follow", "Toggle the foraging", ""),
+        g("Grass", "Toggle the grass gathering", ""),
+        f("Forage", "Toggle the foraging", ""),
         ftl("Forage Types", "Show the list of foraging types", ""),
         ft("Forage Type", "Set the foraging type", "type"),
         b("Botanizing", "Toggle the botanizing", ""),
         btl("Botanize Types", "Show the list of botanizing types", ""),
         bt("Botanize Type", "Set the botanizing type", "type"),
-        d("Distance", "Toggle the dropping of collected items to the ground", ""),
+        d("Drop", "Toggle the dropping of collected items to the ground", ""),
         dwf("Drop When Full", "Change drop mode between drop when full inventory or drop after every action", ""),
         dfa("Add Drop Filter", "Add item to drop filter. Drop filter items won't be dropped", "name(string)"),
         dfc("Clear Filter", "Clear filter", ""),
