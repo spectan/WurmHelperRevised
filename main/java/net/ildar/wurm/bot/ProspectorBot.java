@@ -12,13 +12,12 @@ import net.ildar.wurm.annotations.BotInfo;
         "Prospects selected tile",
         abbreviation = "pr")
 public class ProspectorBot extends Bot {
-    private float staminaThreshold;
     private int clicks;
     private InventoryMetaItem toolItem;
     private static final String[] VALID_TOOLS = {"pickaxe"};
 
     public ProspectorBot() {
-        registerInputHandler(ProspectorBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ProspectorBot.InputKey.s);
         registerInputHandler(ProspectorBot.InputKey.c, this::setClicksNumber);
         registerInputHandler(ProspectorBot.InputKey.tool, input -> selectTool());
     }
@@ -71,24 +70,6 @@ public class ProspectorBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ProspectorBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void setClicksNumber(String []input) {
         if (input == null || input.length != 1) {
             printInputKeyUsageString(ProspectorBot.InputKey.c);
@@ -114,32 +95,15 @@ public class ProspectorBot extends Bot {
         c("Clicks", "Change the amount of clicks bot will do each time", "n(integer value)"),
         tool("Tool", "Set the prospecting tool from selected inventory item.", "tool");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

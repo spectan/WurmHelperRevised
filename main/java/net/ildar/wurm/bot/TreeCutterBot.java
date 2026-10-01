@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
         "Cuts trees",
         abbreviation = "tc")
 public class TreeCutterBot extends Bot{
-    private float staminaThreshold;
     private int maxActions;
 
     private TreeAge minTreeAge;
@@ -46,7 +45,7 @@ public class TreeCutterBot extends Bot{
     private List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
 
     public TreeCutterBot(){
-        registerInputHandler(InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(InputKey.s);
         registerInputHandler(InputKey.c, this::setMaxActions);
         registerInputHandler(InputKey.a, this::setMinAge);
         registerInputHandler(InputKey.tool, input -> selectTool());
@@ -189,19 +188,6 @@ public class TreeCutterBot extends Bot{
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(TreeCutterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
     private void setTreeType(String[] strings) {
         if (strings == null ) {
             printInputKeyUsageString(TreeCutterBot.InputKey.tt);
@@ -261,11 +247,6 @@ public class TreeCutterBot extends Bot{
         }
     }
 
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void showAgesList() {
         Utils.consolePrint("Age abbreviation");
         for(TreeAge age : TreeAge.values())
@@ -283,32 +264,15 @@ public class TreeCutterBot extends Bot{
         b("Botanizing", "Toggle bush cutting. Enabled by default", ""),
         sp("Sprout Cutting", "Toggle sprouting trees cutting. Enabled by default", "");
 
-        public String fullName;
-        public String description;
-        public String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

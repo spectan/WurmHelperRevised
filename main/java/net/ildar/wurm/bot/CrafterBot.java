@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
         "New crafting operations are not starting until an action queue becomes empty. This behaviour can be disabled. ",
         abbreviation = "c")
 public class CrafterBot extends Bot {
-    private float staminaThreshold;
     private boolean repairInstrument = true;
     private String targetName;
     private String sourceName;
@@ -47,7 +46,7 @@ public class CrafterBot extends Bot {
         registerInputHandler(CrafterBot.InputKey.ct, input -> toggleTargetsCombining());
         registerInputHandler(CrafterBot.InputKey.cs, input -> toggleSourcesCombining());
         registerInputHandler(CrafterBot.InputKey.ctimeout, this::setCombineTimeout);
-        registerInputHandler(CrafterBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(CrafterBot.InputKey.s);
         registerInputHandler(CrafterBot.InputKey.u, input -> toggleUnfinishedMode());
         registerInputHandler(CrafterBot.InputKey.ssid, this::addSourceByItemId);
         registerInputHandler(CrafterBot.InputKey.an, this::setActionNumber);
@@ -251,24 +250,6 @@ public class CrafterBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(CrafterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (NumberFormatException e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void setCombineTimeout(String input[]) {
         if (input == null || input.length != 1) {
             printInputKeyUsageString(CrafterBot.InputKey.ctimeout);
@@ -396,32 +377,15 @@ public class CrafterBot extends Bot {
                 "By default " + CrafterBot.class.getSimpleName() + " will check action queue and start crafting operations only when it is empty", ""),
         s1s("Single Source", "Toggles the setting of single item to source slot of crafting window", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

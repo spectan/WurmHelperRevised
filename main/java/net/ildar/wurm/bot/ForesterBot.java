@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
         abbreviation = "fr")
 public class ForesterBot extends Bot {
     static String DEFAULT_CONTAINER_NAME = "backpack";
-    private float staminaThreshold;
     private int maxActions;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
 
@@ -52,7 +51,7 @@ public class ForesterBot extends Bot {
     private int toHarvest;
 
     public ForesterBot() {
-        registerInputHandler(ForesterBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ForesterBot.InputKey.s);
         registerInputHandler(ForesterBot.InputKey.ca, input -> toggleAllTreesCutting());
         registerInputHandler(ForesterBot.InputKey.cs, input -> toggleShriveledTreesChopping());
         registerInputHandler(ForesterBot.InputKey.df, input -> toggleDeforestation());
@@ -378,24 +377,6 @@ public class ForesterBot extends Bot {
             Utils.consolePrint("Deforesting is off!");
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ForesterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-    
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-    
     private boolean isTreeAllowed(String treeType)
     {
         if(!treeWhitelist.isEmpty())
@@ -516,32 +497,15 @@ public class ForesterBot extends Bot {
         asb("Add Sprout Blacklist", "Add blacklisted tree type for sprout picking", "tree_name"),
         csb("Clear Sprout Blacklist", "Clear blacklisted tree types for sprout picking", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

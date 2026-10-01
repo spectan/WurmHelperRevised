@@ -286,32 +286,15 @@ public class ItemMoverBot extends Bot {
                 "Items that match added keywords but lying inside a group or a container will not be touched. " +
                 "Enabled by default", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

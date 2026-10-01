@@ -181,33 +181,15 @@ class AreaAssistant {
         area("Area Mode", "Toggle the area processing mode. ", "tiles_ahead tiles_to_the_right"),
         area_speed("Area Speed", "Set the speed of moving for area mode. Default value is 1 second per tile.", "speed(float value)");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final Bot.KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new Bot.KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public Bot.KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

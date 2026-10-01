@@ -88,32 +88,15 @@ public class HealingBot extends Bot {
     private enum InputKey implements Bot.InputKey {
         md("Min Damage", "Set the minimum damage of the wound to be treated", "min_damage");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

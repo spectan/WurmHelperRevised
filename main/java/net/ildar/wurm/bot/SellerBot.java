@@ -210,33 +210,16 @@ public class SellerBot extends Bot
         st("Set Target", "Set token to sell to", ""),
         sc("Shovel Check", "Set max queued sell actions", "number"),
         gems("Gems", "Set up bot to sell common (non-star) gems", "");
-        
-        String fullName;
-        String description;
-        String usage;
+
+        private final KeyInfo keyInfo;
+
         Inputs(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

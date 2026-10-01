@@ -26,14 +26,13 @@ import java.util.*;
 public class ImproverBot extends Bot {
     private List<Tool> tools = new ArrayList<>();
     private List<InventoryListComponent> targets = new ArrayList<>();
-    private float staminaThreshold;
     private boolean improveActionFinished;
     private boolean groundMode;
     private ToolSkill toolSkill = ToolSkill.UNKNOWN;
 
     @SuppressWarnings("ArraysAsListWithZeroOrOneArgument")
     public ImproverBot() {
-        registerInputHandler(ImproverBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ImproverBot.InputKey.s);
         registerInputHandler(ImproverBot.InputKey.at, input -> addTarget());
         registerInputHandler(ImproverBot.InputKey.ls, input -> listAvailableSkills());
         registerInputHandler(ImproverBot.InputKey.g, this::toggleGroundMode);
@@ -364,24 +363,6 @@ public class ImproverBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ImproverBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void addTarget() {
         WurmComponent inventoryComponent = Utils.getTargetComponent(c -> c instanceof ItemListWindow || c instanceof InventoryWindow);
         if (inventoryComponent == null) {
@@ -408,32 +389,15 @@ public class ImproverBot extends Bot {
         g("Ground", "Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
         ci("Change Instrument", "Change previously chosen instrument by tool selected in player's inventory", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

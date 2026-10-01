@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 public class MinerBot extends Bot {
     private SmeltingOptions smeltingOptions = new SmeltingOptions();
     private MiningMode miningMode = MiningMode.Unknown;
-    private float staminaThreshold;
     private InventoryMetaItem pickaxe;
     private static final String[] VALID_TOOLS = {"pickaxe"};
     private long fixedTileId;
@@ -44,7 +43,7 @@ public class MinerBot extends Bot {
     private Direction direction = Direction.FORWARD;
 
     public MinerBot() {
-        registerInputHandler(MinerBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(MinerBot.InputKey.s);
         registerInputHandler(MinerBot.InputKey.c, this::setClicksNumber);
         registerInputHandler(MinerBot.InputKey.sc, input -> toggleShardsCombining());
         registerInputHandler(MinerBot.InputKey.scn, this::setCombiningShardsName);
@@ -652,24 +651,6 @@ public class MinerBot extends Bot {
                     direction.action);
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(MinerBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void addTargetContainer(float minQuality) {
         WurmComponent container = Utils.getTargetComponent(c -> c instanceof ItemListWindow);
         if (container == null) {
@@ -759,32 +740,15 @@ public class MinerBot extends Bot {
         dir("Direction", "Set mining direction. Possible directions are: f - forward, u - upward, d - downward. Forward is default direction.", "direction"),
         tool("Tool", "Set the mining tool from selected inventory item.", "tool");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

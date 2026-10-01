@@ -347,32 +347,15 @@ public class ArcheoBot extends Bot {
 		ct("Combine Targets", "Clear inventories to identify fragments in", ""),
 		;
 
-  public String fullName;
-  public String description;
-        public String usage;
-        InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
-        }
+		private final KeyInfo keyInfo;
 
-        @Override
-        public String getName() {
-            return name();
-        }
+		InputKey(String fullName, String description, String usage) {
+			keyInfo = new KeyInfo(fullName, description, usage);
+		}
 
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
-        }
+		@Override
+		public KeyInfo keyInfo() {
+			return keyInfo;
+		}
 	}
 }

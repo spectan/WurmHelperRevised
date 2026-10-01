@@ -11,7 +11,7 @@ public abstract class Bot extends Thread {
     /**
      * A timeout an each bot implementation should use between iterations
      */
-    long timeout = 1000;
+    volatile long timeout = 1000;
     /**
      * The bot implementation should register his input handlers with {@link #registerInputHandler(InputKey, InputHandler)}
      */
@@ -20,7 +20,12 @@ public abstract class Bot extends Thread {
      * Store all registered message processors here to unregister them on bot deactivation to prevent memory leaks
      */
     private List<Chat.MessageProcessor> registeredMessageProcessors = new ArrayList<>();
-    private boolean paused = false;
+    private volatile boolean paused = false;
+    /**
+     * Effective stamina (stamina + damage) the player must exceed before work.
+     * Bots that use it register the shared handler with {@link #registerStaminaThresholdHandler(InputKey)}
+     */
+    volatile float staminaThreshold;
 
     public Bot() {
         //register standard input handlers
@@ -44,9 +49,7 @@ public abstract class Bot extends Thread {
             e.printStackTrace();
         } finally {
             try {
-                for (int i = 0; i < Utils.getMaxActionNumber(); i++) {
-                    WurmHelper.hud.sendAction(PlayerAction.STOP, 0);
-                }
+                stopAllActions();
             } catch (Exception ignored) {
                 // hud may be unavailable during early crash
             }
@@ -66,7 +69,7 @@ public abstract class Bot extends Thread {
     }
 
     synchronized void waitOnPause() throws InterruptedException {
-        if (paused) {
+        while (paused) {
             this.wait();
         }
     }
@@ -79,11 +82,9 @@ public abstract class Bot extends Thread {
         }
     }
 
-    public void setPaused() {
+    public synchronized void setPaused() {
         paused = true;
-        for (int i = 0; i < Utils.getMaxActionNumber(); i++) {
-            WurmHelper.hud.sendAction(PlayerAction.STOP, 0);
-        }
+        stopAllActions();
         Utils.consolePrint(getClass().getSimpleName() + " is paused.");
     }
     
@@ -95,6 +96,16 @@ public abstract class Bot extends Thread {
         paused = false;
         this.notifyAll();
         Utils.consolePrint(getClass().getSimpleName() + " is resumed.");
+    }
+
+    /**
+     * Cancel every queued player action
+     */
+    static void stopAllActions() {
+        int maxActions = Utils.getMaxActionNumber();
+        for (int i = 0; i < maxActions; i++) {
+            WurmHelper.hud.sendAction(PlayerAction.STOP, 0);
+        }
     }
 
     public void deactivate() {
@@ -111,9 +122,7 @@ public abstract class Bot extends Thread {
      * Effective stamina = stamina + damage.
      */
     protected boolean hasStamina(float threshold) {
-        float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-        float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-        return (stamina + damage) > threshold;
+        return Utils.getPlayerStamina() > threshold;
     }
 
     /**
@@ -207,6 +216,28 @@ public abstract class Bot extends Thread {
         }
     }
 
+    /**
+     * Register the shared "set stamina threshold" handler under the given key
+     */
+    final void registerStaminaThresholdHandler(InputKey key) {
+        registerInputHandler(key, input -> {
+            if (input == null || input.length != 1) {
+                printInputKeyUsageString(key);
+                return;
+            }
+            try {
+                setStaminaThreshold(Float.parseFloat(input[0]));
+            } catch (NumberFormatException e) {
+                Utils.consolePrint("Wrong threshold value!");
+            }
+        });
+    }
+
+    final void setStaminaThreshold(float s) {
+        staminaThreshold = s;
+        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
+    }
+
     final void setTimeout(int timeout) {
         if (timeout < 100) {
             Utils.consolePrint("Too small timeout!");
@@ -267,34 +298,15 @@ public abstract class Bot extends Thread {
         info("Info", "Get information about configuration key",
                 "key");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
 
         InputKeyBase(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getFullName() {
-            return fullName;
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
-        }
-
-        @Override
-        public String getName() {
-            return name();
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 
@@ -302,14 +314,41 @@ public abstract class Bot extends Thread {
         void handle(String[] inputData);
     }
 
+    /**
+     * Implemented by each bot's key enum. The enum supplies its {@link KeyInfo}; {@code name()} comes from Enum
+     */
     interface InputKey {
-        String getName();
+        String name();
 
-        String getFullName();
+        KeyInfo keyInfo();
 
-        String getDescription();
+        default String getName() {
+            return name();
+        }
 
-        String getUsage();
+        default String getFullName() {
+            return keyInfo().fullName;
+        }
+
+        default String getDescription() {
+            return keyInfo().description;
+        }
+
+        default String getUsage() {
+            return keyInfo().usage;
+        }
+    }
+
+    static final class KeyInfo {
+        final String fullName;
+        final String description;
+        final String usage;
+
+        KeyInfo(String fullName, String description, String usage) {
+            this.fullName = fullName;
+            this.description = description;
+            this.usage = usage;
+        }
     }
 
 }

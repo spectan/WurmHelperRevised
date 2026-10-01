@@ -822,34 +822,16 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         
         regaddr("Regaddr", "Set hostname and port of RMI registry", "host:port"),
         ;
-        
-        
-        String fullName;
-        String description;
-        String usage;
+
+        private final KeyInfo keyInfo;
+
         Inputs(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
     

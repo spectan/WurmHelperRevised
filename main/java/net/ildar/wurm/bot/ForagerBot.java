@@ -39,7 +39,6 @@ public class ForagerBot extends Bot {
     private static final Set<String> forageSetKeywords = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "fresh","seedling","sprout","mushroom","bouquet")));
 
-    private float staminaThreshold;
     private Comparator<InventoryMetaItem> weightComparator = Comparator.comparingDouble(InventoryMetaItem::getWeight);
     private AreaAssistant areaAssistant = new AreaAssistant(this);
     private long sickleId;
@@ -63,7 +62,7 @@ public class ForagerBot extends Bot {
     private List<String> filterItemNames = new ArrayList<>();
 
     public ForagerBot() {
-        registerInputHandler(ForagerBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ForagerBot.InputKey.s);
         registerInputHandler(ForagerBot.InputKey.g, input -> toggleGrassGathering());
         registerInputHandler(ForagerBot.InputKey.f, input -> toggleForaging());
         registerInputHandler(ForagerBot.InputKey.ftl, input -> showForagingTypes());
@@ -495,24 +494,6 @@ public class ForagerBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ForagerBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)"),
@@ -532,32 +513,15 @@ public class ForagerBot extends Bot {
         scn("Container Name", "Set the new name for containers to put sprouts/harvest", "container_name"),
         na("Max Actions", "Set the number of actions bot will do each time", "number");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

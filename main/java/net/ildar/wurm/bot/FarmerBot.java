@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
         "Tends the fields, plants the seeds, cultivates the ground, collects harvests",
         abbreviation = "f")
 public class FarmerBot extends Bot {
-    private float staminaThreshold;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
     private boolean farmTending;
     private InventoryMetaItem rakeItem;
@@ -34,7 +33,7 @@ public class FarmerBot extends Bot {
     private int dropLimit;
 
     public FarmerBot() {
-        registerInputHandler(FarmerBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(FarmerBot.InputKey.s);
         registerInputHandler(FarmerBot.InputKey.ft, input -> toggleFarmTending());
         registerInputHandler(FarmerBot.InputKey.h, input -> toggleHarvesting());
         registerInputHandler(FarmerBot.InputKey.p, this::togglePlanting);
@@ -245,24 +244,6 @@ public class FarmerBot extends Bot {
         Utils.consolePrint("The tool repairing is " + (repairing?"on":"off"));
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(FarmerBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void setDropLimit(String[] input) {
         if (input == null || input.length != 1) {
             printInputKeyUsageString(FarmerBot.InputKey.dl);
@@ -288,32 +269,15 @@ public class FarmerBot extends Bot {
         d("Distance", "Toggle the dropping of harvested items. Add item names to drop by \"" + and.name() + "\" key", ""),
         dl("Drop Limit", "Set the drop limit, configured number of harvests won't be dropped", "number");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

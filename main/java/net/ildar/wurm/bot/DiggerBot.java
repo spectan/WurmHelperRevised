@@ -23,7 +23,6 @@ public class DiggerBot extends Bot{
 
     private long stepDuration;
     private int clicks;
-    private float staminaThreshold;
     private WorkMode workMode;
     private int diggingHeightLimit;
     private boolean levellingDone;
@@ -40,7 +39,7 @@ public class DiggerBot extends Bot{
     private static final Tiles.Tile[] DIRT_LIST = {Tiles.Tile.TILE_DIRT, Tiles.Tile.TILE_GRASS, Tiles.Tile.TILE_SAND, Tiles.Tile.TILE_MYCELIUM, Tiles.Tile.TILE_TUNDRA, Tiles.Tile.TILE_STEPPE};
 
     public DiggerBot() {
-        registerInputHandler(DiggerBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(DiggerBot.InputKey.s);
         registerInputHandler(DiggerBot.InputKey.c, this::setClicksNumber);
         registerInputHandler(DiggerBot.InputKey.d, this::toggleDigging);
         registerInputHandler(DiggerBot.InputKey.dtile, this::toggleTileDiggingMode);
@@ -506,24 +505,6 @@ public class DiggerBot extends Bot{
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(DiggerBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void setClicksNumber(String input[]) {
         if (input == null || input.length != 1)
             printInputKeyUsageString(DiggerBot.InputKey.c);
@@ -581,32 +562,15 @@ public class DiggerBot extends Bot{
         sm("Surface Mining", "Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", ""),
         tool("Tool", "Set the digging tool from selected inventory item.", "tool");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

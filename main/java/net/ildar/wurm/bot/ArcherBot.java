@@ -23,11 +23,10 @@ import java.util.Map;
 public class ArcherBot extends Bot {
     private boolean stringBreaks;
 
-    private float staminaThreshold;
     private InventoryMetaItem bow;
 
     public ArcherBot() {
-        registerInputHandler(ArcherBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ArcherBot.InputKey.s);
         registerInputHandler(ArcherBot.InputKey.string, input -> stringTheBow());
     }
 
@@ -107,24 +106,6 @@ public class ArcherBot extends Bot {
         registerMessageProcessor(":Combat", message -> message.contains("The string breaks!"), () -> stringBreaks = true);
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ArcherBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void stringTheBow() {
         Utils.consolePrint(getClass().getSimpleName() + " will try to string the bow.");
         stringBreaks = true;
@@ -135,32 +116,16 @@ public class ArcherBot extends Bot {
                 "threshold(float value between 0 and 1)"),
         string("String", "String the current bow with a string",
                 "");
-        private String fullName;
-        private String description;
-        private String usage;
+
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

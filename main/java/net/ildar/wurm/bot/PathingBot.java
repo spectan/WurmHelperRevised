@@ -915,34 +915,17 @@ public class PathingBot extends Bot
 		groom("Grooming", "Find and groom nearby creatures", ""),
 		shear("Shear", "Find and shear nearby sheep", ""),
 		;
-		
-  String fullName;
-  String description;
-        String usage;
-        Inputs(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
-        }
 
-        @Override
-        public String getName() {
-            return name();
-        }
+		private final KeyInfo keyInfo;
 
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
+		Inputs(String fullName, String description, String usage) {
+			keyInfo = new KeyInfo(fullName, description, usage);
+		}
 
-        @Override
-        public String getUsage() {
-            return usage;
-        }
+		@Override
+		public KeyInfo keyInfo() {
+			return keyInfo;
+		}
 	}
 }
 

@@ -19,13 +19,12 @@ import java.util.Map;
 public class ChopperBot extends Bot {
     private float distance = 4;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
-    private float staminaThreshold;
     private int clicks;
     private InventoryMetaItem toolItem;
     private static final String[] VALID_TOOLS = {"hatchet"};
 
     public ChopperBot() {
-        registerInputHandler(ChopperBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ChopperBot.InputKey.s);
         registerInputHandler(ChopperBot.InputKey.d, this::setDistance);
         registerInputHandler(ChopperBot.InputKey.c, this::setClickNumber);
         registerInputHandler(ChopperBot.InputKey.tool, input -> selectTool());
@@ -100,24 +99,6 @@ public class ChopperBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String[] input) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ChopperBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void setClickNumber(String[] input) {
         if (input == null || input.length != 1)
             printInputKeyUsageString(ChopperBot.InputKey.c);
@@ -152,32 +133,15 @@ public class ChopperBot extends Bot {
         c("Clicks", "Set the amount of chops the bot will do each time", "c(integer value)"),
         tool("Tool", "Set the chopping tool from selected inventory item.", "tool");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

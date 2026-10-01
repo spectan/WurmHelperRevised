@@ -251,37 +251,16 @@ public class BulkItemGetterBot extends Bot
         ssxy("Source XY", "Find source item(s) for chosen spec from a fixed point at current cursor position", ""),
         st("Set Target", "Set the target item for chosen spec to what the user is currently pointing to", ""),
         ;
-        
-        String fullName;
-        String description;
-        String usage;
-        Inputs(String fullName, String description, String usage)
-        {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+
+        private final KeyInfo keyInfo;
+
+        Inputs(String fullName, String description, String usage) {
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName()
-        {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription()
-        {
-            return description;
-        }
-
-        @Override
-        public String getUsage()
-        {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

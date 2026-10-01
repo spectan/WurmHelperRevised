@@ -13,13 +13,12 @@ import net.ildar.wurm.annotations.BotInfo;
 public class MeditationBot extends Bot {
     private long lastRepair;
     private long repairTimeout;
-    private float staminaThreshold;
     private int clicks = 3;
     private volatile boolean repairInitiated;
     private volatile int clicked;
 
     public MeditationBot() {
-        registerInputHandler(MeditationBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(MeditationBot.InputKey.s);
         registerInputHandler(MeditationBot.InputKey.c, this::setClicksNumber);
         registerInputHandler(MeditationBot.InputKey.rt, this::setRepairTimeout);
     }
@@ -98,24 +97,6 @@ public class MeditationBot extends Bot {
         Utils.consolePrint("Current carpet repair timeout is " + repairTimeout + " milliseconds");
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(MeditationBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     private void setClicksNumber(String input[]) {
         if (input == null || input.length != 1)
             printInputKeyUsageString(MeditationBot.InputKey.c);
@@ -140,32 +121,15 @@ public class MeditationBot extends Bot {
         c("Clicks", "Set the amount of actions the bot will do each time", "c(integer value)"),
         rt("Repair Timeout", "Set the meditation rug repair timeout", "timeout(in milliseconds)");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

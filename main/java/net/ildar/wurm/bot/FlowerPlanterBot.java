@@ -17,12 +17,11 @@ import java.util.List;
         "Skills up player's gardening skill by planting and picking flowers in surrounding area",
         abbreviation = "fp")
 public class FlowerPlanterBot extends Bot {
-    private float staminaThreshold;
     private long sickleId;
     private long shovelId;
 
     public FlowerPlanterBot() {
-        registerInputHandler(FlowerPlanterBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(FlowerPlanterBot.InputKey.s);
     }
 
     @Override
@@ -116,24 +115,6 @@ public class FlowerPlanterBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(FlowerPlanterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     enum BotState{
         PLANT,
         PICK,
@@ -144,32 +125,15 @@ public class FlowerPlanterBot extends Bot {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
                 "threshold(float value between 0 and 1)");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }
