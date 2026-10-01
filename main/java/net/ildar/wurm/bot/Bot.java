@@ -26,6 +26,11 @@ public abstract class Bot extends Thread {
      * Bots that use it register the shared handler with {@link #registerStaminaThresholdHandler(InputKey)}
      */
     volatile float staminaThreshold;
+    private boolean usesStaminaThreshold = false;
+    /**
+     * Set when the user (not the bot itself) asked the bot to stop, to tell a requested stop from an unexpected one
+     */
+    private volatile boolean stopRequested = false;
 
     public Bot() {
         //register standard input handlers
@@ -33,6 +38,7 @@ public abstract class Bot extends Thread {
         registerInputHandler(InputKeyBase.off, inputs -> deactivate());
         registerInputHandler(InputKeyBase.info, this::handleInfoCommand);
         registerInputHandler(InputKeyBase.pause, inputs -> togglePause());
+        registerInputHandler(InputKeyBase.status, inputs -> printStatus());
     }
 
     //Bot implementations must do their stuff here
@@ -40,10 +46,12 @@ public abstract class Bot extends Thread {
 
     @Override
     public final void run() {
+        String failure = null;
         try {
             work();
         } catch (InterruptedException ignored) {
         } catch (Exception e) {
+            failure = e.getMessage() != null ? e.getMessage() : e.toString();
             Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
             Utils.consolePrint(e.toString());
             e.printStackTrace();
@@ -55,7 +63,12 @@ public abstract class Bot extends Thread {
             }
             unregisterMessageProcessors();
             BotController.getInstance().onBotInterruption(this);
-            Utils.consolePrint(this.getClass().getSimpleName() + " was stopped");
+            if (stopRequested) {
+                Utils.feedback(this.getClass().getSimpleName() + " was stopped");
+            } else {
+                // the bot stopped by itself (an error, a missing tool...) - make sure the player notices
+                Utils.alert(this.getClass().getSimpleName() + " stopped" + (failure != null ? ": " + failure : "") + ". See the console for details");
+            }
         }
     }
 
@@ -75,6 +88,10 @@ public abstract class Bot extends Thread {
     }
 
     private void togglePause() {
+        if (!isAlive()) {
+            Utils.consolePrint(getClass().getSimpleName() + " is not running");
+            return;
+        }
         if (paused) {
             this.setResumed();
         } else {
@@ -85,7 +102,7 @@ public abstract class Bot extends Thread {
     public synchronized void setPaused() {
         paused = true;
         stopAllActions();
-        Utils.consolePrint(getClass().getSimpleName() + " is paused.");
+        Utils.feedback(getClass().getSimpleName() + " is paused.");
     }
     
     public boolean getPaused() {
@@ -95,7 +112,7 @@ public abstract class Bot extends Thread {
     public synchronized void setResumed() {
         paused = false;
         this.notifyAll();
-        Utils.consolePrint(getClass().getSimpleName() + " is resumed.");
+        Utils.feedback(getClass().getSimpleName() + " is resumed.");
     }
 
     /**
@@ -109,6 +126,8 @@ public abstract class Bot extends Thread {
     }
 
     public void deactivate() {
+        if (Thread.currentThread() != this)
+            stopRequested = true;
         if (!super.isAlive()) {
             BotController.getInstance().onBotInterruption(this);
             return;
@@ -142,6 +161,114 @@ public abstract class Bot extends Thread {
         return hasStamina(threshold) && isProgressZero();
     }
 
+    /**
+     * Fail a command that needs the bot thread to be running (for example one that acts right away),
+     * telling the user how to start the bot. Returns true when the bot is running
+     */
+    final boolean requireRunning() {
+        if (isAlive())
+            return true;
+        Utils.consolePrint("Start the bot first: bot " + getAbbreviation() + " on");
+        return false;
+    }
+
+    /**
+     * Bots add a line per setting the user can change, shown by the "status" key
+     */
+    void describeSettings(List<String> lines) {
+    }
+
+    private void printStatus() {
+        String state = !isAlive() ? "OFF (settings will apply when it is turned on)" : (paused ? "ON, paused" : "ON");
+        Utils.consolePrint("=== " + getClass().getSimpleName() + " - " + state + " ===");
+        List<String> lines = new ArrayList<>();
+        lines.add("Timeout: " + timeout + " ms");
+        if (usesStaminaThreshold)
+            lines.add("Stamina threshold: " + staminaThreshold);
+        describeSettings(lines);
+        for (String line : lines)
+            Utils.consolePrint("  " + line);
+    }
+
+    static String onOff(boolean value) {
+        return value ? "on" : "off";
+    }
+
+    /**
+     * @return the arguments joined by spaces, or null when there are none
+     */
+    static String joinArgs(String[] input) {
+        if (input == null || input.length == 0)
+            return null;
+        String joined = String.join(" ", input).trim();
+        return joined.isEmpty() ? null : joined;
+    }
+
+    /**
+     * Split the arguments into a list of names separated by commas, so "small barrel, large crate" gives two names
+     * @return the names, empty when there are none
+     */
+    static List<String> parseNameList(String[] input) {
+        List<String> names = new ArrayList<>();
+        String joined = joinArgs(input);
+        if (joined == null)
+            return names;
+        for (String name : joined.split(",")) {
+            name = name.trim();
+            if (!name.isEmpty())
+                names.add(name);
+        }
+        return names;
+    }
+
+    /**
+     * Parse a single whole-number argument in [min, max], printing what went wrong and the key usage on failure
+     * @return the value, or null when the input is missing or invalid
+     */
+    final Integer parseIntArg(String[] input, InputKey key, int min, int max) {
+        if (input == null || input.length != 1) {
+            printInputKeyUsageString(key);
+            return null;
+        }
+        try {
+            int value = Integer.parseInt(input[0]);
+            if (value < min || value > max) {
+                Utils.consolePrint("`" + input[0] + "` is out of range (" + min + " to " + max + ")");
+                printInputKeyUsageString(key);
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            Utils.consolePrint("`" + input[0] + "` is not a whole number");
+            printInputKeyUsageString(key);
+            return null;
+        }
+    }
+
+    /**
+     * Parse a single number argument in [min, max], printing what went wrong and the key usage on failure
+     * @return the value, or null when the input is missing or invalid
+     */
+    final Float parseFloatArg(String[] input, InputKey key, float min, float max) {
+        if (input == null || input.length != 1) {
+            printInputKeyUsageString(key);
+            return null;
+        }
+        try {
+            float value = Float.parseFloat(input[0]);
+            if (Float.isNaN(value) || value < min || value > max) {
+                Utils.consolePrint("`" + input[0] + "` is out of range (" + min + " to " + max + ")");
+                printInputKeyUsageString(key);
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            Utils.consolePrint("`" + input[0] + "` is not a number");
+            printInputKeyUsageString(key);
+            return null;
+        }
+    }
+
     private String getAbbreviation() {
         BotRegistration botRegistration = BotController.getInstance().getBotRegistration(this.getClass());
         if (botRegistration == null) return null;
@@ -155,13 +282,18 @@ public abstract class Bot extends Thread {
                 .sorted(Comparator.comparing(InputKey::getName))
                 .collect(Collectors.toList());
         for (InputKey inputKey : sortedInputKeys) {
-            output.append("\n  ");
+            output.append("\n  ").append(inputKey.getName());
+            String usage = inputKey.getUsage();
+            if (usage != null && !usage.isEmpty())
+                output.append(" ").append(usage);
             String displayName = inputKey.getFullName();
-            if (displayName == null || displayName.isEmpty())
-                output.append(inputKey.getName());
-            else
-                output.append(displayName).append(" (").append(inputKey.getName()).append(")");
+            if (displayName != null && !displayName.isEmpty())
+                output.append(" (").append(displayName).append(")");
+            String description = inputKey.getDescription();
+            if (description != null && !description.isEmpty())
+                output.append(" - ").append(description);
         }
+        output.append("\nKeys can also be typed by their full name, e.g. \"stamina\" or \"add item\"");
         return output.toString();
     }
 
@@ -177,16 +309,19 @@ public abstract class Bot extends Thread {
     public void handleInput(String[] data) {
         if (data == null || data.length == 0 || data[0] == null)
             return;
-        InputHandler inputHandler = getInputHandler(data[0]);
-        if (inputHandler == null) {
-            Utils.consolePrint("Unknown key - " + data[0]);
-            BotController.getInstance().printBotDescription(this.getClass());
+        // a key can be typed by its short name or its full name, which may span several words ("add item")
+        for (int words = data.length; words >= 1; words--) {
+            InputHandler inputHandler = getInputHandler(String.join(" ", Arrays.copyOfRange(data, 0, words)));
+            if (inputHandler == null)
+                continue;
+            String[] handlerParameters = null;
+            if (data.length > words)
+                handlerParameters = Arrays.copyOfRange(data, words, data.length);
+            inputHandler.handle(handlerParameters);
             return;
         }
-        String[] handlerParameters = null;
-        if (data.length > 1)
-            handlerParameters = Arrays.copyOfRange(data, 1, data.length);
-        inputHandler.handle(handlerParameters);
+        Utils.consolePrint("Unknown key - " + data[0]);
+        Utils.consolePrint(getUsageString());
     }
 
     private void handleInfoCommand(String[] input) {
@@ -220,16 +355,28 @@ public abstract class Bot extends Thread {
      * Register the shared "set stamina threshold" handler under the given key
      */
     final void registerStaminaThresholdHandler(InputKey key) {
+        usesStaminaThreshold = true;
         registerInputHandler(key, input -> {
             if (input == null || input.length != 1) {
                 printInputKeyUsageString(key);
                 return;
             }
+            float threshold;
             try {
-                setStaminaThreshold(Float.parseFloat(input[0]));
+                threshold = Float.parseFloat(input[0]);
             } catch (NumberFormatException e) {
-                Utils.consolePrint("Wrong threshold value!");
+                Utils.consolePrint("`" + input[0] + "` is not a number");
+                printInputKeyUsageString(key);
+                return;
             }
+            // accept percentages too: "90" means 0.9
+            if (threshold > 1 && threshold <= 100)
+                threshold /= 100;
+            if (Float.isNaN(threshold) || threshold < 0 || threshold > 1) {
+                Utils.consolePrint("The stamina threshold must be between 0 and 1 (or 0 to 100 percent)");
+                return;
+            }
+            setStaminaThreshold(threshold);
         });
     }
 
@@ -263,11 +410,22 @@ public abstract class Bot extends Thread {
         for (InputKey inputKey : inputHandlers.keySet()) {
             if (inputKey.getName().equals(lower))
                 return inputKey;
+        }
+        String normalized = normalizeName(key);
+        if (normalized.isEmpty()) return null;
+        for (InputKey inputKey : inputHandlers.keySet()) {
             String fullName = inputKey.getFullName();
-            if (fullName != null && !fullName.isEmpty() && fullName.equalsIgnoreCase(lower))
+            if (fullName != null && normalizeName(fullName).equals(normalized))
                 return inputKey;
         }
         return null;
+    }
+
+    /**
+     * Lower-case and strip spaces, dashes and underscores so "Add Item", "add item" and "additem" match
+     */
+    public static String normalizeName(String name) {
+        return name.toLowerCase().replaceAll("[\\s_-]", "");
     }
 
     private InputHandler getInputHandler(String key) {
@@ -290,13 +448,15 @@ public abstract class Bot extends Thread {
 
     private enum InputKeyBase implements InputKey {
         t("Timeout", "Set the timeout for bot. The bot will wait for specified time(in milliseconds) after each iteration/update",
-                "timeout(in milliseconds)"),
+                "<milliseconds>"),
         off("Off", "Deactivate the bot",
                 ""),
         pause("Pause", "Pause/resume the bot",
                 ""),
         info("Info", "Get information about configuration key",
-                "key");
+                "<key>"),
+        status("Status", "Show the bot's current settings",
+                "");
 
         private final KeyInfo keyInfo;
 

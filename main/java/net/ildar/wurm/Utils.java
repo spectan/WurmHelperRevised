@@ -1,5 +1,7 @@
 package net.ildar.wurm;
 
+import java.io.BufferedInputStream;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -14,6 +16,11 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineEvent;
 
 import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 
@@ -50,6 +57,49 @@ public class Utils {
         fmt = args.length == 0 ? fmt : String.format(fmt, args);
         for(String line: fmt.split("\n"))
             consoleMessages.add(line);
+    }
+
+    /**
+     * Report a state change (a bot or a feature turned on/off, paused...). Always printed to the console,
+     * and also shown on screen when the OnscreenFeedback option is on, so keybind users see it with the console closed
+     */
+    public static void feedback(String fmt, Object... args) {
+        String message = args.length == 0 ? fmt : String.format(fmt, args);
+        consolePrint(message);
+        if (WurmHelper.onscreenFeedback && WurmHelper.hud != null)
+            WurmHelper.hud.addOnscreenMessage(message, 1, 1, 1, (byte)1);
+    }
+
+    /**
+     * Report something the player must notice, like a bot that stopped by itself. Always shown on screen,
+     * and plays the alarm sound when the AlarmOnStop option is on
+     */
+    public static void alert(String message) {
+        consolePrint(message);
+        if (WurmHelper.hud != null)
+            WurmHelper.hud.addOnscreenMessage(message, 1, 0.4f, 0.4f, (byte)1);
+        if (WurmHelper.alarmOnStop)
+            playAlarm();
+    }
+
+    private static void playAlarm() {
+        try {
+            InputStream resource = WurmHelper.class.getResourceAsStream("/alarm_sound.wav");
+            if (resource == null) {
+                consolePrint("Couldn't find the alarm sound");
+                return;
+            }
+            AudioInputStream audio = AudioSystem.getAudioInputStream(new BufferedInputStream(resource));
+            Clip clip = AudioSystem.getClip();
+            clip.addLineListener(event -> {
+                if (event.getType() == LineEvent.Type.STOP)
+                    clip.close();
+            });
+            clip.open(audio);
+            clip.start();
+        } catch (Exception e) {
+            consolePrint("Couldn't play the alarm sound: " + e);
+        }
     }
 
     public static void showOnScreenMessage(String message) {
@@ -652,6 +702,8 @@ public class Utils {
     }
 
     public static void writeToConsoleInputLine(String s) {
+        if (!WurmHelper.prefillConsoleInput)
+            return;
         try {
             Object consoleComponent = getField(WurmHelper.hud, "consoleComponent");
             Object inputField = getField(consoleComponent, "inputField");

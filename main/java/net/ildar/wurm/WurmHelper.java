@@ -50,6 +50,12 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
     private long lastBless = 0L;
     private boolean noBlessings = false;
     public static Color3f consoleColor = new Color3f(0.5f, 1, 1);
+    // show bot state changes on screen as well as in the console
+    public static boolean onscreenFeedback = true;
+    // play a sound when a bot stops by itself
+    public static boolean alarmOnStop = false;
+    // put the last bot command back into the console input line, so it can be edited and repeated
+    public static boolean prefillConsoleInput = true;
 
     public WurmHelper() {
         logger = Logger.getLogger("WurmHelper");
@@ -154,14 +160,12 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
     }
 
     private void printAvailableConsoleCommands() {
-        StringBuilder commands = new StringBuilder();
-        for (String name : commandRegistry.getCommandNames()) {
-            commands.append(name).append(", ");
-        }
-        if (commands.length() >= 2) {
-            commands.setLength(commands.length() - 2);
-        }
-        Utils.consolePrint("Available custom commands - " + commands.toString());
+        Utils.consolePrint("Available custom commands:");
+        List<String> names = new ArrayList<>(commandRegistry.getCommandNames());
+        Collections.sort(names);
+        for (String name : names)
+            Utils.consolePrint("  " + name + " - " + commandRegistry.get(name).getDescription());
+        Utils.consolePrint("Type \"info <command>\" for its usage, \"info bots\" for the list of bots");
     }
 
     public static void addCoordsText(int x, int y, int section, final PickData pickData) {
@@ -204,6 +208,10 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
         String noBlessings = properties.getProperty("NoBlessings", "false");
         this.noBlessings = noBlessings.equalsIgnoreCase("true");
         
+        onscreenFeedback = properties.getProperty("OnscreenFeedback", "true").equalsIgnoreCase("true");
+        alarmOnStop = properties.getProperty("AlarmOnStop", "false").equalsIgnoreCase("true");
+        prefillConsoleInput = properties.getProperty("PrefillConsoleInput", "true").equalsIgnoreCase("true");
+
         String consoleMsgColor = properties.getProperty("ConsoleMsgColor", "0.5,1.0,1.0");
         try {
             String[] bits = consoleMsgColor.split(",");
