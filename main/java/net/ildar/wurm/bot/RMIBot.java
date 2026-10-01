@@ -45,7 +45,12 @@ import static net.ildar.wurm.Utils.printExceptions;
 public class RMIBot extends Bot implements BotServer, BotClient, Executor
 {
     final HeadsUpDisplay hud = WurmHelper.hud;
-    final World world = hud.getWorld();
+    
+    // looked up when needed so that constructing the bot (e.g. to configure it before it starts) has no side effects
+    World world()
+    {
+        return hud.getWorld();
+    }
     
     static final String registryPrefix = RMIBot.class.getSimpleName();
     String registryHost = "127.0.43.7";
@@ -102,40 +107,51 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     {
         registerInputHandler(
             Inputs.s,
-            input -> printExceptions(
+            input -> { if(requireRunning()) printExceptions(
                 () -> toggleServerMode(),
                 "Got %s when toggling server mode: %s"
-            )
+            ); }
         );
         registerInputHandler(
             Inputs.c,
-            input -> printExceptions(
+            input -> { if(requireRunning()) printExceptions(
                 () -> toggleClientMode(),
                 "Got %s when toggling client mode: %s"
-            )
+            ); }
         );
         registerInputHandler(
             Inputs.sl,
-            input -> printExceptions(
+            input -> { if(requireRunning()) printExceptions(
                 () -> serverListClients(),
                 "Got %s when listing clients: %s"
-            )
+            ); }
         );
         registerInputHandler(
             Inputs.slr,
-            input -> printExceptions(
+            input -> { if(requireRunning()) printExceptions(
                 () -> serverRefreshClients(),
                 "Got %s when refreshing clients: %s"
-            )
+            ); }
         );
         registerInputHandler(
             Inputs.sr,
-            input -> printExceptions(
+            input -> { if(requireRunning()) printExceptions(
                 () -> serverRun(input),
                 "Got %s when running server command: %s"
-            )
+            ); }
         );
         registerInputHandler(Inputs.regaddr, this::setRegistryAddress);
+    }
+    
+    @Override
+    void describeSettings(List<String> lines)
+    {
+        lines.add(String.format("Registry address: %s:%d", registryHost, registryPort));
+        lines.add("Mode: " + (isServer() ? "server" : isClient() ? "client" : "off"));
+        lines.add("Target sync: " + onOff(syncTarget));
+        lines.add("Position sync: " + onOff(syncPosition));
+        lines.add("Heading sync: " + onOff(syncHeading));
+        lines.add("Sync delay: " + syncDelay + " ms");
     }
     
     @Override
@@ -287,7 +303,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             );
             serverRegistry = null;
             
-            Utils.consolePrint("Server mode disabled, RMI registry shut down");
+            Utils.feedback("Server mode disabled, RMI registry shut down");
             return;
         }
         
@@ -302,7 +318,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         
         clients = new ClientSet();
         
-        Utils.consolePrint("Server mode active, RMI registry running at %s:%d", registryHost, registryPort);
+        Utils.feedback("Server mode active, RMI registry running at %s:%d", registryHost, registryPort);
     }
     
     void toggleClientMode() throws Exception
@@ -331,14 +347,14 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             );
             clientRegistry = null;
             
-            Utils.consolePrint("Client mode disabled");
+            Utils.feedback("Client mode disabled");
             return;
         }
         
         clientRegistry = LocateRegistry.getRegistry(registryHost, registryPort);
         Remote stub = UnicastRemoteObject.exportObject(this, 0);
         clientRegistry.bind(regName, stub);
-        Utils.consolePrint("Client mode enabled");
+        Utils.feedback("Client mode enabled");
         ((BotServer)clientRegistry.lookup("BotServer")).onClientJoin(getPlayerName());
     }
     
@@ -384,9 +400,9 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             return;
         }
         
-        final int mouseX = world.getClient().getXMouse();
-        final int mouseY = world.getClient().getYMouse();
-        final PickableUnit hoveredUnit = world.getCurrentHoveredObject();
+        final int mouseX = world().getClient().getXMouse();
+        final int mouseY = world().getClient().getYMouse();
+        final PickableUnit hoveredUnit = world().getCurrentHoveredObject();
         
         switch(args[0].toLowerCase())
         {
@@ -564,9 +580,9 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 if(syncTarget)
                     execute(this::syncTargetTask);
                 
-                Utils.consolePrint(
+                Utils.feedback(
                     "Target synchronization %s",
-                    syncTarget ? "on" : "off"
+                    onOff(syncTarget)
                 );
                 break;
             }
@@ -577,9 +593,9 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 if(syncPosition)
                     startSyncPositionTask();
                 
-                Utils.consolePrint(
+                Utils.feedback(
                     "Position synchronization %s",
-                    syncPosition ? "on" : "off"
+                    onOff(syncPosition)
                 );
                 break;
             }
@@ -590,9 +606,9 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 if(syncHeading)
                     startSyncPositionTask();
                 
-                Utils.consolePrint(
+                Utils.feedback(
                     "Heading synchronization %s",
-                    syncHeading ? "on" : "off"
+                    onOff(syncHeading)
                 );
                 break;
             }
@@ -782,7 +798,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         if(isServer() || isClient())
         {
             Utils.consolePrint(
-                "Can't change registry address while it/client mode are enabled"
+                "Can't change registry address while server/client mode is enabled"
             );
             return;
         }
@@ -798,6 +814,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             RegistryAddress address = parseRegistryAddress(args[0]);
             registryPort = address.port;
             registryHost = address.host;
+            Utils.consolePrint("RMI registry address is now %s:%d", registryHost, registryPort);
         }
         catch(IllegalArgumentException err)
         {
@@ -807,14 +824,14 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
 
     private enum Inputs implements Bot.InputKey
     {
-        s("Server", "Toggle server mode, allowing sending commands to other characters", ""),
-        c("Client", "Toggle client mode, allowing remote control of this character", ""),
+        s("Server", "Toggle server mode, allowing sending commands to other characters. Needs the bot running", ""),
+        c("Client", "Toggle client mode, allowing remote control of this character. Needs the bot running", ""),
         
-        sl("Server: List", "Server: list known clients", ""),
-        slr("Server: Refresh", "Server: refresh list of clients", ""),
-        sr("Server: Dispatch", "Server: dispatch commands", "..."),
+        sl("Server List", "Server mode: list known clients", ""),
+        slr("Server Refresh", "Server mode: refresh list of clients", ""),
+        sr("Server Dispatch", "Server mode: dispatch a command to every character. Use `sr help` to list the subcommands", "<subcommand> [<args>]"),
         
-        regaddr("Regaddr", "Set hostname and port of RMI registry", "host:port"),
+        regaddr("Registry Address", "Set hostname and port of RMI registry. Change it before turning on server/client mode", "<host>:<port>"),
         ;
 
         private final KeyInfo keyInfo;
@@ -894,10 +911,10 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             syncPositionRunning = false;
             return;
         }
-        final float px = syncPosition ? world.getPlayerPosX() : -1;
-        final float py = syncPosition ? world.getPlayerPosY() : -1;
-        final float rx = syncHeading ? world.getPlayerRotX() : Float.NaN;
-        final float ry = syncHeading ? world.getPlayerRotY() : Float.NaN;
+        final float px = syncPosition ? world().getPlayerPosX() : -1;
+        final float py = syncPosition ? world().getPlayerPosY() : -1;
+        final float rx = syncHeading ? world().getPlayerRotX() : Float.NaN;
+        final float ry = syncHeading ? world().getPlayerRotY() : Float.NaN;
         printExceptions(
             () -> clients.setPosAndHeading(px, py, rx, ry),
             "Got %s when setting clients' position: %s"
@@ -929,7 +946,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public String getPlayerName()
     {
-        return world.getPlayer().getPlayerName();
+        return world().getPlayer().getPlayerName();
     }
     
     @Override
@@ -948,14 +965,14 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         
         CombatInfo result = new CombatInfo();
         result.target = targetCreature == null ? -10 : targetCreature.getId();
-        result.playerHealth = 1f - world.getPlayer().getDamage();
+        result.playerHealth = 1f - world().getPlayer().getDamage();
         return result;
     }
     
     @Override
     public void execCmds(String[] cmds) throws RemoteException
     {
-        WurmConsole console = world.getClient().getConsole();
+        WurmConsole console = world().getClient().getConsole();
         for(int index = 0; index < cmds.length; index++)
             console.handleInput(cmds[index], false);
     }
@@ -987,7 +1004,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void disembark() throws RemoteException
     {
-        CreatureCellRenderable vehicle = world.getPlayer().getCarrierCreature();
+        CreatureCellRenderable vehicle = world().getPlayer().getCarrierCreature();
         if(vehicle == null)
         {
             Utils.consolePrint("Got disembark request but not riding anything");
@@ -1024,10 +1041,10 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         if(!locateShovel())
             return;
         
-        final int tx = Math.round(world.getPlayerPosX() / 4);
-        final int ty = Math.round(world.getPlayerPosY() / 4);
+        final int tx = Math.round(world().getPlayerPosX() / 4);
+        final int ty = Math.round(world().getPlayerPosY() / 4);
         final long tileID = Tiles.getTileId(tx, ty, 0);
-        world.getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.DIG);
+        world().getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.DIG);
     }
     
     @Override
@@ -1036,7 +1053,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         if(!locateShovel())
             return;
         
-        world.getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.LEVEL);
+        world().getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.LEVEL);
     }
     
     @Override
@@ -1052,7 +1069,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                     pickaxeID = tool.getId();
             }
             
-            world.getServerConnection().sendAction(
+            world().getServerConnection().sendAction(
                 pickaxeID,
                 new long[]{wallID},
                 direction.action

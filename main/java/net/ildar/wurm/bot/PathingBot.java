@@ -82,9 +82,13 @@ public class PathingBot extends Bot
 	static final float tickDelta = 1 / 6f;
 	volatile float topSpeedMPS = (15f * 1000) / 60 / 60;
 	
+	// commands run as tasks on the pool, which only works while the bot thread runs (it registers the event processors and shuts the pool down)
 	InputHandler inPool(InputHandler fn)
 	{
-		return args -> pool.execute(() -> fn.handle(args));
+		return args -> {
+			if(!requireRunning()) return;
+			pool.execute(() -> fn.handle(args));
+		};
 	}
 	
 	boolean waitOnPauseFJ()
@@ -99,7 +103,7 @@ public class PathingBot extends Bot
 	
 	public PathingBot()
 	{
-		registerInputHandler(Inputs.speed, inPool(this::cmdSpeed));
+		registerInputHandler(Inputs.speed, this::cmdSpeed);
 		registerInputHandler(Inputs.walkto, inPool(this::cmdWalkto));
 		registerInputHandler(Inputs.follow, inPool(this::cmdFollow));
 		registerInputHandler(Inputs.murder, inPool(this::cmdMurder));
@@ -109,27 +113,9 @@ public class PathingBot extends Bot
 	
 	void cmdSpeed(String[] args)
 	{
-		if(args == null || args.length == 0)
-		{
-			printInputKeyUsageString(Inputs.speed);
+		final Float newSpeed = parseFloatArg(args, Inputs.speed, 0.1f, 1000f);
+		if(newSpeed == null)
 			return;
-		}
-		
-		final float newSpeed;
-		try
-		{
-			newSpeed = Float.parseFloat(args[0]);
-		}
-		catch(NumberFormatException err)
-		{
-			Utils.consolePrint("`%s` is not a number", args[0]);
-			return;
-		}
-		if(!(newSpeed > 0) || Float.isInfinite(newSpeed))
-		{
-			Utils.consolePrint("Speed must be a positive number");
-			return;
-		}
 		topSpeedMPS = (newSpeed * 1000) / 60 / 60;
 		Utils.consolePrint(
 			"Bot will now move at %f kph (%f m/s)",
@@ -138,10 +124,31 @@ public class PathingBot extends Bot
 		);
 	}
 	
-	void enforceNoTasksRunning()
+	/**
+	 * @return true when no other task runs; otherwise tells the user and returns false
+	 */
+	boolean checkNoTasksRunning()
 	{
 		if(walking || following || murdering || groomTask.running || shearTask.running)
-			throw new RuntimeException("Another task is already enabled");
+		{
+			Utils.consolePrint("Another task is already running - turn it off first");
+			return false;
+		}
+		return true;
+	}
+	
+	@Override
+	void describeSettings(List<String> lines)
+	{
+		lines.add(String.format("Speed: %.1f km/h", topSpeedMPS * 60 * 60 / 1000));
+		final String task;
+		if(walking) task = "walking";
+		else if(following) task = "following " + followTargetName;
+		else if(murdering) task = "murdering";
+		else if(groomTask.running) task = "grooming";
+		else if(shearTask.running) task = "shearing";
+		else task = "none";
+		lines.add("Task: " + task);
 	}
 	
 	volatile boolean walking = false;
@@ -189,7 +196,7 @@ public class PathingBot extends Bot
 			}
 		}
 		
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
 		walking = true;
 		
 		Utils.consolePrint("Pathfinding to %d,%d", target.x, target.y);
@@ -199,26 +206,40 @@ public class PathingBot extends Bot
 	}
 	
 	volatile boolean following = false;
+	volatile String followTargetName = null;
 	void cmdFollow(String[] args)
 	{
+		final String name = joinArgs(args);
 		if(following)
 		{
-			following = false;
+			if(name == null)
+			{
+				following = false;
+				Utils.feedback("Stopped following");
+			}
+			else
+			{
+				// already following: switch to the new player instead of stopping
+				followTargetName = name.toLowerCase();
+				Utils.feedback("Now following `%s`", name);
+			}
 			return;
 		}
 		
-		if(args == null || args.length < 1)
+		if(name == null)
 		{
 			printInputKeyUsageString(Inputs.follow);
 			return;
 		}
-		final String targetPlayerName = args[0].toLowerCase();
 		
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
 		
+		followTargetName = name.toLowerCase();
 		following = true;
+		Utils.feedback("Following `%s`", name);
 		while(!exiting && following)
 		{
+			final String targetPlayerName = followTargetName;
 			CreatureCellRenderable _targetPlayer = null;
 			for(int i = 0; i < 10; i++)
 			{
@@ -282,12 +303,14 @@ public class PathingBot extends Bot
 		if(murdering)
 		{
 			murdering = false;
+			Utils.feedback("Murdering is off");
 			return;
 		}
 		
 		// TODO: only target hostile/passive
 		
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
+		Utils.feedback("Murdering is on");
 		
 		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
@@ -427,10 +450,11 @@ public class PathingBot extends Bot
 		if(task.running)
 		{
 			task.running = false;
+			Utils.feedback("%s is off", task.label);
 			return;
 		}
 
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
 
 		final InventoryMetaItem toolItem = Utils.locateToolItem(task.toolName);
 		if(toolItem == null)
@@ -443,6 +467,7 @@ public class PathingBot extends Bot
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
 
 		task.running = true;
+		Utils.feedback("%s is on", task.label);
 		final HashSet<Long> ignoredCreatures = new HashSet<>();
 		List<CreatureCellRenderable> creatures;
 		final Cell<CreatureCellRenderable> target = new Cell<>(null);
@@ -818,12 +843,12 @@ public class PathingBot extends Bot
 	
 	static enum Inputs implements Bot.InputKey
 	{
-		speed("Speed", "Set speed at which bot will move, in km/h", "real"),
-		walkto("Walkto", "Walk to given tile coordinates", "x y"),
-		follow("Follow", "Follow the given player", "name"),
-		murder("Murder", "Find and murder nearby creatures", ""),
-		groom("Grooming", "Find and groom nearby creatures", ""),
-		shear("Shear", "Find and shear nearby sheep", ""),
+		speed("Speed", "Set speed at which bot will move, in km/h", "<km/h>"),
+		walkto("Walk To", "Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running", "[<x> <y>]"),
+		follow("Follow", "Follow the player whose name starts with the given text. Without a name it stops following; with a name while following it switches to that player. Needs the bot running", "[<player name>]"),
+		murder("Murder", "Toggle finding and murdering nearby creatures. Needs the bot running", ""),
+		groom("Grooming", "Toggle finding and grooming nearby creatures. Needs the bot running", ""),
+		shear("Shear", "Toggle finding and shearing nearby sheep. Needs the bot running", ""),
 		;
 
 		private final KeyInfo keyInfo;

@@ -13,6 +13,7 @@ import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @BotInfo(name = "Digger", description =
@@ -59,6 +60,28 @@ public class DiggerBot extends Bot{
         digAction = PlayerAction.DIG_TO_PILE;
         workMode = WorkMode.Unknown;
         stepDuration = 1000;
+        staminaThreshold = 0.95f;
+        timeout = 500;
+        clicks = Utils.getMaxActionNumber();
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + clicks);
+        String mode;
+        switch (workMode) {
+            case Digging: mode = "digging to height " + diggingHeightLimit; break;
+            case DiggingTile: mode = "digging tile" + (diggingTileInfo != null ? " (" + diggingTileInfo.x + "," + diggingTileInfo.y + ")" : "") + " to height " + diggingHeightLimit; break;
+            case Levelling: mode = "levelling selected tile"; break;
+            case LevellingArea: mode = "levelling area to height " + diggingHeightLimit; break;
+            default: mode = "none";
+        }
+        lines.add("Mode: " + mode);
+        lines.add("Dig action: " + (digAction != null && digAction.getId() == PlayerAction.DIG_TO_PILE.getId() ? "dig to pile" : "dig"));
+        lines.add("Repair: " + onOff(toolRepairing));
+        lines.add("Surface mining: " + onOff(surfaceMiningMode));
+        lines.add("Shovel: " + (shovelItem != null ? shovelItem.getDisplayName() : "auto (looked up on start)"));
+        areaAssistant.describeSettings(lines);
     }
 
     private void registerEventProcessors() {
@@ -89,9 +112,12 @@ public class DiggerBot extends Bot{
             Utils.consolePrint("Player doesn't have a shovel!");
             return;
         }
-        setStaminaThreshold(0.95f);
-        setTimeout(500);
-        clicks = Utils.getMaxActionNumber();
+        if (surfaceMiningMode && pickaxeItem == null)
+            pickaxeItem = Utils.locateToolItem("pickaxe");
+        if (surfaceMiningMode && pickaxeItem == null) {
+            Utils.consolePrint("Player doesn't have a pickaxe!");
+            return;
+        }
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
         Object progressBar = Utils.getField(creationWindow, "progressBar");
         registerEventProcessors();
@@ -403,10 +429,10 @@ public class DiggerBot extends Bot{
                 return;
             }
             surfaceMiningMode = true;
-            Utils.consolePrint("Surface mining is on!");
+            Utils.feedback("Surface mining is on");
         } else {
             surfaceMiningMode = false;
-            Utils.consolePrint("Surface mining is off!");
+            Utils.feedback("Surface mining is off");
         }
     }
 
@@ -414,106 +440,92 @@ public class DiggerBot extends Bot{
         if (workMode != WorkMode.Levelling) {
             workMode = WorkMode.Levelling;
             levellingDone = false;
-            Utils.consolePrint("The levelling of selected tile is on");
+            Utils.feedback("The levelling of selected tile is on");
         } else {
             workMode = WorkMode.Unknown;
-            Utils.consolePrint("The levelling is off");
+            Utils.feedback("The levelling is off");
         }
     }
 
 
     private void toggleLevellingArea(String [] input) {
-        if (workMode != WorkMode.LevellingArea) {
-            if (input == null || input.length != 1) {
+        if (input == null || input.length == 0) {
+            if (workMode == WorkMode.LevellingArea) {
+                workMode = WorkMode.Unknown;
+                Utils.feedback("The area levelling is off");
+            } else
                 printInputKeyUsageString(DiggerBot.InputKey.la);
-                return;
-            }
-            try {
-                diggingHeightLimit = Integer.parseInt(input[0]);
-            } catch (NumberFormatException e) {
-                Utils.consolePrint("Wrong height value!");
-                return;
-            }
-            workMode = WorkMode.LevellingArea;
-            Utils.consolePrint("The levelling of surrounding area is on");
-            areaAssistant.setMoveRightDistance(1);
-        } else {
-            workMode = WorkMode.Unknown;
-            Utils.consolePrint("The area levelling is off");
+            return;
         }
+        Integer height = parseIntArg(input, DiggerBot.InputKey.la, -100000, 100000);
+        if (height == null)
+            return;
+        diggingHeightLimit = height;
+        workMode = WorkMode.LevellingArea;
+        areaAssistant.setMoveRightDistance(1);
+        Utils.feedback("The levelling of surrounding area to height " + diggingHeightLimit + " is on");
     }
 
     private void toggleDigToPileAction() {
         if (digAction.getId() == PlayerAction.DIG_TO_PILE.getId()) {
             digAction = PlayerAction.DIG;
-            Utils.consolePrint("The " + getClass().getSimpleName() + " will make default \"Dig\" actions");
+            Utils.feedback("The " + getClass().getSimpleName() + " will make default \"Dig\" actions");
         } else {
             digAction = PlayerAction.DIG_TO_PILE;
-            Utils.consolePrint("The " + getClass().getSimpleName() + " will make \"Dig to pile\" actions");
+            Utils.feedback("The " + getClass().getSimpleName() + " will make \"Dig to pile\" actions");
         }
     }
 
     private void toggleDigging(String []input) {
-        if (workMode != WorkMode.Digging) {
-            if (input == null || input.length != 1) {
+        if (input == null || input.length == 0) {
+            if (workMode == WorkMode.Digging) {
+                workMode = WorkMode.Unknown;
+                clearInvalidCorners();
+                Utils.feedback("Digging was disabled");
+            } else
                 printInputKeyUsageString(DiggerBot.InputKey.d);
-                return;
-            }
-            try {
-                diggingHeightLimit = Integer.parseInt(input[0]);
-                workMode = WorkMode.Digging;
-                Utils.consolePrint(this.getClass().getSimpleName() +
-                        " will dig until " + diggingHeightLimit + " height is reached");
-            } catch (NumberFormatException e) {
-                Utils.consolePrint("Wrong height value!");
-            }
-        } else {
-            workMode = WorkMode.Unknown;
-            clearInvalidCorners();
-            Utils.consolePrint("Digging was disabled");
+            return;
         }
+        Integer height = parseIntArg(input, DiggerBot.InputKey.d, -100000, 100000);
+        if (height == null)
+            return;
+        diggingHeightLimit = height;
+        workMode = WorkMode.Digging;
+        Utils.feedback(this.getClass().getSimpleName() +
+                " will dig until " + diggingHeightLimit + " height is reached");
     }
 
     private void toggleTileDiggingMode(String []input) {
-        if (workMode != WorkMode.DiggingTile) {
-            if (input == null || input.length != 1) {
+        if (input == null || input.length == 0) {
+            if (workMode == WorkMode.DiggingTile) {
+                workMode = WorkMode.Unknown;
+                clearInvalidCorners();
+                Utils.feedback("Digging of tile was disabled");
+            } else
                 printInputKeyUsageString(DiggerBot.InputKey.dtile);
-                return;
-            }
-            try {
-                diggingHeightLimit = Integer.parseInt(input[0]);
-            } catch (NumberFormatException e) {
-                Utils.consolePrint("Wrong height value!");
-                return;
-            }
-            try {
-                diggingTileInfo = new DiggingTileInfo();
-                diggingTileInfo.x = (int)(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
-                diggingTileInfo.y = (int)(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
-                workMode = WorkMode.DiggingTile;
-                Utils.consolePrint("The digging of tile (" +diggingTileInfo.x + "," + diggingTileInfo.y + ") is on");
-                areaAssistant.setMoveRightDistance(2);
-            } catch(Exception e) {
-                Utils.consolePrint("Error on turning the tile digging on");
-            }
-        } else {
-            workMode = WorkMode.Unknown;
-            clearInvalidCorners();
-            Utils.consolePrint("Digging of tile was disabled");
+            return;
+        }
+        Integer height = parseIntArg(input, DiggerBot.InputKey.dtile, -100000, 100000);
+        if (height == null)
+            return;
+        try {
+            DiggingTileInfo tileInfo = new DiggingTileInfo();
+            tileInfo.x = (int)(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
+            tileInfo.y = (int)(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
+            diggingHeightLimit = height;
+            diggingTileInfo = tileInfo;
+            workMode = WorkMode.DiggingTile;
+            areaAssistant.setMoveRightDistance(2);
+            Utils.feedback("The digging of tile (" + diggingTileInfo.x + "," + diggingTileInfo.y + ") to height " + diggingHeightLimit + " is on");
+        } catch(Exception e) {
+            Utils.consolePrint("Error on turning the tile digging on");
         }
     }
 
     private void setClicksNumber(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(DiggerBot.InputKey.c);
-        else {
-            try {
-                int clicks = Integer.parseInt(input[0]);
-                setClicks(clicks);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong value!");
-            }
-        }
+        Integer value = parseIntArg(input, DiggerBot.InputKey.c, 1, 100);
+        if (value != null)
+            setClicks(value);
     }
 
     private void setClicks(int clicks) {
@@ -525,13 +537,13 @@ public class DiggerBot extends Bot{
         InventoryMetaItem tool = Utils.selectInventoryTool(new String[]{"shovel"});
         if (tool != null) {
             shovelItem = tool;
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+            Utils.feedback(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }
 
     private void toggleToolRepairing() {
         toolRepairing = !toolRepairing;
-        Utils.consolePrint("The repairing of the tool is " + (toolRepairing ?"on":"off"));
+        Utils.feedback("The repairing of the tool is " + onOff(toolRepairing));
     }
 
     private enum WorkMode{
@@ -548,17 +560,17 @@ public class DiggerBot extends Bot{
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        d("Dig", "Toggle the digging until the specified height is reached", "height(in slopes)"),
-        dtp("Dig To Pile", "Toogle the use of \"Dig to pile\" action", ""),
-        dtile("Tile Digging", "Toggle the digging until the specified height is reached on all 4 corners of current tile", "height(in slopes)"),
-        c("Clicks", "Set the amount of actions the bot will do each time", "c(integer value)"),
+        s("Stamina", "Set the stamina threshold (0 to 1). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        d("Dig", "Dig until the specified height (in slopes) is reached. With a height it sets the height and turns digging on; without one it turns digging off", "[<height>]"),
+        dtp("Dig To Pile", "Toggle the use of \"Dig to pile\" action instead of \"Dig\"", ""),
+        dtile("Tile Digging", "Dig all 4 corners of the current tile until the specified height (in slopes) is reached. With a height it turns tile digging on; without one it turns it off", "[<height>]"),
+        c("Clicks", "Set the amount of actions the bot will do each time", "<clicks>"),
         l("Levelling", "Toggle the levelling of selected tile", ""),
-        la("Area Levelling", "Toggle the levelling of area around player", "height(in slopes)"),
-        tr("Tool Repair", "Toggle the repairing of the tool", ""),
+        la("Area Levelling", "Level the area around player to the specified height (in slopes). With a height it turns area levelling on; without one it turns it off", "[<height>]"),
+        tr("Repair", "Toggle the repairing of the tool", ""),
         sm("Surface Mining", "Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", ""),
-        tool("Tool", "Set the digging tool from selected inventory item.", "tool");
+        tool("Tool", "Set the digging tool from selected inventory item", "");
 
         private final KeyInfo keyInfo;
 
