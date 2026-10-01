@@ -57,7 +57,6 @@ class AreaAssistant {
             else
                 Utils.turnPlayer(90);
             turnedRight = !turnedRight;
-            movedAhead = 0;
         } else
             stopAreaTour();
         try {
