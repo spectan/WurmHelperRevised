@@ -76,11 +76,11 @@ public class BotController {
                 configure(botInstance, args);
             }
         } else if (args[0].equalsIgnoreCase("on")) {
-            // "bot X on <key> <args>" configures the bot right before starting it
-            Bot newBot = getStagedInstance(botClass);
+            // "bot X on <key> <args>" starts the bot, then applies the key, so keys that need
+            // a running bot (e.g. starting a walk) work too
+            Bot newBot = startBot(botClass);
             if (newBot != null && args.length > 1)
                 configure(newBot, Arrays.copyOfRange(args, 1, args.length));
-            startBot(botClass);
         } else if (args[0].equalsIgnoreCase("off")) {
             if (stagedBots.remove(botClass) != null)
                 Utils.consolePrint(botClass.getSimpleName() + " is not running, its pending settings were discarded");
@@ -92,7 +92,7 @@ public class BotController {
             Bot stagedBot = getStagedInstance(botClass);
             if (stagedBot != null) {
                 if (!wasStaged)
-                    Utils.consolePrint(botClass.getSimpleName() + " is off. Settings will apply when you turn it on with \"bot " + abbreviation + " on\"");
+                    Utils.consolePrint(botClass.getSimpleName() + " is not running. Settings you make now are kept for when you turn it on with \"bot " + abbreviation + " on\"");
                 configure(stagedBot, args);
             }
         }
@@ -108,15 +108,16 @@ public class BotController {
         }
     }
 
-    private synchronized void startBot(Class<? extends Bot> botClass) {
+    private synchronized Bot startBot(Class<? extends Bot> botClass) {
         Bot newBot = getInstance(botClass);
         if (newBot == null) {
             Utils.consolePrint("Internal error on bot activation");
-            return;
+            return null;
         }
         newBot.start();
         Utils.feedback(botClass.getSimpleName() + " is on!");
         printBotDescription(botClass);
+        return newBot;
     }
 
     /**

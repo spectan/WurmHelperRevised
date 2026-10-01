@@ -167,14 +167,21 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     }
     
     @Override
-    public synchronized void execute(Runnable task)
+    public void execute(Runnable task)
+    {
+        tryExecute(task);
+    }
+    
+    // queue the task, returning false when the queue is full and the task was dropped
+    synchronized boolean tryExecute(Runnable task)
     {
         if(!oneshotTasks.offer(task))
         {
             Utils.consolePrint("%s: task queue is full, dropping task", getClass().getSimpleName());
-            return;
+            return false;
         }
         notify();
+        return true;
     }
     
     synchronized void schedule(Runnable task, long msecs)
@@ -900,27 +907,34 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     {
         if(syncPositionRunning)
             return;
-        syncPositionRunning = true;
-        execute(this::syncPositionTask);
+        syncPositionRunning = tryExecute(this::syncPositionTask);
     }
     
     void syncPositionTask()
     {
-        if(!syncPosition && !syncHeading)
+        boolean rescheduled = false;
+        try
         {
-            syncPositionRunning = false;
-            return;
+            if(!syncPosition && !syncHeading)
+                return;
+            final float px = syncPosition ? world().getPlayerPosX() : -1;
+            final float py = syncPosition ? world().getPlayerPosY() : -1;
+            final float rx = syncHeading ? world().getPlayerRotX() : Float.NaN;
+            final float ry = syncHeading ? world().getPlayerRotY() : Float.NaN;
+            printExceptions(
+                () -> clients.setPosAndHeading(px, py, rx, ry),
+                "Got %s when setting clients' position: %s"
+            );
+            
+            schedule(this::syncPositionTask, syncDelay);
+            rescheduled = true;
         }
-        final float px = syncPosition ? world().getPlayerPosX() : -1;
-        final float py = syncPosition ? world().getPlayerPosY() : -1;
-        final float rx = syncHeading ? world().getPlayerRotX() : Float.NaN;
-        final float ry = syncHeading ? world().getPlayerRotY() : Float.NaN;
-        printExceptions(
-            () -> clients.setPosAndHeading(px, py, rx, ry),
-            "Got %s when setting clients' position: %s"
-        );
-        
-        schedule(this::syncPositionTask, syncDelay);
+        finally
+        {
+            // let syncpos/synclook start the loop again if it ended for any reason
+            if(!rescheduled)
+                syncPositionRunning = false;
+        }
     }
     
     @Override

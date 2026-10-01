@@ -457,9 +457,10 @@ public class AssistantBot extends Bot {
                     int actions = 0;
                     for (GroundItemCellRenderable item: corpses) {
                         final long id = item.getId();
-                        corpseTimes.putIfAbsent(id, now);
+                        // the console thread may clear corpseTimes at any time, so don't read it back
+                        final Long firstSeen = corpseTimes.putIfAbsent(id, now);
                         
-                        if (now - corpseTimes.get(id) > buryDelay) {
+                        if (now - (firstSeen != null ? firstSeen : now) > buryDelay) {
                             serverConnection.sendAction(
                                 needsPickaxeToBury(item) ? pickaxe : shovel,
                                 new long[]{item.getId()},
@@ -868,14 +869,11 @@ public class AssistantBot extends Bot {
      */
     private void handleCasting(String[] input) {
         Enchant enchant = null;
-        if (input != null && input.length > 0) {
-            if (input.length != 1) {
-                printInputKeyUsageString(InputKey.c);
-                return;
-            }
-            enchant = Enchant.find(input[0]);
+        String spellName = joinArgs(input);
+        if (spellName != null) {
+            enchant = Enchant.find(spellName);
             if (enchant == null) {
-                Utils.consolePrint("Unknown spell `" + input[0] + "`, see " + InputKey.ls.name());
+                Utils.consolePrint("Unknown spell `" + spellName + "`, see " + InputKey.ls.name());
                 return;
             }
         }
