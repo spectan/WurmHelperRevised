@@ -25,7 +25,8 @@ import java.util.*;
         abbreviation = "i")
 public class ImproverBot extends Bot {
     private List<Tool> tools = new ArrayList<>();
-    private List<InventoryListComponent> targets = new ArrayList<>();
+    // changed from the console thread while the bot thread iterates it
+    private final List<InventoryListComponent> targets = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile boolean improveActionFinished;
     private boolean groundMode;
     /**
@@ -41,6 +42,9 @@ public class ImproverBot extends Bot {
         registerInputHandler(ImproverBot.InputKey.g, this::toggleGroundMode);
         registerInputHandler(ImproverBot.InputKey.ci, input -> changeInstrument());
         registerInputHandler(ImproverBot.InputKey.ss, this::setToolSkill);
+        registerInputHandler(ImproverBot.InputKey.ct, input -> clearTargets());
+        staminaThreshold = 0.8f;
+        timeout = 300;
 
         tools.add(new Tool(1201, "carving knife", true, false, new HashSet<>(Arrays.asList(ToolSkill.CARPENTRY))));
         tools.add(new Tool(741, "mallet", true, false, new HashSet<>(Arrays.asList(ToolSkill.CARPENTRY, ToolSkill.LEATHERWORKING))));
@@ -88,9 +92,26 @@ public class ImproverBot extends Bot {
     }
 
     @Override
+    void describeSettings(List<String> lines) {
+        List<String> targetNames = new ArrayList<>();
+        for (InventoryListComponent ilc : targets)
+            targetNames.add(inventoryName(ilc));
+        lines.add("Target inventories: " + (targetNames.isEmpty() ? "none" : String.join(", ", targetNames)));
+        lines.add("Ground mode: " + onOff(groundMode));
+        ToolSkill skill = toolSkill;
+        lines.add("Skill: " + (skill == ToolSkill.UNKNOWN ? "by the material of the improved item" : skill.name()));
+    }
+
+    /**
+     * @return the name of the inventory window's root item, for messages
+     */
+    private static String inventoryName(InventoryListComponent ilc) {
+        InventoryMetaItem rootItem = ilc != null ? Utils.getRootItem(ilc) : null;
+        return rootItem != null ? rootItem.getDisplayName() : "unknown inventory";
+    }
+
+    @Override
     public void work() throws Exception{
-        setStaminaThreshold(0.8f);
-        setTimeout(300);
         registerEventProcessors();
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
         while (isActive()) {
@@ -320,6 +341,7 @@ public class ImproverBot extends Bot {
         for(Tool tool : tools) {
             if(instrument.getBaseName().contains(tool.name)) {
                 printShortToolInfo(instrument);
+                Utils.feedback("\"" + instrument.getDisplayName() + "\" will be used as " + tool.name);
                 tool.itemId = instrument.getId();
                 for(Tool anotherTool : tools)
                     if (!anotherTool.equals(tool) && anotherTool.improveIconId == tool.improveIconId)
@@ -344,26 +366,21 @@ public class ImproverBot extends Bot {
         }
         if (ToolSkill.UNKNOWN.abbreviation.equals(input[0])) {
             this.toolSkill = ToolSkill.UNKNOWN;
-            Utils.consolePrint("The skill will be determined by the material of improved item");
+            Utils.feedback("The skill will be determined by the material of improved item");
             return;
         }
         ToolSkill toolSkill = ToolSkill.getByAbbreviation(input[0]);
         if (toolSkill == ToolSkill.UNKNOWN) {
-            Utils.consolePrint("Unknown skill abbreviation!");
+            Utils.consolePrint("Unknown skill abbreviation! Use the \"" + ImproverBot.InputKey.ls.name() + "\" key to list the skills");
         } else {
             this.toolSkill = toolSkill;
-            Utils.consolePrint("The skill was set to " + toolSkill.name());
+            Utils.feedback("The skill was set to " + toolSkill.name());
         }
     }
 
     private void toggleGroundMode(String input[]) {
-        if (groundMode) {
-            groundMode = false;
-            Utils.consolePrint("Ground mode is off!");
-        } else {
-            groundMode = true;
-            Utils.consolePrint("Ground mode is on!");
-        }
+        groundMode = !groundMode;
+        Utils.feedback("Ground mode is " + onOff(groundMode));
     }
 
     private void addTarget() {
@@ -379,17 +396,27 @@ public class ImproverBot extends Bot {
             Utils.consolePrint("Unable to get inventory information");
             return;
         }
+        if (targets.contains(ilc)) {
+            Utils.consolePrint("The inventory \"" + inventoryName(ilc) + "\" is already a target");
+            return;
+        }
         targets.add(ilc);
-        Utils.consolePrint("A new inventory was added");
+        Utils.feedback("Added the inventory \"" + inventoryName(ilc) + "\" (" + targets.size() + " target(s) now)");
+    }
+
+    private void clearTargets() {
+        targets.clear();
+        Utils.feedback("Cleared the target inventories");
     }
 
     enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        at("Add Target", "Add new inventory(under mouse cursor). Selected items in this inventory will be improved.", ""),
+                "<threshold>"),
+        at("Add Target", "Add the inventory under the mouse cursor. Selected items in this inventory will be improved.", ""),
+        ct("Clear Targets", "Remove all target inventories", ""),
         ls("List Skills", "List available improving skills", ""),
         ss("Set Skill", "Set the skill. Only tools from that skill will be used. You can list available skills using \"" + ls.name() + "\" key. " +
-                "Use \"" + ToolSkill.UNKNOWN.abbreviation + "\" to determine the skill by the material of improved item(default)", "skill_abbreviation"),
+                "Use \"" + ToolSkill.UNKNOWN.abbreviation + "\" to determine the skill by the material of improved item (default)", "<skill abbreviation>"),
         g("Ground", "Toggle the ground mode. Set the skill first by \"" + ss.name() + "\" key", ""),
         ci("Change Instrument", "Change previously chosen instrument by tool selected in player's inventory", "");
 

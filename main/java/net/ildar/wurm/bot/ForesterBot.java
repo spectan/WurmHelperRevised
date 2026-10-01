@@ -67,14 +67,30 @@ public class ForesterBot extends Bot {
         registerInputHandler(ForesterBot.InputKey.ctb, input -> clearTreeBlacklist());
         registerInputHandler(ForesterBot.InputKey.asb, this::addSproutBlacklist);
         registerInputHandler(ForesterBot.InputKey.csb, input -> clearSproutBlacklist());
+        staminaThreshold = 0.95f;
+        timeout = 300;
+        maxActions = Utils.getMaxActionNumber();
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + maxActions);
+        lines.add("Harvesting: " + onOff(harvesting));
+        lines.add("Planting: " + onOff(planting));
+        lines.add("Cut sprouts from all trees: " + onOff(cutAllSprouts) + (cutAllSprouts ? "" : " (very old only)"));
+        lines.add("Cut shriveled trees: " + onOff(shriveledTreesChopping));
+        lines.add("Deforestation: " + onOff(deforesting));
+        lines.add("Container name: " + containerName);
+        lines.add("Extra items to move: " + (itemNamesToMove.isEmpty() ? "none" : String.join(", ", itemNamesToMove)));
+        lines.add("Tree whitelist: " + (treeWhitelist.isEmpty() ? "none (all trees)" : String.join(", ", treeWhitelist)));
+        lines.add("Tree blacklist: " + (treeBlacklist.isEmpty() ? "none" : String.join(", ", treeBlacklist)));
+        lines.add("Sprout blacklist: " + (sproutBlacklist.isEmpty() ? "none" : String.join(", ", sproutBlacklist)));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception {
-        setStaminaThreshold(0.95f);
-        setTimeout(300);
         World world = WurmHelper.hud.getWorld();
-        maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
         InventoryMetaItem bucket = Utils.locateToolItem("bucket");
         lastActionFinishedTime = System.currentTimeMillis();
@@ -271,58 +287,49 @@ public class ForesterBot extends Bot {
     }
 
     private void addItemToMove(String []input) {
-        if (input == null || input.length != 1) {
+        List<String> names = parseNameList(input);
+        if (names.isEmpty()) {
             printInputKeyUsageString(ForesterBot.InputKey.aim);
             return;
         }
-        itemNamesToMove.add(input[0]);
-        Utils.consolePrint("Items with name \"" + input[0] + "\" will be moved to containers");
+        itemNamesToMove.addAll(names);
+        Utils.consolePrint("Items with name \"" + String.join("\", \"", names) + "\" will be moved to containers");
     }
 
     private void setMaxActions(String [] input) {
-        if (input == null || input.length != 1 ){
-            printInputKeyUsageString(ForesterBot.InputKey.na);
+        Integer value = parseIntArg(input, ForesterBot.InputKey.na, 1, 100);
+        if (value == null)
             return;
-        }
-        try {
-            maxActions = Integer.parseInt(input[0]);
-            Utils.consolePrint("Maximum actions was set " + maxActions);
-        } catch (Exception e) {
-            Utils.consolePrint("Wrong max actions value!");
-        }
+        maxActions = value;
+        Utils.consolePrint("Maximum actions was set " + maxActions);
     }
 
     private void setContainerName(String []input) {
-        if (input == null || input.length != 1 ){
+        String name = joinArgs(input);
+        if (name == null) {
             printInputKeyUsageString(ForesterBot.InputKey.scn);
             return;
         }
-        containerName = input[0];
-        Utils.consolePrint("Container name was set to \"" + containerName + "\"");
+        containerName = name;
+        Utils.feedback("Container name was set to \"" + containerName + "\"");
     }
 
     private void togglePlanting() {
         planting = !planting;
-        if (planting)
-            Utils.consolePrint("Planting is on!");
-        else
-            Utils.consolePrint("Planting is off!");
+        Utils.feedback("Planting is " + onOff(planting));
     }
 
     private void toggleHarvesting() {
         harvesting = !harvesting;
-        if (harvesting)
-            Utils.consolePrint("Harvesting is on!");
-        else
-            Utils.consolePrint("Harvesting is off!");
+        Utils.feedback("Harvesting is " + onOff(harvesting));
     }
 
     private void toggleAllTreesCutting() {
         cutAllSprouts = !cutAllSprouts;
         if (cutAllSprouts)
-            Utils.consolePrint(this.getClass().getSimpleName() + " will cut sprouts from trees and bushes of any age");
+            Utils.feedback(this.getClass().getSimpleName() + " will cut sprouts from trees and bushes of any age");
         else
-            Utils.consolePrint(this.getClass().getSimpleName() + " will cut sprouts only from very old trees and bushes");
+            Utils.feedback(this.getClass().getSimpleName() + " will cut sprouts only from very old trees and bushes");
     }
 
     private void actionFinished() {
@@ -354,10 +361,11 @@ public class ForesterBot extends Bot {
                 hatchetId = hatchet.getId();
                 Utils.consolePrint(this.getClass().getSimpleName() + " will use " + hatchet.getDisplayName() + " to chop shriveled trees.");
                 Utils.consolePrint("QL:" + hatchet.getQuality() + " DMG:" + hatchet.getDamage());
+                Utils.feedback("Auto chopping shriveled trees is on");
             }
         } else {
             shriveledTreesChopping = false;
-            Utils.consolePrint("Auto chopping shriveled trees is off");
+            Utils.feedback("Auto chopping shriveled trees is off");
         }
     }
 
@@ -372,15 +380,15 @@ public class ForesterBot extends Bot {
                 hatchetId = hatchet.getId();
                 Utils.consolePrint(this.getClass().getSimpleName() + " will use " + hatchet.getDisplayName() + " to chop trees.");
                 Utils.consolePrint("QL:" + hatchet.getQuality() + " DMG:" + hatchet.getDamage());
-                Utils.consolePrint("Deforesting is on!");
+                Utils.feedback("Deforesting is on");
                 if (planting) {
                     planting = false;
-                    Utils.consolePrint("Planting is off!");
+                    Utils.feedback("Planting is off");
                 }
             }
         }
         else
-            Utils.consolePrint("Deforesting is off!");
+            Utils.feedback("Deforesting is off");
     }
 
     private boolean isTreeAllowed(String treeType)
@@ -415,14 +423,13 @@ public class ForesterBot extends Bot {
     
     private void addTreeWhitelist(String[] args)
     {
-        if(args == null || args.length == 0)
+        if(joinArgs(args) == null)
         {
             printInputKeyUsageString(InputKey.atw);
             return;
         }
         
-        String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: treeNames)
+        for(String name: parseNameList(args))
             treeWhitelist.add(name.toLowerCase());
         
         Utils.consolePrint(
@@ -439,14 +446,13 @@ public class ForesterBot extends Bot {
     
     private void addTreeBlacklist(String[] args)
     {
-        if(args == null || args.length == 0)
+        if(joinArgs(args) == null)
         {
             printInputKeyUsageString(InputKey.atb);
             return;
         }
         
-        String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: treeNames)
+        for(String name: parseNameList(args))
             treeBlacklist.add(name.toLowerCase());
         
         Utils.consolePrint(
@@ -463,14 +469,13 @@ public class ForesterBot extends Bot {
     
     private void addSproutBlacklist(String[] args)
     {
-        if(args == null || args.length == 0)
+        if(joinArgs(args) == null)
         {
             printInputKeyUsageString(InputKey.asb);
             return;
         }
         
-        String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: treeNames)
+        for(String name: parseNameList(args))
             sproutBlacklist.add(name.toLowerCase());
         
         Utils.consolePrint(
@@ -487,20 +492,20 @@ public class ForesterBot extends Bot {
 
     enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
+                "<threshold>"),
         ca("Cut All Sprouts", "Toggle the cutting of sprouts from all trees", ""),
         cs("Cut Shriveled", "Toggle the cutting of shriveled trees", ""),
         df("Deforestation", "Toggle the cutting of all trees (deforestation)", ""),
         h("Harvest Mode", "Toggle the harvesting", ""),
         p("Planting", "Toggle the planting", ""),
-        scn("Container Name", "Set the new name for containers to put sprouts/harvest", "container_name"),
-        na("Max Actions", "Set the number of actions bot will do each time", "number"),
-        aim("Add Move Item", "Add new item name for moving into containers", "item_name"),
-        atw("Add Tree Whitelist", "Add whitelisted tree type", "tree_name"),
+        scn("Container Name", "Set the name of the containers to put sprouts/harvest in (may contain spaces)", "<container name>"),
+        na("Clicks", "Set the number of actions bot will do each time", "<clicks>"),
+        aim("Add Item", "Add item name(s), separated by commas, to move into the containers along with sprouts", "<item name>[, <item name>...]"),
+        atw("Add Tree Whitelist", "Add whitelisted tree type(s), separated by commas. When the whitelist is not empty only those trees are processed", "<tree name>[, <tree name>...]"),
         ctw("Clear Tree Whitelist", "Clear whitelisted tree types", ""),
-        atb("Add Tree Blacklist", "Add blacklisted tree type", "tree_name"),
+        atb("Add Tree Blacklist", "Add blacklisted tree type(s), separated by commas. Those trees are skipped", "<tree name>[, <tree name>...]"),
         ctb("Clear Tree Blacklist", "Clear blacklisted tree types", ""),
-        asb("Add Sprout Blacklist", "Add blacklisted tree type for sprout picking", "tree_name"),
+        asb("Add Sprout Blacklist", "Add tree type(s), separated by commas, to not pick sprouts from", "<tree name>[, <tree name>...]"),
         csb("Clear Sprout Blacklist", "Clear blacklisted tree types for sprout picking", "");
 
         private final KeyInfo keyInfo;

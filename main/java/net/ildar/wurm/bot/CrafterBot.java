@@ -52,12 +52,51 @@ public class CrafterBot extends Bot {
         registerInputHandler(CrafterBot.InputKey.an, this::setActionNumber);
         registerInputHandler(CrafterBot.InputKey.noan, input -> toggleActionNumberChecks());
         registerInputHandler(CrafterBot.InputKey.s1s, input -> toggleSingleSourceItemMode());
+        staminaThreshold = 0.96f;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        String target;
+        if (craftUnfinishedItemMode)
+            target = "the top of the \"Needed items\" list (unfinished mode)";
+        else if (targetX != 0 && targetY != 0)
+            target = "items at screen point X " + targetX + " Y " + targetY;
+        else
+            target = targetName != null ? targetName : "not set (kept from the crafting window)";
+        lines.add("Target: " + target);
+        String source;
+        if (sourceX != 0 && sourceY != 0)
+            source = "items at screen point X " + sourceX + " Y " + sourceY;
+        else
+            source = sourceName != null ? sourceName : "not set (kept from the crafting window)";
+        lines.add("Source: " + source);
+        lines.add("Repair: " + onOff(repairInstrument));
+        lines.add("Sort by weight: " + onOff(!noSort));
+        lines.add("Combine targets: " + onOff(combineTargets) + ", combine sources: " + onOff(combineSources)
+                + (combineTimeout > 0 ? " (every " + combineTimeout + " ms)" : ""));
+        lines.add("Single source item: " + onOff(singleSourceItemMode));
+        lines.add("Check action queue: " + onOff(!withoutActionsInUse));
+    }
+
+    /**
+     * @return the names of the items at the given screen point of the inventory, for messages
+     */
+    private static String describeItemsAtPoint(int x, int y) {
+        try {
+            List<InventoryMetaItem> items = Utils.getInventoryItemsAtPoint(x, y);
+            if (items == null || items.isEmpty())
+                return "no items there yet";
+            String name = items.get(0).getDisplayName();
+            return items.size() == 1 ? name : name + " and " + (items.size() - 1) + " more";
+        } catch (Exception e) {
+            return "unknown items";
+        }
     }
 
     @Override
     @SuppressWarnings("ConstantConditions")
     public void work() throws Exception{
-        setStaminaThreshold(0.96f);
         long lastSourceCombineTime = 0;
         long lastTargetCombineTime = 0;
 
@@ -178,28 +217,26 @@ public class CrafterBot extends Bot {
     private void toggleActionNumberChecks() {
         withoutActionsInUse = !withoutActionsInUse;
         if (withoutActionsInUse) {
-            Utils.consolePrint(this.getClass().getSimpleName() + " will NOT check action queue");
+            Utils.feedback(this.getClass().getSimpleName() + " will NOT check action queue");
         } else {
-            Utils.consolePrint(this.getClass().getSimpleName() + " will check action queue");
+            Utils.feedback(this.getClass().getSimpleName() + " will check action queue");
         }
     }
 
     private void toggleSingleSourceItemMode() {
         singleSourceItemMode = !singleSourceItemMode;
-        Utils.consolePrint("Single source item mode is " + (singleSourceItemMode?"on":"off"));
+        Utils.feedback("Single source item mode is " + onOff(singleSourceItemMode));
     }
 
     private void setActionNumber(String input[]) {
-        if(input == null || input.length != 1) {
-            printInputKeyUsageString(CrafterBot.InputKey.an);
+        Integer num = parseIntArg(input, CrafterBot.InputKey.an, 1, 100);
+        if (num == null)
             return;
-        }
-
         try {
-            int num = Integer.parseInt(input[0]);
             CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
             Utils.setField(creationWindow, "selectedActions", num);
-        } catch (NumberFormatException | ReflectiveOperationException e) {
+            Utils.feedback("The crafting window will do " + num + " action(s) per click");
+        } catch (ReflectiveOperationException e) {
             Utils.consolePrint("Can't set an action number");
         }
     }
@@ -226,7 +263,7 @@ public class CrafterBot extends Bot {
             Method requestCreationList = ReflectionUtil.getMethod(creationWindow.getClass(), "requestCreationList");
             requestCreationList.setAccessible(true);
             requestCreationList.invoke(creationWindow);
-
+            Utils.feedback("The source slot was set to \"" + sourceItem.getDisplayName() + "\" (id " + id + ")");
         } catch (Exception e) {
             Utils.consolePrint("Can't set new source item with provided id");
         }
@@ -237,23 +274,17 @@ public class CrafterBot extends Bot {
             targetName = null;
             targetX = targetY = 0;
             craftUnfinishedItemMode = true;
-            Utils.consolePrint("The unfinished item crafting mode is on!");
+            Utils.feedback("The unfinished item crafting mode is on");
         } else {
             craftUnfinishedItemMode = false;
-            Utils.consolePrint("The unfinished item crafting mode is off!");
+            Utils.feedback("The unfinished item crafting mode is off");
         }
     }
 
     private void setCombineTimeout(String input[]) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(CrafterBot.InputKey.ctimeout);
-            return;
-        }
-        try {
-            setCombineTimeout(Long.parseLong(input[0]));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong timeout value");
-        }
+        Integer value = parseIntArg(input, CrafterBot.InputKey.ctimeout, 100, 3600000);
+        if (value != null)
+            setCombineTimeout(value);
     }
 
     private void setCombineTimeout(long timeout) {
@@ -264,73 +295,69 @@ public class CrafterBot extends Bot {
     private void toggleSourcesCombining() {
         combineSources = !combineSources;
         if (combineSources) {
-            Utils.consolePrint("Source combining is on!");
+            Utils.feedback("Source combining is on");
             if (combineTimeout == 0)
                 setCombineTimeout(10000);
         } else
-            Utils.consolePrint("Source combining is off!");
+            Utils.feedback("Source combining is off");
     }
 
     private void toggleTargetsCombining() {
         combineTargets = !combineTargets;
         if (combineTargets) {
-            Utils.consolePrint("Target combining is on!");
+            Utils.feedback("Target combining is on");
             if (combineTimeout == 0)
                 setCombineTimeout(10000);
         } else
-            Utils.consolePrint("Target combining is off!");
+            Utils.feedback("Target combining is off");
     }
 
     private void toggleSorting() {
         noSort = !noSort;
         if (noSort)
-            Utils.consolePrint(this.getClass().getSimpleName() + " will NOT sort the targets and sources by weight");
+            Utils.feedback(this.getClass().getSimpleName() + " will NOT sort the targets and sources by weight");
         else
-            Utils.consolePrint(this.getClass().getSimpleName() + " will sort the targets and sources by weight");
+            Utils.feedback(this.getClass().getSimpleName() + " will sort the targets and sources by weight");
     }
 
     private void setTargetName(String input[]) {
-        if(input == null || input.length == 0) {
+        String target = joinArgs(input);
+        if (target == null) {
             printInputKeyUsageString(CrafterBot.InputKey.st);
             return;
         }
-        StringBuilder target = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            target.append(" ").append(input[i]);
-        setTargetName(target.toString());
+        setTargetName(target);
     }
 
     private void setSourceName(String input[]) {
-        if(input == null || input.length == 0) {
+        String source = joinArgs(input);
+        if (source == null) {
             printInputKeyUsageString(CrafterBot.InputKey.ss);
             return;
         }
-        StringBuilder source = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            source.append(" ").append(input[i]);
-        setSourceName(source.toString());
+        setSourceName(source);
     }
 
     private void toggleRepairInstrument(){
         repairInstrument = !repairInstrument;
-        if (repairInstrument)
-            Utils.consolePrint("Instrument auto repairing is on!");
-        else
-            Utils.consolePrint("Instrument auto repairing is off!");
+        Utils.feedback("Instrument auto repairing is " + onOff(repairInstrument));
     }
 
     private void setTargetName(String t) {
         if (t != null && t.length() > 0) {
-            Utils.consolePrint("New target item name is - " + t);
             targetName = t;
+            // the fixed point would override the name
+            targetX = targetY = 0;
+            Utils.feedback("New target item name is - " + t);
         } else
             Utils.consolePrint("Can't set empty target item name");
     }
 
     private void setSourceName(String t) {
         if (t != null && t.length() > 0) {
-            Utils.consolePrint("New source item name is - " + t);
             sourceName = t;
+            sourceX = sourceY = 0;
+            Utils.feedback("New source item name is - " + t);
         } else
             Utils.consolePrint("Can't set empty source item name");
     }
@@ -339,34 +366,34 @@ public class CrafterBot extends Bot {
         targetX = WurmHelper.hud.getWorld().getClient().getXMouse();
         targetY = WurmHelper.hud.getWorld().getClient().getYMouse();
         targetName = null;
-        Utils.consolePrint("The target was set to X - " + targetX + " Y - " + targetY);
+        Utils.feedback("The target was set to X - " + targetX + " Y - " + targetY + " (" + describeItemsAtPoint(targetX, targetY) + ")");
     }
 
     private void setSourceXY() {
         sourceX = WurmHelper.hud.getWorld().getClient().getXMouse();
         sourceY = WurmHelper.hud.getWorld().getClient().getYMouse();
         sourceName = null;
-        Utils.consolePrint("The source was set to X - " + sourceX + " Y - " + sourceY);
+        Utils.feedback("The source was set to X - " + sourceX + " Y - " + sourceY + " (" + describeItemsAtPoint(sourceX, sourceY) + ")");
     }
 
     private enum InputKey implements Bot.InputKey {
-        r("Toggle Repairing", "Toggle the source item repairing(on the left side of crafting window). " +
+        r("Repair", "Toggle the source item repairing (on the left side of crafting window). " +
                 "Usually it is an instrument. When the source item gets 10% damage player will repair it automatically", ""),
-        st("Set Target", "Set the target item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the target slot(on the right side of crafting window)",
-                "target_name"),
+        st("Set Target", "Set the target item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the target slot(on the right side of crafting window). The name may contain spaces",
+                "<item name>"),
         stxy("Target XY", "Set the target item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the target item slot(on the right side of crafting window)", ""),
-        ss("Add Source", "Set the source item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the source slot(on the left side of crafting window)",
-                "source_name"),
+        ss("Set Source", "Set the source item name. " + CrafterBot.class.getSimpleName()+ " will place item with provided name from your inventory to the source slot(on the left side of crafting window). The name may contain spaces",
+                "<item name>"),
         ssxy("Source XY", "Set the source item fixed point. " + CrafterBot.class.getSimpleName()+ " will place item from that fixed point of screen to the source item slot(on the left side of crafting window)", ""),
         nosort("Toggle Sorting", "Sorting of source and target items by weight is disabled by default. This key toggles sorting on and off", ""),
         cs("Combine Sources", "Combine source items(on the left side of crafting window)", ""),
         ct("Combine Targets", "Combine target items(on the right side of crafting window)", ""),
-        ctimeout("Combine Timeout", "Set the timeout for item combining", "timeout(in milliseconds)"),
+        ctimeout("Combine Timeout", "Set the timeout for item combining in milliseconds", "<milliseconds>"),
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
+                "<threshold>"),
         u("Unfinished Mode", "Toggle the special mode in which " + CrafterBot.class.getSimpleName() + " will place an item to the target item slot which is at the top of \"Needed items\" list", ""),
-        ssid("Source By ID", "Set an item with provided id to the source slot(on the left side of crafting window)", "id"),
-        an("Action Number", "Set an action number. The number of crafting operations the player will do on each click on continue/create button", "number"),
+        ssid("Source By ID", "Set an item with provided id to the source slot(on the left side of crafting window)", "<item id>"),
+        an("Clicks", "Set an action number. The number of crafting operations the player will do on each click on continue/create button", "<clicks>"),
         noan("Toggle Action Check", "Toggles the check for action queue state before the start of each crafting operation. " +
                 "By default " + CrafterBot.class.getSimpleName() + " will check action queue and start crafting operations only when it is empty", ""),
         s1s("Single Source", "Toggles the setting of single item to source slot of crafting window", "");

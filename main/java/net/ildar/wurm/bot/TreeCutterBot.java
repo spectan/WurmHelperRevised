@@ -61,12 +61,23 @@ public class TreeCutterBot extends Bot{
         sproutingTreeCutting = true;
         minTreeAge=TreeAge.any;
         treeType="";
+        staminaThreshold = 0.96f;
+        maxActions = Utils.getMaxActionNumber();
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + maxActions);
+        lines.add("Tree types: " + (treeType.isEmpty() ? "all" : treeType));
+        lines.add("Minimal tree age: " + minTreeAge.name);
+        lines.add("Bush cutting: " + onOff(bushCutting));
+        lines.add("Sprouting trees cutting: " + onOff(sproutingTreeCutting));
+        lines.add("Tool: " + (selectedTool != null ? selectedTool.getDisplayName() : "a hatchet from the inventory (looked up on start)"));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception {
-        setStaminaThreshold(0.96f);
-        setMaxActions(Utils.getMaxActionNumber());
         World world = WurmHelper.hud.getWorld();
         lastActionFinishedTime = System.currentTimeMillis();
 
@@ -194,55 +205,47 @@ public class TreeCutterBot extends Bot{
     }
 
     private void setTreeType(String[] strings) {
-        if (strings == null ) {
+        String types = joinArgs(strings);
+        if (types == null) {
             printInputKeyUsageString(TreeCutterBot.InputKey.tt);
             return;
         }
-
-        treeType = String.join(" ", strings).toLowerCase();
-        Utils.consolePrint("The bot cut " +treeType);
+        types = types.toLowerCase();
+        if (types.equals("all") || types.equals("any")) {
+            treeType = "";
+            Utils.feedback("The bot will cut all tree types");
+            return;
+        }
+        treeType = types;
+        Utils.feedback("The bot will cut " + treeType);
     }
     private void toggleBushCutting() {
         bushCutting=!bushCutting;
-        if (bushCutting)
-            Utils.consolePrint("Bushes cutting is on!");
-        else
-            Utils.consolePrint("Bushes cutting is off!");
+        Utils.feedback("Bush cutting is " + onOff(bushCutting));
     }
     private void toggleSproutingTreeCutting() {
         sproutingTreeCutting = !sproutingTreeCutting;
-        if (sproutingTreeCutting)
-            Utils.consolePrint("Sprouting trees cutting is on!");
-        else
-            Utils.consolePrint("Sprouting trees cutting is off!");
+        Utils.feedback("Sprouting trees cutting is " + onOff(sproutingTreeCutting));
     }
     private void setMinAge(String[] input) {
-        if (input == null || input.length != 1) {
+        String ageName = joinArgs(input);
+        if (ageName == null) {
             printInputKeyUsageString(TreeCutterBot.InputKey.a);
             return;
         }
-        TreeAge age = TreeAge.getByNameOrAbbreviation(input[0]);
+        TreeAge age = TreeAge.getByNameOrAbbreviation(ageName.toLowerCase());
         if (age == null) {
-            Utils.consolePrint("Unknown tree age \"" + input[0] + "\". Use the \"" + InputKey.al.name() + "\" key to list the ages");
+            Utils.consolePrint("Unknown tree age \"" + ageName + "\". Use the \"" + InputKey.al.name() + "\" key to list the ages");
             return;
         }
         minTreeAge = age;
-        Utils.consolePrint("Minimal tree age set to " +minTreeAge.name+"!");
+        Utils.feedback("Minimal tree age set to " + minTreeAge.name);
     }
 
     private void setMaxActions(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(TreeCutterBot.InputKey.c);
+        Integer num = parseIntArg(input, TreeCutterBot.InputKey.c, 1, 100);
+        if (num == null)
             return;
-        }
-        try {
-            setMaxActions(Integer.parseInt(input[0]));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Invalid max actions value: " + input[0]);
-        }
-    }
-
-    private void setMaxActions(int num){
         this.maxActions = num;
         Utils.consolePrint(getClass().getSimpleName() + " will do " + maxActions + " chops each time");
     }
@@ -252,7 +255,7 @@ public class TreeCutterBot extends Bot{
         if (tool != null) {
             selectedTool = tool;
             toolId = tool.getId();
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+            Utils.feedback(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }
 
@@ -264,12 +267,12 @@ public class TreeCutterBot extends Bot{
 
     private enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        tt("Tree Type", "Set tree types for chopping. Chop all trees by default", "birch oak"),
-        c("Clicks", "Set chops number", "1"),
-        a("Age Limit", "Set minimal tree age for chopping. Chop all trees by default", "ov"),
-        tool("Tool", "Set the cutting tool from selected inventory item.", "tool"),
-        al("Age List", "Get ages abbreviation list", ""),
+                "<threshold>"),
+        tt("Tree Type", "Set tree types for chopping, e.g. \"birch oak\" or \"birch, oak\". Use \"all\" to chop all trees again (the default)", "<tree types>"),
+        c("Clicks", "Set the number of chops queued each time", "<clicks>"),
+        a("Age Limit", "Set minimal tree age for chopping by name or abbreviation, e.g. \"ov\" or \"old\" (see the \"al\" key). Chop all trees by default", "<age>"),
+        tool("Tool", "Use the item selected in your inventory as the cutting tool (a hatchet is looked up on start otherwise)", ""),
+        al("Age List", "Show the tree ages and their abbreviations", ""),
         b("Bush Cutting", "Toggle bush cutting. Enabled by default", ""),
         sp("Sprout Cutting", "Toggle sprouting trees cutting. Enabled by default", "");
 
