@@ -159,10 +159,10 @@ public class AssistantBot extends Bot {
         registerInputHandler(AssistantBot.InputKey.groom, input -> toggleGrooming());
         registerInputHandler(AssistantBot.InputKey.v, input -> toggleVerbosity());
         registerInputHandler(AssistantBot.InputKey.pave,
-            input -> pave(false, String.join(" ", input).toLowerCase())
+            input -> pave(false, input == null ? "" : String.join(" ", input).toLowerCase())
         );
         registerInputHandler(AssistantBot.InputKey.pavec,
-            input -> pave(true, String.join(" ", input).toLowerCase())
+            input -> pave(true, input == null ? "" : String.join(" ", input).toLowerCase())
         );
         registerInputHandler(AssistantBot.InputKey.paveclear, input -> paveClear());
         registerInputHandler(AssistantBot.InputKey.notarget, input -> toggleNotarget());
@@ -1352,7 +1352,13 @@ public class AssistantBot extends Bot {
         ;
     }
     
-    private HashMap<String, HashSet<Long>> usedPavers = new HashMap<>();
+    /**
+     * How long a sent paver stays reserved even when no action shows as queued,
+     * covering the round trip before the server reports the action
+     */
+    private static final long PAVER_PENDING_MS = 2000;
+    /** item name -> (paver id -> time the pave action was sent) */
+    private final HashMap<String, HashMap<Long, Long>> usedPavers = new HashMap<>();
     private void pave(boolean corner, String itemName)
     {
         if(itemName == null || itemName.length() == 0)
@@ -1363,8 +1369,19 @@ public class AssistantBot extends Bot {
         
         final InventoryListComponent plyInventory = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         final List<InventoryMetaItem> items = Utils.getInventoryItems(plyInventory, itemName);
-        final HashSet<Long> used = usedPavers.computeIfAbsent(itemName, _k -> new HashSet<>());
-        items.removeIf(item -> used.contains(item.getId()));
+        final HashMap<Long, Long> used = usedPavers.computeIfAbsent(itemName, _k -> new HashMap<>());
+        // A paver is reserved as soon as its action is sent, so repeated presses pick fresh items while
+        // earlier ones are still queued. Consumed pavers leave the inventory and are forgotten. One that
+        // is still here once nothing is queued was rejected by the server (e.g. a tile that can't be
+        // paved) and becomes usable again.
+        final HashSet<Long> inventoryIds = new HashSet<>();
+        for (InventoryMetaItem item : items)
+            inventoryIds.add(item.getId());
+        final boolean busy = hasQueuedActions();
+        final long now = System.currentTimeMillis();
+        used.entrySet().removeIf(e -> !inventoryIds.contains(e.getKey())
+            || (!busy && now - e.getValue() > PAVER_PENDING_MS));
+        items.removeIf(item -> used.containsKey(item.getId()));
         if(items.isEmpty())
         {
             final String msg = String.format("Couldn't find any items named `%s`", itemName);
@@ -1389,14 +1406,23 @@ public class AssistantBot extends Bot {
             action = corner ? PlayerAction.PAVE_CORNER : PlayerAction.PAVE;
         
         final long nextPaver = items.iterator().next().getId();
-        used.add(nextPaver);
+        used.put(nextPaver, now);
         WurmHelper.hud.getWorld().getServerConnection().sendAction(nextPaver, new long[]{target.getId()}, action);
+    }
+    
+    private boolean hasQueuedActions()
+    {
+        try {
+            return WurmHelper.hud.getCreationWindow().getActionInUse() > 0 || !isProgressZero();
+        } catch (Exception e) {
+            // can't tell, keep the reservations
+            return true;
+        }
     }
     
     private void paveClear()
     {
-        for(HashSet<Long> set: usedPavers.values())
-            set.clear();
+        usedPavers.clear();
         Utils.consolePrint("Paver usage history cleared");
     }
     
