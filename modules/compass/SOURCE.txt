@@ -1,0 +1,3 @@
+Upstream: https://github.com/bdew-wurm/compass
+Commit: bf504e95831e14aca5c5321b1b5f4d4299e618c2
+License: LGPL

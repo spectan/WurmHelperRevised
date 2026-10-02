@@ -1,0 +1,3 @@
+Upstream: https://github.com/Snidor/FreecamMod
+Commit: 8e04ee6d99724971bf04aad34159c8442af02227
+License: PERMISSION
