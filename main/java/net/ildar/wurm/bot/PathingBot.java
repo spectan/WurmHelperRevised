@@ -377,7 +377,7 @@ public class PathingBot extends Bot
 						(int)(_target.getXPos() / 4f),
 						(int)(_target.getYPos() / 4f)
 					);
-					WalkStatus res = walkPath(targetPos);
+					WalkStatus res = walkPathToCreature(targetPos);
 					if(res == WalkStatus.noPath)
 					{
 						ignoredCreatures.add(target.getId());
@@ -587,7 +587,7 @@ public class PathingBot extends Bot
 					(int)(target.val.getXPos() / 4f),
 					(int)(target.val.getYPos() / 4f)
 				);
-				WalkStatus res = walkPath(targetPos);
+				WalkStatus res = walkPathToCreature(targetPos);
 				if(res == WalkStatus.noPath)
 				{
 					ignoredCreatures.add(target.val.getId());
@@ -734,6 +734,27 @@ public class PathingBot extends Bot
 		return WalkStatus.complete;
 	}
 	
+	// finds and then moves along an unobstructed path from current tile to given tile
+	WalkStatus walkPathToCreature(Supplier<Vec2i> target)
+	{
+		WalkStatus res = walkPath(target);
+		if(res != WalkStatus.noPath)
+			return res;
+		// creatures ignore the slope/terrain rules the collision cache enforces, so the
+		// target's own tile can be unreachable; any neighbor is close enough to act from
+		final Vec2i center = target.get();
+		for(Dir dir: Dir.values())
+		{
+			if(dir == Dir.all)
+				continue;
+			final Vec2i neighbor = new Vec2i(center.x + dir.offset.x, center.y + dir.offset.y);
+			res = walkPath(() -> neighbor);
+			if(res != WalkStatus.noPath)
+				return res;
+		}
+		return WalkStatus.noPath;
+	}
+
 	// finds and then moves along an unobstructed path from current tile to given tile
 	WalkStatus walkPath(Supplier<Vec2i> target)
 	{
