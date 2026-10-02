@@ -3,6 +3,8 @@ package net.ildar.wurm.bot;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 
+import java.util.List;
+
 class AreaAssistant {
     private final static int STEPS_IN_MOVE = 5;//each moving is divided to this number of steps for each tile
 
@@ -57,7 +59,6 @@ class AreaAssistant {
             else
                 Utils.turnPlayer(90);
             turnedRight = !turnedRight;
-            movedAhead = 0;
         } else
             stopAreaTour();
         try {
@@ -102,6 +103,10 @@ class AreaAssistant {
 
     private void stopAreaTour() {
         Utils.showOnScreenMessage("Area tour is ended");
+        resetAreaTour();
+    }
+
+    private void resetAreaTour() {
         height = 0;
         width = 0;
         movedAhead = 0;
@@ -136,78 +141,89 @@ class AreaAssistant {
         this.moveStrategy = moveStrategy;
     }
 
+    /**
+     * Without arguments: stop the running tour (or print usage when there is none).
+     * With a size: start a tour of that size. While a tour runs, the same size stops it (so one keybind
+     * toggles the tour) and a different size resizes it
+     */
     void toggleAreaTour(String[] input) {
-        if (areaTourActivated()) {
-            stopAreaTour();
-        } else  {
-            if (input != null && input.length == 2) {
-                try {
-                    startAreaTour(Integer.parseInt(input[0]), Integer.parseInt(input[1]));
-                    Utils.consolePrint("Activated area mode for " + bot.getClass().getSimpleName());
-                } catch (NumberFormatException e) {
-                    Utils.consolePrint("Wrong area size!");
-                    bot.printInputKeyUsageString(InputKey.area);
-                }
-            }
-            else
+        if (!bot.requireRunning()) return;
+        String botName = bot.getClass().getSimpleName();
+        if (input == null || input.length == 0) {
+            if (areaTourActivated()) {
+                resetAreaTour();
+                Utils.feedback("Area mode is off for " + botName);
+            } else
                 bot.printInputKeyUsageString(InputKey.area);
+            return;
+        }
+        if (input.length != 2) {
+            bot.printInputKeyUsageString(InputKey.area);
+            return;
+        }
+        int tilesForward, tilesToRight;
+        try {
+            tilesForward = Integer.parseInt(input[0]);
+            tilesToRight = Integer.parseInt(input[1]);
+        } catch (NumberFormatException e) {
+            Utils.consolePrint("Wrong area size! Both values must be whole numbers");
+            bot.printInputKeyUsageString(InputKey.area);
+            return;
+        }
+        if (tilesForward < 1 || tilesToRight < 1) {
+            Utils.consolePrint("Wrong area size! Both values must be at least 1");
+            bot.printInputKeyUsageString(InputKey.area);
+            return;
+        }
+        if (areaTourActivated() && tilesForward == height && tilesToRight == width) {
+            resetAreaTour();
+            Utils.feedback("Area mode is off for " + botName);
+        } else if (areaTourActivated()) {
+            // keep the start point and the progress, only the bounds change
+            height = tilesForward;
+            width = tilesToRight;
+            Utils.feedback(String.format("Area mode for %s resized to %d tiles ahead x %d tiles to the right",
+                    botName, tilesForward, tilesToRight));
+        } else {
+            startAreaTour(tilesForward, tilesToRight);
+            Utils.feedback(String.format("Area mode is on for %s: %d tiles ahead x %d tiles to the right",
+                    botName, tilesForward, tilesToRight));
         }
     }
 
-    private void setAreaModeSpeed(String []input) {
-        if (input == null || input.length != 1) {
-            bot.printInputKeyUsageString(InputKey.area_speed);
+    private void setAreaModeSpeed(String[] input) {
+        Float speed = bot.parseFloatArg(input, InputKey.area_speed, 0.01f, 100f);
+        if (speed == null)
             return;
-        }
-        float speed;
-        try {
-            speed = Float.parseFloat(input[0]);
-            if (speed < 0) {
-                Utils.consolePrint("Speed can not be negative");
-                return;
-            }
-            if (speed == 0) {
-                Utils.consolePrint("Speed can not be equal to 0");
-                return;
-            }
-            this.stepTimeout = (long) (1000 / speed);
-            Utils.consolePrint(String.format("The speed for area mode was set to %.2f", speed));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong speed value");
-        }
+        this.stepTimeout = (long) (1000 / speed);
+        Utils.consolePrint(String.format("The speed for area mode was set to %.2f tiles per second", speed));
+    }
+
+    /**
+     * Add the area mode settings to the owning bot's status lines
+     */
+    void describeSettings(List<String> lines) {
+        if (areaTourActivated())
+            lines.add(String.format("Area mode: on (%d tiles ahead x %d tiles to the right)", height, width));
+        else
+            lines.add("Area mode: off");
+        lines.add(String.format("Area speed: %.2f tiles per second", 1000f / stepTimeout));
     }
 
     private enum InputKey implements Bot.InputKey {
-        area("Area Mode", "Toggle the area processing mode. ", "tiles_ahead tiles_to_the_right"),
-        area_speed("Area Speed", "Set the speed of moving for area mode. Default value is 1 second per tile.", "speed(float value)");
+        area("Area Mode", "Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. " +
+                "While it is running, the same size (or no arguments) stops it and a different size resizes it", "[<tiles ahead> <tiles to the right>]"),
+        area_speed("Area Speed", "Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second.", "<tiles per second>");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final Bot.KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new Bot.KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public Bot.KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

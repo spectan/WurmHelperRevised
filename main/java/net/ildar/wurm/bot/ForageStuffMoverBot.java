@@ -1,12 +1,19 @@
 package net.ildar.wurm.bot;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
+import com.wurmonline.client.renderer.PickableUnit;
+import com.wurmonline.client.renderer.gui.InventoryListComponent;
+import com.wurmonline.client.renderer.gui.InventoryWindow;
+import com.wurmonline.client.renderer.gui.ItemListWindow;
+import com.wurmonline.client.renderer.gui.WurmComponent;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 @BotInfo(name = "Forage Stuff Mover", description =
@@ -14,9 +21,10 @@ import java.util.stream.Collectors;
         "Optionally you can toggle the moving of rocks or rare items on and off.",
         abbreviation = "fsm")
 public class ForageStuffMoverBot extends Bot {
-    private List<Long> targets = new ArrayList<>();
-    private boolean moveRareItems;
-    private boolean notMoveRocks;
+    private final List<Long> targets = new CopyOnWriteArrayList<>();
+    private final Map<Long, String> targetNames = new ConcurrentHashMap<>();
+    private volatile boolean moveRareItems;
+    private volatile boolean notMoveRocks;
 
     public ForageStuffMoverBot() {
         registerInputHandler(ForageStuffMoverBot.InputKey.at, input -> addTarget());
@@ -25,7 +33,18 @@ public class ForageStuffMoverBot extends Bot {
     }
 
     @Override
+    void describeSettings(List<String> lines) {
+        if (targets.isEmpty())
+            lines.add("Target: none (hover over a container and use \"at\")");
+        else
+            lines.add("Target: " + targetNames.getOrDefault(targets.get(0), String.valueOf(targets.get(0))));
+        lines.add("Move rare items: " + onOff(moveRareItems));
+        lines.add("Move rocks: " + onOff(!notMoveRocks));
+    }
+
+    @Override
     public void work() throws Exception{
+        String lastStatus = null;
         while (isActive()) {
             waitOnPause();
             List<InventoryMetaItem> foragables = Utils.getSelectedItems(WurmHelper.hud.getInventoryWindow().getInventoryListComponent(), true, true);
@@ -34,15 +53,19 @@ public class ForageStuffMoverBot extends Bot {
                     .filter(item -> moveRareItems || item.getRarity() == 0)
                     .limit(100)
                     .collect(Collectors.toList());
+            String status = null;
             if (moveList.size() == 0) {
-                Utils.consolePrint("Nothing to move");
+                status = "Nothing to move";
             } else if (targets.size() == 0) {
-                Utils.consolePrint("No target containers to move to");
+                status = "No target containers to move to";
             } else {
                 long[] moveIds = Utils.getItemIds(moveList);
-                for (long target : targets)
-                    WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(target, moveIds);
+                // sending the same items to every target would just shuffle them into the last one
+                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(targets.get(0), moveIds);
             }
+            if (status != null && !status.equals(lastStatus))
+                Utils.consolePrint(status);
+            lastStatus = status;
             sleep(timeout);
         }
     }
@@ -53,53 +76,61 @@ public class ForageStuffMoverBot extends Bot {
         long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
         if (targets != null && targets.length > 0) {
             long target = targets[0];
+            String name = getTargetName(target, x, y);
+            // a new target replaces the previous one (items used to end up in the last target added)
+            targetNames.clear();
+            targetNames.put(target, name);
+            this.targets.clear();
             this.targets.add(target);
-            Utils.consolePrint("New target is " + target);
+            Utils.feedback("New target is " + name);
         } else
-            Utils.consolePrint("Can't find the target");
+            Utils.consolePrint("Can't find the target. Hover the mouse over a container and try again");
+    }
+
+    /**
+     * Find a readable name for the hovered target: a world object or an item in an opened inventory window
+     */
+    private String getTargetName(long target, int x, int y) {
+        try {
+            PickableUnit hovered = WurmHelper.hud.getWorld().getCurrentHoveredObject();
+            if (hovered != null && hovered.getId() == target)
+                return hovered.getHoverName();
+            WurmComponent window = Utils.getComponentAtPoint(x, y, c -> c instanceof ItemListWindow || c instanceof InventoryWindow);
+            if (window != null) {
+                InventoryListComponent ilc = Utils.getField(window, "component");
+                for (InventoryMetaItem item : Utils.getInventoryItemsAtPoint(ilc, x, y))
+                    if (item.getId() == target)
+                        return item.getDisplayName();
+            }
+        } catch (Exception ignored) {
+        }
+        return "item " + target;
     }
 
     private void toggleMovingRareItems() {
         moveRareItems = !moveRareItems;
-        Utils.consolePrint("Rare items will be " + (moveRareItems?"":"NOT") + " moved");
+        Utils.feedback("Rare items will " + (moveRareItems ? "" : "NOT ") + "be moved");
     }
 
     private void toggleMovingRocks() {
         notMoveRocks = !notMoveRocks;
-        Utils.consolePrint("Rocks will be " + (notMoveRocks?"NOT":"") + " moved");
+        Utils.feedback("Rocks will " + (notMoveRocks ? "NOT " : "") + "be moved");
     }
 
     enum InputKey implements Bot.InputKey {
-        at("Add Target", "Add new target item. Foragable and botanizable items will be moved to that destination", ""),
+        at("Set Target", "Set the container under the mouse as the target. Foragable and botanizable items will be moved to it. Using it again switches to the new container", ""),
         r("Toggle Rares", "Toggle moving of rare items", ""),
         mr("Toggle Rocks", "Toggle moving of rocks", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

@@ -1,6 +1,5 @@
 package net.ildar.wurm.bot;
 
-import com.wurmonline.client.game.PlayerObj;
 import com.wurmonline.client.game.World;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.mesh.FoliageAge;
@@ -13,6 +12,7 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,15 +27,15 @@ import java.util.stream.Collectors;
         "Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. ",
         abbreviation = "fr")
 public class ForesterBot extends Bot {
-    static String DEFAULT_CONTAINER_NAME = "backpack";
-    private float staminaThreshold;
+    private static final String DEFAULT_CONTAINER_NAME = "backpack";
     private int maxActions;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
 
     private long hatchetId;
-    private List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
+    // modified from both the bot thread and chat callbacks; compound operations synchronize on the list
+    private final List<Pair<Integer, Integer>> queuedTiles = Collections.synchronizedList(new ArrayList<>());
 
-    private long lastActionFinishedTime;
+    private volatile long lastActionFinishedTime;
 
     private String containerName = DEFAULT_CONTAINER_NAME;
     private List<String> itemNamesToMove= new ArrayList<>();
@@ -49,10 +49,10 @@ public class ForesterBot extends Bot {
     private boolean planting;
     private boolean shriveledTreesChopping;
     private boolean deforesting;
-    private int toHarvest;
+    private volatile int toHarvest;
 
     public ForesterBot() {
-        registerInputHandler(ForesterBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ForesterBot.InputKey.s);
         registerInputHandler(ForesterBot.InputKey.ca, input -> toggleAllTreesCutting());
         registerInputHandler(ForesterBot.InputKey.cs, input -> toggleShriveledTreesChopping());
         registerInputHandler(ForesterBot.InputKey.df, input -> toggleDeforestation());
@@ -67,15 +67,30 @@ public class ForesterBot extends Bot {
         registerInputHandler(ForesterBot.InputKey.ctb, input -> clearTreeBlacklist());
         registerInputHandler(ForesterBot.InputKey.asb, this::addSproutBlacklist);
         registerInputHandler(ForesterBot.InputKey.csb, input -> clearSproutBlacklist());
+        staminaThreshold = 0.95f;
+        timeout = 300;
+        maxActions = Utils.getMaxActionNumber();
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + maxActions);
+        lines.add("Harvesting: " + onOff(harvesting));
+        lines.add("Planting: " + onOff(planting));
+        lines.add("Cut sprouts from all trees: " + onOff(cutAllSprouts) + (cutAllSprouts ? "" : " (very old only)"));
+        lines.add("Cut shriveled trees: " + onOff(shriveledTreesChopping));
+        lines.add("Deforestation: " + onOff(deforesting));
+        lines.add("Container name: " + containerName);
+        lines.add("Extra items to move: " + (itemNamesToMove.isEmpty() ? "none" : String.join(", ", itemNamesToMove)));
+        lines.add("Tree whitelist: " + (treeWhitelist.isEmpty() ? "none (all trees)" : String.join(", ", treeWhitelist)));
+        lines.add("Tree blacklist: " + (treeBlacklist.isEmpty() ? "none" : String.join(", ", treeBlacklist)));
+        lines.add("Sprout blacklist: " + (sproutBlacklist.isEmpty() ? "none" : String.join(", ", sproutBlacklist)));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception {
-        setStaminaThreshold(0.95f);
-        setTimeout(300);
         World world = WurmHelper.hud.getWorld();
-        PlayerObj player = world.getPlayer();
-        maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
         InventoryMetaItem bucket = Utils.locateToolItem("bucket");
         lastActionFinishedTime = System.currentTimeMillis();
@@ -102,7 +117,10 @@ public class ForesterBot extends Bot {
                 int checkedtiles[][] = Utils.getAreaCoordinates();
                 int tileIndex = -1;
                 Set<Long> usedSprouts = new HashSet<>();
-                while (++tileIndex < 9 && queuedTiles.size() + toHarvest < maxActions && toHarvest <= maxActions) {
+                List<InventoryMetaItem> plantableSprouts = null;
+                InventoryMetaItem shovel = null;
+                boolean shovelSearched = false;
+                while (++tileIndex < 9 && queuedTiles.size() + toHarvest < maxActions) {
                     Pair<Integer, Integer> coordsPair = new Pair<>(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1]);
                     if (queuedTiles.contains(coordsPair))
                         continue;
@@ -154,26 +172,28 @@ public class ForesterBot extends Bot {
                         }
                     }
                     if (planting && (tileType.isGrass() || tileType.tilename.equals("Mycelium") || tileType.tilename.equals("Dirt"))) {
-                        List<InventoryMetaItem> sprouts = Utils.getInventoryItems("sprout")
-                                .stream()
-                                .filter(item -> (item.getRarity() == 0))
-                                .collect(Collectors.toList());
-                        if (sprouts != null && sprouts.size() > 0) {
-                            for (InventoryMetaItem sprout : sprouts) {
-                                if (!usedSprouts.contains(sprout.getId())) {
-                                    world.getServerConnection().sendAction(sprout.getId(),
-                                            new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
-                                            PlayerAction.PLANT_CENTER);
-                                    usedSprouts.add(sprout.getId());
-                                    queuedTiles.add(coordsPair);
-                                    lastActionFinishedTime = System.currentTimeMillis();
-                                    break;
-                                }
+                        if (plantableSprouts == null)
+                            plantableSprouts = Utils.getInventoryItems("sprout")
+                                    .stream()
+                                    .filter(item -> (item.getRarity() == 0))
+                                    .collect(Collectors.toList());
+                        for (InventoryMetaItem sprout : plantableSprouts) {
+                            if (!usedSprouts.contains(sprout.getId())) {
+                                world.getServerConnection().sendAction(sprout.getId(),
+                                        new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
+                                        PlayerAction.PLANT_CENTER);
+                                usedSprouts.add(sprout.getId());
+                                queuedTiles.add(coordsPair);
+                                lastActionFinishedTime = System.currentTimeMillis();
+                                break;
                             }
                         }
                     }
                     if (planting && (tileType.tilename.equals("Steppe")||tileType.tilename.equals("Moss"))) {
-                        InventoryMetaItem shovel = Utils.locateToolItem("shovel");
+                        if (!shovelSearched) {
+                            shovel = Utils.locateToolItem("shovel");
+                            shovelSearched = true;
+                        }
                         if (shovel != null) {
                             world.getServerConnection().sendAction(shovel.getId(),
                                     new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
@@ -186,25 +206,22 @@ public class ForesterBot extends Bot {
                 if (queuedTiles.size() == 0 && toHarvest == 0 && areaAssistant.areaTourActivated())
                     areaAssistant.areaNextPosition();
 
-                List<InventoryMetaItem> sprouts =
-                        Utils.getFirstLevelItems()
+                List<InventoryMetaItem> firstLevelItems = Utils.getFirstLevelItems();
+                List<InventoryMetaItem> sprouts = firstLevelItems
                         .stream()
                         .filter(this::itemShouldBeMoved)
                         .collect(Collectors.toList());
-                if (sprouts != null && sprouts.size() > 0) {
-                    List<InventoryMetaItem> containers = Utils.getFirstLevelItems().stream()
+                if (sprouts.size() > 0) {
+                    List<InventoryMetaItem> containers = firstLevelItems.stream()
                             .filter(item->item.getBaseName().contains(containerName))
                             .collect(Collectors.toList());
-                    if (containers != null && containers.size() > 0)
-                        for (InventoryMetaItem container : containers)
-                            if (container.getChildren() != null && container.getChildren().size() < 100) {
-                                long[] sproutIds = new long[sprouts.size()];
-                                for (tileIndex = 0; tileIndex < sprouts.size(); tileIndex++)
-                                    sproutIds[tileIndex] = sprouts.get(tileIndex).getId();
-                                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
-                                        container.getId(), sproutIds);
-                                break;
-                            }
+                    for (InventoryMetaItem container : containers)
+                        if (container.getChildren() != null && container.getChildren().size() < 100) {
+                            long[] sproutIds = sprouts.stream().mapToLong(InventoryMetaItem::getId).toArray();
+                            WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
+                                    container.getId(), sproutIds);
+                            break;
+                        }
                 }
             }
             sleep(timeout);
@@ -230,7 +247,7 @@ public class ForesterBot extends Bot {
                         || message.contains("It does not make sense to prune")
                         || message.contains("You prune the ") || message.contains("You stop pruning")
                         || message.contains("You stop picking") || message.contains("has no sprout to pick")
-                        || message.contains("has no sprout to pick") || message.contains("You stop cutting down.")
+                        || message.contains("You stop cutting down.")
                         || message.contains("You cut down the ") || message.contains("You plant the sprout.")
                         || message.contains("You chip away some wood")
                         || message.contains("The ground is cultivated and ready to sow now.")),
@@ -239,7 +256,7 @@ public class ForesterBot extends Bot {
                 this::harvestedSomething);
     }
 
-    private void increaseHarvests(FoliageAge fage) {
+    private synchronized void increaseHarvests(FoliageAge fage) {
         float f = WurmHelper.hud.getWorld().getPlayer().getSkillSet().getSkillValue("forestry");
         int maxHarvest = 1;
         if (f > 80)
@@ -263,78 +280,73 @@ public class ForesterBot extends Bot {
         }
     }
 
-    private void harvestedSomething() {
+    private synchronized void harvestedSomething() {
         if (--toHarvest < 0)
             toHarvest = 0;
         lastActionFinishedTime = System.currentTimeMillis();
     }
 
     private void addItemToMove(String []input) {
-        if (input == null || input.length != 1) {
+        List<String> names = parseNameList(input);
+        if (names.isEmpty()) {
             printInputKeyUsageString(ForesterBot.InputKey.aim);
             return;
         }
-        itemNamesToMove.add(input[0]);
-        Utils.consolePrint("Items with name \"" + input[0] + "\" will be moved to containers");
+        itemNamesToMove.addAll(names);
+        Utils.consolePrint("Items with name \"" + String.join("\", \"", names) + "\" will be moved to containers");
     }
 
     private void setMaxActions(String [] input) {
-        if (input.length != 1 ){
-            printInputKeyUsageString(ForesterBot.InputKey.na);
+        Integer value = parseIntArg(input, ForesterBot.InputKey.na, 1, 100);
+        if (value == null)
             return;
-        }
-        try {
-            maxActions = Integer.parseInt(input[0]);
-            Utils.consolePrint("Maximum actions was set " + maxActions);
-        } catch (Exception e) {
-            Utils.consolePrint("Wrong max actions value!");
-        }
+        maxActions = value;
+        Utils.consolePrint("Maximum actions was set " + maxActions);
     }
 
     private void setContainerName(String []input) {
-        if (input.length != 1 ){
+        String name = joinArgs(input);
+        if (name == null) {
             printInputKeyUsageString(ForesterBot.InputKey.scn);
             return;
         }
-        containerName = input[0];
-        Utils.consolePrint("Container name was set to \"" + containerName + "\"");
+        containerName = name;
+        Utils.feedback("Container name was set to \"" + containerName + "\"");
     }
 
     private void togglePlanting() {
         planting = !planting;
-        if (planting)
-            Utils.consolePrint("Planting is on!");
-        else
-            Utils.consolePrint("Planting is off!");
+        Utils.feedback("Planting is " + onOff(planting));
     }
 
     private void toggleHarvesting() {
         harvesting = !harvesting;
-        if (harvesting)
-            Utils.consolePrint("Harvesting is on!");
-        else
-            Utils.consolePrint("Harvesting is off!");
+        Utils.feedback("Harvesting is " + onOff(harvesting));
     }
 
     private void toggleAllTreesCutting() {
         cutAllSprouts = !cutAllSprouts;
         if (cutAllSprouts)
-            Utils.consolePrint(this.getClass().getSimpleName() + " will cut sprouts from trees and bushes of any age");
+            Utils.feedback(this.getClass().getSimpleName() + " will cut sprouts from trees and bushes of any age");
         else
-            Utils.consolePrint(this.getClass().getSimpleName() + " will cut sprouts only from very old trees and bushes");
+            Utils.feedback(this.getClass().getSimpleName() + " will cut sprouts only from very old trees and bushes");
     }
 
     private void actionFinished() {
-        if (queuedTiles.size() > 0) {
-            queuedTiles.remove(0);
-            lastActionFinishedTime = System.currentTimeMillis();
+        synchronized (queuedTiles) {
+            if (queuedTiles.size() > 0) {
+                queuedTiles.remove(0);
+                lastActionFinishedTime = System.currentTimeMillis();
+            }
         }
     }
 
     private void actionNotQueued() {
-        if (queuedTiles.size() > 0) {
-            queuedTiles.remove(queuedTiles.size()  - 1);
-            lastActionFinishedTime = System.currentTimeMillis();
+        synchronized (queuedTiles) {
+            if (queuedTiles.size() > 0) {
+                queuedTiles.remove(queuedTiles.size()  - 1);
+                lastActionFinishedTime = System.currentTimeMillis();
+            }
         }
         toHarvest = 0;
     }
@@ -349,10 +361,11 @@ public class ForesterBot extends Bot {
                 hatchetId = hatchet.getId();
                 Utils.consolePrint(this.getClass().getSimpleName() + " will use " + hatchet.getDisplayName() + " to chop shriveled trees.");
                 Utils.consolePrint("QL:" + hatchet.getQuality() + " DMG:" + hatchet.getDamage());
+                Utils.feedback("Auto chopping shriveled trees is on");
             }
         } else {
             shriveledTreesChopping = false;
-            Utils.consolePrint("Auto chopping shriveled trees is off");
+            Utils.feedback("Auto chopping shriveled trees is off");
         }
     }
 
@@ -367,35 +380,17 @@ public class ForesterBot extends Bot {
                 hatchetId = hatchet.getId();
                 Utils.consolePrint(this.getClass().getSimpleName() + " will use " + hatchet.getDisplayName() + " to chop trees.");
                 Utils.consolePrint("QL:" + hatchet.getQuality() + " DMG:" + hatchet.getDamage());
-                Utils.consolePrint("Deforesting is on!");
+                Utils.feedback("Deforesting is on");
                 if (planting) {
                     planting = false;
-                    Utils.consolePrint("Planting is off!");
+                    Utils.feedback("Planting is off");
                 }
             }
         }
         else
-            Utils.consolePrint("Deforesting is off!");
+            Utils.feedback("Deforesting is off");
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ForesterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-    
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-    
     private boolean isTreeAllowed(String treeType)
     {
         if(!treeWhitelist.isEmpty())
@@ -428,15 +423,14 @@ public class ForesterBot extends Bot {
     
     private void addTreeWhitelist(String[] args)
     {
-        if(args.length == 0)
+        if(joinArgs(args) == null)
         {
             printInputKeyUsageString(InputKey.atw);
             return;
         }
         
-        String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: treeNames)
-            treeWhitelist.add(name);
+        for(String name: parseNameList(args))
+            treeWhitelist.add(name.toLowerCase());
         
         Utils.consolePrint(
             "Bot will only work on trees of type: %s",
@@ -452,15 +446,14 @@ public class ForesterBot extends Bot {
     
     private void addTreeBlacklist(String[] args)
     {
-        if(args.length == 0)
+        if(joinArgs(args) == null)
         {
             printInputKeyUsageString(InputKey.atb);
             return;
         }
         
-        String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: treeNames)
-            treeBlacklist.add(name);
+        for(String name: parseNameList(args))
+            treeBlacklist.add(name.toLowerCase());
         
         Utils.consolePrint(
             "Bot will skip working on tree types: %s",
@@ -476,15 +469,14 @@ public class ForesterBot extends Bot {
     
     private void addSproutBlacklist(String[] args)
     {
-        if(args.length == 0)
+        if(joinArgs(args) == null)
         {
             printInputKeyUsageString(InputKey.asb);
             return;
         }
         
-        String[] treeNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: treeNames)
-            sproutBlacklist.add(name);
+        for(String name: parseNameList(args))
+            sproutBlacklist.add(name.toLowerCase());
         
         Utils.consolePrint(
             "Bot will skip picking sprouts from tree types: %s",
@@ -500,48 +492,31 @@ public class ForesterBot extends Bot {
 
     enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
+                "<threshold>"),
         ca("Cut All Sprouts", "Toggle the cutting of sprouts from all trees", ""),
         cs("Cut Shriveled", "Toggle the cutting of shriveled trees", ""),
         df("Deforestation", "Toggle the cutting of all trees (deforestation)", ""),
         h("Harvest Mode", "Toggle the harvesting", ""),
-        p("Path To", "Toggle the planting", ""),
-        scn("Container Name", "Set the new name for containers to put sprouts/harvest", "container_name"),
-        na("Max Actions", "Set the number of actions bot will do each time", "number"),
-        aim("Add Move Item", "Add new item name for moving into containers", "item_name"),
-        atw("Add Tree Whitelist", "Add whitelisted tree type", "tree_name"),
+        p("Planting", "Toggle the planting", ""),
+        scn("Container Name", "Set the name of the containers to put sprouts/harvest in (may contain spaces)", "<container name>"),
+        na("Clicks", "Set the number of actions bot will do each time", "<clicks>"),
+        aim("Add Item", "Add item name(s), separated by commas, to move into the containers along with sprouts", "<item name>[, <item name>...]"),
+        atw("Add Tree Whitelist", "Add whitelisted tree type(s), separated by commas. When the whitelist is not empty only those trees are processed", "<tree name>[, <tree name>...]"),
         ctw("Clear Tree Whitelist", "Clear whitelisted tree types", ""),
-        atb("Add Tree Blacklist", "Add blacklisted tree type", "tree_name"),
+        atb("Add Tree Blacklist", "Add blacklisted tree type(s), separated by commas. Those trees are skipped", "<tree name>[, <tree name>...]"),
         ctb("Clear Tree Blacklist", "Clear blacklisted tree types", ""),
-        asb("Add Sprout Blacklist", "Add blacklisted tree type for sprout picking", "tree_name"),
+        asb("Add Sprout Blacklist", "Add tree type(s), separated by commas, to not pick sprouts from", "<tree name>[, <tree name>...]"),
         csb("Clear Sprout Blacklist", "Clear blacklisted tree types for sprout picking", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

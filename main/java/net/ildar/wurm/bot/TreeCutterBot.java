@@ -1,7 +1,6 @@
 package net.ildar.wurm.bot;
 
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
-import com.wurmonline.client.game.PlayerObj;
 import com.wurmonline.client.game.World;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.GroundItemData;
@@ -17,18 +16,17 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 @BotInfo(name = "Tree Cutter", description =
         "Cuts trees",
         abbreviation = "tc")
 public class TreeCutterBot extends Bot{
-    private float staminaThreshold;
     private int maxActions;
 
     private TreeAge minTreeAge;
@@ -38,15 +36,16 @@ public class TreeCutterBot extends Bot{
 
     private long toolId;
     private InventoryMetaItem selectedTool;
-    private long lastActionFinishedTime;
-    private Byte[] sproutingAgeId = {7,9,11,13};
+    private volatile long lastActionFinishedTime;
+    private static final int[] SPROUTING_AGE_IDS = {7,9,11,13};
     private static final String[] VALID_TOOLS = {"hatchet", "small axe", "axe", "huge axe", "longsword", "two handed sword", "short sword", "shovel", "pickaxe", "sickle", "rake", "scythe"};
 
     private AreaAssistant areaAssistant = new AreaAssistant(this);
-    private List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
+    // modified from both the bot thread and chat callbacks; compound operations synchronize on the list
+    private final List<Pair<Integer, Integer>> queuedTiles = Collections.synchronizedList(new ArrayList<>());
 
     public TreeCutterBot(){
-        registerInputHandler(InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(InputKey.s);
         registerInputHandler(InputKey.c, this::setMaxActions);
         registerInputHandler(InputKey.a, this::setMinAge);
         registerInputHandler(InputKey.tool, input -> selectTool());
@@ -62,14 +61,24 @@ public class TreeCutterBot extends Bot{
         sproutingTreeCutting = true;
         minTreeAge=TreeAge.any;
         treeType="";
+        staminaThreshold = 0.96f;
+        maxActions = Utils.getMaxActionNumber();
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + maxActions);
+        lines.add("Tree types: " + (treeType.isEmpty() ? "all" : treeType));
+        lines.add("Minimal tree age: " + minTreeAge.name);
+        lines.add("Bush cutting: " + onOff(bushCutting));
+        lines.add("Sprouting trees cutting: " + onOff(sproutingTreeCutting));
+        lines.add("Tool: " + (selectedTool != null ? selectedTool.getDisplayName() : "a hatchet from the inventory (looked up on start)"));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception {
-        setStaminaThreshold(0.96f);
-        setMaxActions(Utils.getMaxActionNumber());
         World world = WurmHelper.hud.getWorld();
-        PlayerObj player = world.getPlayer();
         lastActionFinishedTime = System.currentTimeMillis();
 
         if (selectedTool == null) {
@@ -98,37 +107,13 @@ public class TreeCutterBot extends Bot{
             if (hasStamina(staminaThreshold) && queuedTiles.size() == 0) {
                 int checkedtiles[][] = Utils.getAreaCoordinates();
                 int tileIndex = -1;
+                Set<Long> hiveTiles = getHiveTileIds(sscc);
 
                 while (++tileIndex < 9 && queuedTiles.size() < maxActions){
                     Pair<Integer, Integer> coordsPair = new Pair<>(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1]);
                     if (queuedTiles.contains(coordsPair))
                         continue;
 
-                    Map<Long, GroundItemCellRenderable> beeItems = Utils.getField(sscc, "groundItems");
-                    for(int tries = 0; tries < 5; tries++) {
-                        try {
-                            beeItems = beeItems.entrySet().stream().filter(entry -> {
-                                try {
-                                    GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");
-                                    return groundItemData.getName().contains("hive");
-                                } catch (Exception e) {
-                                    Utils.consolePrint(e.getMessage());
-                                }
-                                return false;
-                            }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                            break;
-                        } catch(ConcurrentModificationException err) {
-                            if(tries < 4)
-                                continue;
-                            else {
-                                Utils.consolePrint(
-                                    "%s: Unable to find beehive items due to repeated ConcurrentModificationException",
-                                    TreeCutterBot.class.getSimpleName()
-                                );
-                                beeItems = Collections.emptyMap();
-                            }
-                        }
-                    }
                     Tiles.Tile tileType = world.getNearTerrainBuffer().getTileType(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1]);
                     byte tileData = world.getNearTerrainBuffer().getData(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1]);
 
@@ -137,18 +122,9 @@ public class TreeCutterBot extends Bot{
                         TreeData.TreeType ttype = tileType.getTreeType(tileData);
 
                         boolean isRightAge=fage.getAgeId() >= minTreeAge.id;
-                        boolean isCutSprouts = sproutingTreeCutting || !Arrays.asList(sproutingAgeId).contains(fage.getAgeId());
-                        boolean isRightType = treeType.equals("") || treeType.contains(TreeData.TreeType.fromInt(ttype.getTypeId()).toString().toLowerCase());
-                        boolean isHive = false;
-                        if (beeItems.size() > 0) {
-                            for (Map.Entry<Long, GroundItemCellRenderable> entry : beeItems.entrySet()) {
-                                Long beeTile = Tiles.getTileId((int) (entry.getValue().getXPos() / 4.0f), (int) (entry.getValue().getYPos() / 4.0f), 0);
-                                if (Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0) == beeTile) {
-                                    isHive = true;
-                                    break;
-                                }
-                            }
-                        }
+                        boolean isCutSprouts = sproutingTreeCutting || !isSproutingAge(fage.getAgeId());
+                        boolean isRightType = treeType.equals("") || treeType.contains(ttype.toString().toLowerCase());
+                        boolean isHive = hiveTiles.contains(Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0));
                         if(isRightAge && isCutSprouts && isRightType && !isHive){
                             world.getServerConnection().sendAction(toolId,
                                     new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
@@ -166,6 +142,41 @@ public class TreeCutterBot extends Bot{
         }
     }
 
+    /**
+     * Collect tile ids of all hives lying on the ground nearby
+     */
+    private Set<Long> getHiveTileIds(ServerConnectionListenerClass sscc) throws Exception {
+        Map<Long, GroundItemCellRenderable> groundItems = Utils.getField(sscc, "groundItems");
+        for(int tries = 0; tries < 5; tries++) {
+            try {
+                Set<Long> hiveTiles = new HashSet<>();
+                for (GroundItemCellRenderable groundItem : groundItems.values()) {
+                    try {
+                        GroundItemData groundItemData = Utils.getField(groundItem, "item");
+                        if (groundItemData.getName().contains("hive"))
+                            hiveTiles.add(Tiles.getTileId((int) (groundItem.getXPos() / 4.0f), (int) (groundItem.getYPos() / 4.0f), 0));
+                    } catch (Exception e) {
+                        Utils.consolePrint(e.getMessage());
+                    }
+                }
+                return hiveTiles;
+            } catch(ConcurrentModificationException ignored) {
+            }
+        }
+        Utils.consolePrint(
+            "%s: Unable to find beehive items due to repeated ConcurrentModificationException",
+            TreeCutterBot.class.getSimpleName()
+        );
+        return Collections.emptySet();
+    }
+
+    private static boolean isSproutingAge(int ageId) {
+        for (int sproutingAgeId : SPROUTING_AGE_IDS)
+            if (sproutingAgeId == ageId)
+                return true;
+        return false;
+    }
+
     private void registerEventProcessors() {
         registerEventProcessor(message -> message.contains("You are too far away") ,
                 this::actionNotQueued);
@@ -176,78 +187,65 @@ public class TreeCutterBot extends Bot{
     }
 
     private void actionFinished() {
-        if (queuedTiles.size() > 0) {
-            queuedTiles.remove(0);
-            lastActionFinishedTime = System.currentTimeMillis();
+        synchronized (queuedTiles) {
+            if (queuedTiles.size() > 0) {
+                queuedTiles.remove(0);
+                lastActionFinishedTime = System.currentTimeMillis();
+            }
         }
     }
 
     private void actionNotQueued() {
-        if (queuedTiles.size() > 0) {
-            queuedTiles.remove(queuedTiles.size()  - 1);
-            lastActionFinishedTime = System.currentTimeMillis();
-        }
-    }
-
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(TreeCutterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
+        synchronized (queuedTiles) {
+            if (queuedTiles.size() > 0) {
+                queuedTiles.remove(queuedTiles.size()  - 1);
+                lastActionFinishedTime = System.currentTimeMillis();
             }
         }
     }
 
     private void setTreeType(String[] strings) {
-        if (strings == null ) {
+        String types = joinArgs(strings);
+        if (types == null) {
             printInputKeyUsageString(TreeCutterBot.InputKey.tt);
             return;
         }
-
-        treeType = String.join(" ", strings).toLowerCase();
-        Utils.consolePrint("The bot cut " +treeType);
+        types = types.toLowerCase();
+        if (types.equals("all") || types.equals("any")) {
+            treeType = "";
+            Utils.feedback("The bot will cut all tree types");
+            return;
+        }
+        treeType = types;
+        Utils.feedback("The bot will cut " + treeType);
     }
     private void toggleBushCutting() {
         bushCutting=!bushCutting;
-        if (bushCutting)
-            Utils.consolePrint("Bushes cutting is on!");
-        else
-            Utils.consolePrint("Bushes cutting is off!");
+        Utils.feedback("Bush cutting is " + onOff(bushCutting));
     }
     private void toggleSproutingTreeCutting() {
         sproutingTreeCutting = !sproutingTreeCutting;
-        if (sproutingTreeCutting)
-            Utils.consolePrint("Sprouting trees cutting is on!");
-        else
-            Utils.consolePrint("Sprouting trees cutting is off!");
+        Utils.feedback("Sprouting trees cutting is " + onOff(sproutingTreeCutting));
     }
     private void setMinAge(String[] input) {
-        if (input == null || input.length != 1) {
+        String ageName = joinArgs(input);
+        if (ageName == null) {
             printInputKeyUsageString(TreeCutterBot.InputKey.a);
             return;
         }
-        minTreeAge = TreeAge.getByNameOrAbbreviation(input[0]);
-
-        Utils.consolePrint("Minimal tree age set to " +minTreeAge.name+"!");
+        TreeAge age = TreeAge.getByNameOrAbbreviation(ageName.toLowerCase());
+        if (age == null) {
+            Utils.consolePrint("Unknown tree age \"" + ageName + "\". Use the \"" + InputKey.al.name() + "\" key to list the ages");
+            return;
+        }
+        minTreeAge = age;
+        Utils.feedback("Minimal tree age set to " + minTreeAge.name);
     }
 
     private void setMaxActions(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(TreeCutterBot.InputKey.c);
+        Integer num = parseIntArg(input, TreeCutterBot.InputKey.c, 1, 100);
+        if (num == null)
             return;
-        }
-        try {
-            setMaxActions(Integer.parseInt(input[0]));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Invalid max actions value: " + input[0]);
-        }
-    }
-
-    private void setMaxActions(int num){
         this.maxActions = num;
         Utils.consolePrint(getClass().getSimpleName() + " will do " + maxActions + " chops each time");
     }
@@ -257,13 +255,8 @@ public class TreeCutterBot extends Bot{
         if (tool != null) {
             selectedTool = tool;
             toolId = tool.getId();
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+            Utils.feedback(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
     }
 
     private void showAgesList() {
@@ -274,41 +267,24 @@ public class TreeCutterBot extends Bot{
 
     private enum InputKey implements Bot.InputKey {
         s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        tt("Tree Type", "Set tree types for chopping. Chop all trees by default", "birch oak"),
-        c("Clicks", "Set chops number", "1"),
-        a("Age Limit", "Set minimal tree age for chopping. Chop all trees by default", "ov"),
-        tool("Tool", "Set the cutting tool from selected inventory item.", "tool"),
-        al("Age List", "Get ages abbreviation list", ""),
-        b("Botanizing", "Toggle bush cutting. Enabled by default", ""),
+                "<threshold>"),
+        tt("Tree Type", "Set tree types for chopping, e.g. \"birch oak\" or \"birch, oak\". Use \"all\" to chop all trees again (the default)", "<tree types>"),
+        c("Clicks", "Set the number of chops queued each time", "<clicks>"),
+        a("Age Limit", "Set minimal tree age for chopping by name or abbreviation, e.g. \"oa\" or \"old\" (see the \"al\" key). Chop all trees by default", "<age>"),
+        tool("Tool", "Use the item selected in your inventory as the cutting tool (a hatchet is looked up on start otherwise)", ""),
+        al("Age List", "Show the tree ages and their abbreviations", ""),
+        b("Bush Cutting", "Toggle bush cutting. Enabled by default", ""),
         sp("Sprout Cutting", "Toggle sprouting trees cutting. Enabled by default", "");
 
-        public String fullName;
-        public String description;
-        public String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 
@@ -333,7 +309,7 @@ public class TreeCutterBot extends Bot{
             for (TreeAge treeAge : values())
                 if (treeAge.name().equals(input) || treeAge.name.equals(input))//name() is collection element name, not name parameter
                     return treeAge;
-            return any;
+            return null;
         }
     }
 

@@ -27,7 +27,7 @@ public enum CardinalDirection {
 
     public static CardinalDirection getByName(String name) {
         try {
-            return Enum.valueOf(CardinalDirection.class, name);
+            return Enum.valueOf(CardinalDirection.class, name.toLowerCase());
         } catch (Exception e) {
             return CardinalDirection.unknown;
         }

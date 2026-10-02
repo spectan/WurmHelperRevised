@@ -4,45 +4,53 @@ import com.wurmonline.client.comm.ServerConnectionListenerClass;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.GroundItemData;
 import com.wurmonline.client.renderer.cell.GroundItemCellRenderable;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.ConcurrentModificationException;
+import java.util.List;
 import java.util.Map;
 
 @BotInfo(name = "Chopper", description =
         "Automatically chops felled trees near player",
         abbreviation = "ch")
 public class ChopperBot extends Bot {
-    private float distance = 4;
+    private volatile float distance = 4;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
-    private float staminaThreshold;
-    private int clicks;
-    private InventoryMetaItem toolItem;
+    private volatile int clicks;
+    private volatile InventoryMetaItem toolItem;
     private static final String[] VALID_TOOLS = {"hatchet"};
 
     public ChopperBot() {
-        registerInputHandler(ChopperBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ChopperBot.InputKey.s);
         registerInputHandler(ChopperBot.InputKey.d, this::setDistance);
         registerInputHandler(ChopperBot.InputKey.c, this::setClickNumber);
         registerInputHandler(ChopperBot.InputKey.tool, input -> selectTool());
 
         areaAssistant.setMoveAheadDistance(1);
         areaAssistant.setMoveRightDistance(1);
+        staminaThreshold = 0.96f;
+        clicks = Math.max(1, Utils.getMaxActionNumber());
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Distance: " + distance + " meters");
+        lines.add("Clicks: " + clicks);
+        InventoryMetaItem tool = toolItem;
+        lines.add("Tool: " + (tool != null ? tool.getDisplayName() : "any hatchet in the inventory"));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception{
-        setStaminaThreshold(0.96f);
-        setClicks(Utils.getMaxActionNumber());
         if (toolItem == null)
             toolItem = Utils.locateToolItem("hatchet");
         long hatchetId;
         if (toolItem == null) {
-            Utils.consolePrint("You don't have a hatchet!");
+            Utils.consolePrint("You don't have a hatchet! Put one in your inventory, or select one and use \"bot ch tool\", then start the bot again");
             deactivate();
             return;
         } else {
@@ -50,8 +58,6 @@ public class ChopperBot extends Bot {
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + toolItem.getDisplayName() + " to chop felled trees.");
             Utils.consolePrint("QL:" + toolItem.getQuality() + " DMG:" + toolItem.getDamage());
         }
-        CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
         while (isActive()) {
             waitOnPause();
@@ -66,7 +72,7 @@ public class ChopperBot extends Bot {
                             GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");
                             float itemX = groundItemData.getX();
                             float itemY = groundItemData.getY();
-                            if (Math.sqrt(Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2)) <= distance)
+                            if (Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2) <= distance * distance)
                                 if (groundItemData.getName().contains("felled tree")) {
                                     for (int i = 0; i < clicks; i++)
                                         WurmHelper.hud.getWorld().getServerConnection().sendAction(hatchetId, new long[]{groundItemData.getId()}, PlayerAction.CHOP_UP);
@@ -78,7 +84,7 @@ public class ChopperBot extends Bot {
                         Utils.consolePrint("Got concurrent modification exception!");
                     }
                 }
-                if (!didSomething) {
+                if (!didSomething && areaAssistant.areaTourActivated()) {
                     areaAssistant.areaNextPosition();
                     continue;
                 }
@@ -88,47 +94,17 @@ public class ChopperBot extends Bot {
     }
 
     private void setDistance(String[] input) {
-        if (input == null || input.length == 0) {
-            printInputKeyUsageString(ChopperBot.InputKey.d);
+        Float value = parseFloatArg(input, ChopperBot.InputKey.d, 0.1f, 100);
+        if (value == null)
             return;
-        }
-        try {
-            distance = Float.parseFloat(input[0]);
-            Utils.consolePrint("New lookup distance is " + distance + " meters");
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong distance value!");
-        }
-    }
-
-    private void setStaminaThreshold(String[] input) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ChopperBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
+        distance = value;
+        Utils.consolePrint("New lookup distance is " + distance + " meters");
     }
 
     private void setClickNumber(String[] input) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ChopperBot.InputKey.c);
-        else {
-            try {
-                int clicks = Integer.parseInt(input[0]);
-                setClicks(clicks);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong value!");
-            }
-        }
+        Integer value = parseIntArg(input, ChopperBot.InputKey.c, 1, 100);
+        if (value != null)
+            setClicks(value);
     }
 
     private void setClicks(int clicks) {
@@ -140,44 +116,27 @@ public class ChopperBot extends Bot {
         InventoryMetaItem tool = Utils.selectInventoryTool(VALID_TOOLS);
         if (tool != null) {
             toolItem = tool;
-            Utils.consolePrint(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
+            Utils.feedback(this.getClass().getSimpleName() + " will use " + tool.getDisplayName() + " with QL:" + tool.getQuality() + " DMG:" + tool.getDamage());
         }
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        d("Distance", "Set the distance the bot should look around player in search for a felled tree",
-                "distance(in meters)"),
-        c("Clicks", "Set the amount of chops the bot will do each time", "c(integer value)"),
-        tool("Tool", "Set the chopping tool from selected inventory item.", "tool");
+        s("Stamina", "Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        d("Distance", "Set the distance (in meters) the bot should look around player in search for a felled tree",
+                "<distance>"),
+        c("Clicks", "Set the amount of chops the bot will do each time", "<clicks>"),
+        tool("Tool", "Set the chopping tool from the selected inventory item", "");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

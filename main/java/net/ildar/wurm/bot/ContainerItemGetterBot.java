@@ -1,8 +1,9 @@
 package net.ildar.wurm.bot;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
@@ -18,12 +19,13 @@ import net.ildar.wurm.annotations.BotInfo;
 @BotInfo(name = "Container Item Getter", description = "Retrieves items from containers", abbreviation = "cig")
 public class ContainerItemGetterBot extends Bot
 {
-    HashSet<String> items = new HashSet<>();
-    HashSet<InventoryListComponent> sources = new HashSet<>();
-    boolean verbose = false;
+    final Set<String> items = ConcurrentHashMap.newKeySet();
+    final Set<InventoryListComponent> sources = ConcurrentHashMap.newKeySet();
+    volatile boolean verbose = false;
     
     public ContainerItemGetterBot()
     {
+        timeout = 5000;
         registerInputHandler(Inputs.a, this::addItem);
         registerInputHandler(Inputs.c, input -> clearItems());
         registerInputHandler(Inputs.ss, input -> addSource());
@@ -34,8 +36,6 @@ public class ContainerItemGetterBot extends Bot
     @Override
     public void work() throws Exception
     {
-        setTimeout(5000);
-        
         InventoryListComponent playerInv = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         InventoryMetaItem playerInvRoot = Utils.getRootItem(playerInv);
         if (playerInvRoot == null) {
@@ -65,10 +65,19 @@ public class ContainerItemGetterBot extends Bot
             
             for(InventoryListComponent src: sources)
             {
+                InventoryMetaItem srcRoot = Utils.getRootItem(src);
+                if(srcRoot == null)
+                {
+                    // the source window was closed
+                    sources.remove(src);
+                    Utils.consolePrint("A source container is no longer available and was removed");
+                    continue;
+                }
+                
                 if(verbose)
                     Utils.consolePrint(
                         "Checking container %s for items to grab",
-                        Utils.getRootItem(src).getBaseName()
+                        srcRoot.getBaseName()
                     );
                 
                 srcItems.clear();
@@ -95,8 +104,10 @@ public class ContainerItemGetterBot extends Bot
                     );
                 
                 long[] ids = Utils.getItemIds(srcItems);
+                if(ids.length == 0)
+                    continue;
                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(playerInvID, ids);
-                if(verbose && ids.length > 0)
+                if(verbose)
                     Utils.consolePrint("Requested move of %d items", ids.length);
             }
             
@@ -106,15 +117,14 @@ public class ContainerItemGetterBot extends Bot
     
     void addItem(String[] args)
     {
-        if(args == null || args.length == 0)
+        List<String> itemNames = parseNameList(args);
+        if(itemNames.isEmpty())
         {
             printInputKeyUsageString(Inputs.a);
             return;
         }
         
-        String[] itemNames = String.join(" ", args).split("\\s*,\\s*");
-        for(String name: itemNames)
-            items.add(name);
+        items.addAll(itemNames);
         Utils.consolePrint(
             "Getting: %s",
             String.join(", ", items)
@@ -124,7 +134,7 @@ public class ContainerItemGetterBot extends Bot
     void clearItems()
     {
         items.clear();
-        Utils.consolePrint("List of items to get cleared");
+        Utils.feedback("List of items to get cleared");
     }
     
     void addSource()
@@ -155,62 +165,60 @@ public class ContainerItemGetterBot extends Bot
         }
         
         sources.add(listComponent);
-        Utils.consolePrint(
-            "New source containers are: %s",
-            sources
-                .stream()
-                .map(lc -> Utils.getRootItem(lc).getBaseName())
-                .collect(Collectors.joining(", "))
-        );
+        Utils.feedback("Added source container \"%s\"", Utils.getRootItem(listComponent).getBaseName());
+        Utils.consolePrint("Source containers are: %s", describeSources());
     }
     
     void clearSources()
     {
         sources.clear();
-        Utils.consolePrint("List of source containers cleared");
+        Utils.feedback("List of source containers cleared");
     }
     
     void toggleVerbose()
     {
         verbose = !verbose;
-        Utils.consolePrint("Verbose logging is now %s", verbose ? "on" : "off");
+        Utils.feedback("Verbose logging is now %s", onOff(verbose));
+    }
+    
+    String describeSources()
+    {
+        List<String> names = new ArrayList<>();
+        for(InventoryListComponent lc: sources)
+        {
+            InventoryMetaItem root = Utils.getRootItem(lc);
+            if(root != null)
+                names.add(root.getBaseName());
+        }
+        return names.isEmpty() ? "none" : String.join(", ", names);
+    }
+    
+    @Override
+    void describeSettings(List<String> lines)
+    {
+        lines.add("Items: " + (items.isEmpty() ? "none" : String.join(", ", items)));
+        lines.add("Sources: " + describeSources());
+        lines.add("Verbose: " + onOff(verbose));
     }
     
     enum Inputs implements InputKey
     {
-        a("Area Mode", "Add item to be pulled", "name"),
-        c("Clicks", "Clear list of items to pull", ""),
+        a("Add Item", "Add item names to be pulled. Separate several names with commas", "<item name>"),
+        c("Clear Items", "Clear list of items to pull", ""),
         ss("Add Source", "Add source container to pull from", ""),
         cs("Clear Sources", "Clear list of source containers", ""),
         v("Verbose", "Toggle verbose messages", ""),
         ;
-        
-        String fullName;
-        String description;
-        String usage;
+
+        private final KeyInfo keyInfo;
+
         Inputs(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }

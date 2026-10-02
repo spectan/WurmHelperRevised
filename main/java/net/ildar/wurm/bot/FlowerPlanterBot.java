@@ -8,32 +8,30 @@ import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
-import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 
-import java.lang.reflect.Method;
 import java.util.List;
 
 @BotInfo(name = "Flower Planter", description =
         "Skills up player's gardening skill by planting and picking flowers in surrounding area",
         abbreviation = "fp")
 public class FlowerPlanterBot extends Bot {
-    private float staminaThreshold;
     private long sickleId;
     private long shovelId;
 
     public FlowerPlanterBot() {
-        registerInputHandler(FlowerPlanterBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(FlowerPlanterBot.InputKey.s);
+        timeout = 300;
+        staminaThreshold = 0.96f;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        // only the timeout and the stamina threshold, which the base class prints
     }
 
     @Override
     public void work() throws Exception{
-        setTimeout(300);
-        setStaminaThreshold(0.96f);
-
         CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Method sendCreateAction = ReflectionUtil.getMethod(CreationWindow.class, "sendCreateAction");
-        sendCreateAction.setAccessible(true);
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         int maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
         InventoryMetaItem shovel = Utils.locateToolItem("shovel");
@@ -55,13 +53,10 @@ public class FlowerPlanterBot extends Bot {
         BotState state = BotState.PLANT;
         while (isActive()) {
             waitOnPause();
-            float stamina = WurmHelper.hud.getWorld().getPlayer().getStamina();
-            float damage = WurmHelper.hud.getWorld().getPlayer().getDamage();
-            float progress = Utils.getField(progressBar, "progress");
             int checkedtiles[][] = Utils.getAreaCoordinates();
             int sentactions = 0;
 
-            if ((stamina+damage) > staminaThreshold && creationWindow.getActionInUse() == 0 && progress == 0f) {
+            if (canDoWork(staminaThreshold) && creationWindow.getActionInUse() == 0) {
                 switch (state) {
                     case PLANT:
                         long[] flowerIds = new long[maxActions];
@@ -72,7 +67,7 @@ public class FlowerPlanterBot extends Bot {
                             if (flowersFound >= maxActions)
                                 break;
                         }
-                        for(int i = 0; i < 9 && sentactions < maxActions; i++) {
+                        for(int i = 0; i < 9 && sentactions < flowersFound; i++) {
                             Tiles.Tile type = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(checkedtiles[i][0], checkedtiles[i][1]);
                             if (type.tilename.equals("Dirt")) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendAction(flowerIds[sentactions],
@@ -116,24 +111,6 @@ public class FlowerPlanterBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(FlowerPlanterBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     enum BotState{
         PLANT,
         PICK,
@@ -141,35 +118,18 @@ public class FlowerPlanterBot extends Bot {
     }
 
     private enum InputKey implements Bot.InputKey {
-        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)");
+        s("Stamina", "Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>");
 
-        private String fullName;
-        private String description;
-        private String usage;
+        private final KeyInfo keyInfo;
+
         InputKey(String fullName, String description, String usage) {
-            this.fullName = fullName;
-            this.description = description;
-            this.usage = usage;
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getFullName() {
-            return fullName;
-        }
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }
