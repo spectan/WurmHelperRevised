@@ -390,6 +390,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
+| `an` | Avoid Named | Toggle avoiding named creatures while murdering. Any creature with a hover text (tamed, bred or otherwise named animals) is left alone |
 | `ap` | Avoid Passives | Toggle murdering only hostile creatures, leaving passive animals alone |
 | `b` | Butchering | Toggle butchering of corpses on the ground while murdering |
 | `bu` | Burying | Toggle burying of corpses on the ground while murdering |

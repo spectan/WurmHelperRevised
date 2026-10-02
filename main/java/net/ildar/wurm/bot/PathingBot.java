@@ -107,6 +107,7 @@ public class PathingBot extends Bot
 	volatile boolean repairing = false;
 	final Set<String> murderBlacklist = ConcurrentHashMap.newKeySet();
 	volatile boolean avoidPassives = false;
+	volatile boolean avoidNamed = false;
 	// strikes for "That would be illegal here." while the current murder target is active
 	final AtomicInteger illegalStrikes = new AtomicInteger(0);
 	
@@ -147,6 +148,7 @@ public class PathingBot extends Bot
 		registerInputHandler(Inputs.mb, this::addMurderBlacklist);
 		registerInputHandler(Inputs.mbc, input -> clearMurderBlacklist());
 		registerInputHandler(Inputs.ap, input -> toggleAvoidPassives());
+		registerInputHandler(Inputs.an, input -> toggleAvoidNamed());
 	}
 	
 	void cmdSpeed(String[] args)
@@ -193,6 +195,7 @@ public class PathingBot extends Bot
 		lines.add("Repair: " + onOff(repairing));
 		lines.add("Murder blacklist: " + (murderBlacklist.isEmpty() ? "empty" : String.join(", ", murderBlacklist)));
 		lines.add("Avoid passives: " + onOff(avoidPassives));
+		lines.add("Avoid named: " + onOff(avoidNamed));
 	}
 	
 	volatile boolean walking = false;
@@ -436,6 +439,7 @@ public class PathingBot extends Bot
 					data.getHoverText().toLowerCase().contains(kw)
 				) &&
 				(!avoidPassives || !isPassive(creature)) &&
+				(!avoidNamed || data.getHoverText().isEmpty()) &&
 				!petItemRe.matcher(data.getHoverText()).find()
 			);
 			creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
@@ -1254,6 +1258,12 @@ public class PathingBot extends Bot
 		Utils.feedback("Bot will " + (avoidPassives ? "only murder hostile creatures" : "murder creatures of any attitude"));
 	}
 
+	void toggleAvoidNamed()
+	{
+		avoidNamed = !avoidNamed;
+		Utils.feedback("Bot will " + (avoidNamed ? "not murder named creatures" : "murder named creatures too"));
+	}
+
 	void onIllegalMessage()
 	{
 		// butcher/bury attempts can draw the same message, and their responses arrive
@@ -1288,6 +1298,7 @@ public class PathingBot extends Bot
 		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist, matched against the creature's name and hover text. Creatures matching them are never attacked, so named animals (a bred horse's name) can be excluded", "<keyword>[, <keyword>...]"),
 		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
 		ap("Avoid Passives", "Toggle murdering only hostile creatures, leaving passive animals alone", ""),
+		an("Avoid Named", "Toggle avoiding named creatures while murdering. Any creature with a hover text (tamed, bred or otherwise named animals) is left alone", ""),
 		;
 
 		private final KeyInfo keyInfo;
