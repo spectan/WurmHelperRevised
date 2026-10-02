@@ -24,6 +24,69 @@
             </resource>
         </resources>
         <plugins>
+            <!-- the client mods merged into WurmHelper live in ../modules/<id>, one folder per mod -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-module-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.basedir}/../modules/archeogroup/java</source>
+                                <source>${project.basedir}/../modules/compass/java</source>
+                                <source>${project.basedir}/../modules/esp/java</source>
+                                <source>${project.basedir}/../modules/ezbulk/java</source>
+                                <source>${project.basedir}/../modules/fishbuddy/java</source>
+                                <source>${project.basedir}/../modules/freecam/java</source>
+                                <source>${project.basedir}/../modules/improvedimprove/java</source>
+                                <source>${project.basedir}/../modules/livemap/java</source>
+                                <source>${project.basedir}/../modules/skilltrack/java</source>
+                                <source>${project.basedir}/../modules/timelock/java</source>
+                                <source>${project.basedir}/../modules/toolbelt/java</source>
+                                <source>${project.basedir}/../modules/tooltips/java</source>
+                                <source>${project.basedir}/../modules/uiscale/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>add-module-resources</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>add-resource</goal>
+                        </goals>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../modules/livemap/resources</directory>
+                                </resource>
+                                <resource>
+                                    <directory>${project.basedir}/../modules/tooltips/resources</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.0</version>
+                <configuration>
+                    <!-- the uiscale module uses the JDK's internal ASM copy (jdk.internal.org.objectweb.asm),
+                         which javac 8 hides unless it compiles against the real rt.jar; the flag is only
+                         honored by a forked javac, not by the in-process compiler -->
+                    <fork>true</fork>
+                    <compilerArgs>
+                        <arg>-XDignore.symbol.file</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <version>1.8</version>
@@ -40,21 +103,15 @@
                                     <zipfileset dir="${project.basedir}/.."
                                                 includes="Mod.properties"
                                                 fullpath="${project.parent.artifactId}.properties"/>
+                                    <!-- default settings of the merged mods: mods/WurmHelper/<id>.properties -->
+                                    <zipfileset dir="${project.basedir}/../modules/default-config"
+                                                includes="*.properties"
+                                                prefix="${project.parent.artifactId}"/>
+                                    <!-- licenses, permission notes and upstream versions of the merged mods -->
+                                    <zipfileset dir="${project.basedir}/../modules"
+                                                includes="*/LICENSE*,*/PERMISSION.txt,*/SOURCE.txt"
+                                                prefix="${project.parent.artifactId}/licenses"/>
                                 </zip>
-                            </tasks>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>prepare-package</id>
-                        <phase>prepare-package</phase>
-                        <configuration>
-                            <tasks>
-                                <copy todir="${project.build.directory}/classes">
-                                    <fileset dir="${project.basedir}/../annotations/target/classes" includes="**/BotRegistration.class"/>
-                                </copy>
                             </tasks>
                         </configuration>
                         <goals>

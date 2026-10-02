@@ -10,21 +10,29 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-@BotInfo(description =
+@BotInfo(name = "Ground Item Getter", description =
         "Collects items from the ground around player.",
         abbreviation = "gig")
 public class GroundItemGetterBot extends Bot {
-    private Set <String> itemNames = new HashSet<>();
-    private float distance = 4;
+    private final Set <String> itemNames = ConcurrentHashMap.newKeySet();
+    private volatile float distance = 4;
 
     public GroundItemGetterBot() {
         registerInputHandler(GroundItemGetterBot.InputKey.a, this::addNewItemName);
         registerInputHandler(GroundItemGetterBot.InputKey.d, this::setDistance);
+        timeout = 500;
     }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Distance: " + distance + " meters");
+        lines.add("Items: " + (itemNames.isEmpty() ? "none (add some with \"a <item name>\")" : String.join(", ", itemNames)));
+    }
+
     @Override
     public void work() throws Exception{
-        setTimeout(500);
         while (isActive()) {
             waitOnPause();
             if (itemNames.size() > 0) {
@@ -38,10 +46,12 @@ public class GroundItemGetterBot extends Bot {
                             GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");
                             float itemX = groundItemData.getX();
                             float itemY = groundItemData.getY();
-                            if ((Math.sqrt(Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2)) <= distance) && itemNames != null && itemNames.size() > 0)
+                            if (Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2) <= distance * distance)
                                 for (String item : itemNames)
-                                    if (groundItemData.getName().contains(item))
+                                    if (groundItemData.getName().contains(item)) {
                                         WurmHelper.hud.sendAction(PlayerAction.TAKE, groundItemData.getId());
+                                        break;
+                                    }
                         }
                     } catch (ConcurrentModificationException ignored) {
                     }
@@ -57,10 +67,12 @@ public class GroundItemGetterBot extends Bot {
             float y = WurmHelper.hud.getWorld().getPlayerPosY();
             float itemX = Utils.getField(staticModelRenderable, "x");
             float itemY = Utils.getField(staticModelRenderable, "y");
-            if ((Math.sqrt(Math.pow(itemX-x, 2)+Math.pow(itemY-y, 2)) <= distance) && itemNames != null && itemNames.size() > 0)
+            if (Math.pow(itemX-x, 2)+Math.pow(itemY-y, 2) <= distance * distance)
                 for(String item:itemNames)
-                    if (staticModelRenderable.getHoverName().contains(item))
+                    if (staticModelRenderable.getHoverName().contains(item)) {
                         WurmHelper.hud.sendAction(PlayerAction.TAKE, staticModelRenderable.getId());
+                        break;
+                    }
         }
         catch(IllegalAccessException|NoSuchFieldException e) {
             Utils.consolePrint("Got exception while processing new item in " + GroundItemGetterBot.class.getSimpleName());
@@ -68,61 +80,37 @@ public class GroundItemGetterBot extends Bot {
     }
 
     private void addNewItemName(String []input) {
-        if (input == null || input.length < 1) {
+        List<String> names = parseNameList(input);
+        if (names.isEmpty()) {
             printInputKeyUsageString(GroundItemGetterBot.InputKey.a);
             return;
         }
-        StringBuilder newitem = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            newitem.append(" ").append(input[i]);
-        addItem(newitem.toString());
-    }
-
-    private void setDistance(String []input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(GroundItemGetterBot.InputKey.d);
-            return;
-        }
-        try {
-            distance = Float.parseFloat(input[0]);
-            Utils.consolePrint("Distance was set to " + distance + " meters");
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong distance value!");
-        }
-    }
-
-    private void addItem(String item) {
-        if (itemNames == null)
-            itemNames = new HashSet<>();
-        itemNames.add(item);
+        itemNames.addAll(names);
         Utils.consolePrint("Current item set in " + this.getClass().getSimpleName() + " - " + itemNames.toString());
     }
 
+    private void setDistance(String []input) {
+        Float value = parseFloatArg(input, GroundItemGetterBot.InputKey.d, 0.1f, 100);
+        if (value == null)
+            return;
+        distance = value;
+        Utils.consolePrint("Distance was set to " + distance + " meters");
+    }
+
     enum InputKey implements Bot.InputKey {
-        d("Set the distance the bot should look around player in search for items",
-                "distance(in meters, 1 tile is 4 meters)"),
-        a("Add new item name to search list", "item_name");
+        d("Distance", "Set the distance (in meters, 1 tile is 4 meters) the bot should look around player in search for items",
+                "<distance>"),
+        a("Add Item", "Add item names to the search list. Separate several names with commas, e.g. \"log, small rock\"", "<item name>");
 
-        private String description;
-        private String usage;
-        InputKey(String description, String usage) {
-            this.description = description;
-            this.usage = usage;
+        private final KeyInfo keyInfo;
+
+        InputKey(String fullName, String description, String usage) {
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

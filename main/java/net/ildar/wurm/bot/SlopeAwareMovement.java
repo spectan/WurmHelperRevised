@@ -1,6 +1,5 @@
 package net.ildar.wurm.bot;
 
-import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.Utils;
 import net.ildar.wurm.WurmHelper;
 
@@ -178,10 +177,6 @@ class SlopeAwareMovement {
         recoveryState.updateWork(workX, workY);
     }
 
-    void clearRecovery() {
-        recoveryState.clear();
-    }
-
     boolean isRecovering() {
         return recoveryState.isActive();
     }
@@ -215,6 +210,8 @@ class SlopeAwareMovement {
             float targetY = y + (float)(-distance * Math.cos((double)xRot / 180 * Math.PI));
 
             moveTo(targetX, targetY, steps, duration);
+        } catch (InterruptedException e) {
+            throw e;
         } catch (Exception e) {
             Utils.consolePrint("Unexpected error while moving slope-aware - " + e.getMessage());
             Utils.consolePrint(e.toString());
@@ -259,13 +256,8 @@ class SlopeAwareMovement {
             Utils.movePlayerBySteps(recoveryState.getRecoveryX(), recoveryState.getRecoveryY(), 5, stepDuration);
             setClimbing(false);
             waitForRecovery();
-            try {
-                setClimbing(true);
-                Utils.movePlayerBySteps(workX, workY, 5, stepDuration);
-            } catch (Exception e) {
-                setClimbing(false); // emergency: never leave climb on
-                throw e;
-            }
+            setClimbing(true);
+            Utils.movePlayerBySteps(workX, workY, 5, stepDuration);
         } catch (InterruptedException e) {
             stopClimbing();
             throw e;
@@ -337,9 +329,7 @@ class SlopeAwareMovement {
     private static class WurmActionQueueControls implements ActionQueueControls {
         @Override
         public void cancelQueuedActions() {
-            for (int i = 0; i < Utils.getMaxActionNumber(); i++) {
-                WurmHelper.hud.sendAction(PlayerAction.STOP, 0);
-            }
+            Bot.stopAllActions();
         }
     }
 }

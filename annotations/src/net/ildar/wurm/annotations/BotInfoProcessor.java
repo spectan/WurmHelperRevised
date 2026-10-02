@@ -69,7 +69,7 @@ public class BotInfoProcessor extends AbstractProcessor {
                     addLine(writer, "       List<BotRegistration> registrations = new ArrayList<>();");
                     addLine(writer, "       try {");
                     for(AnnotatedBot annotatedBot : annotatedBots) {
-                        addLine(writer, String.format("         registrations.add(new BotRegistration(Class.forName(\"%s\"), \"%s\", \"%s\"));", annotatedBot.botClass, prepareDescription(annotatedBot.botInfo.description()), annotatedBot.botInfo.abbreviation()));
+                        addLine(writer, String.format("         registrations.add(new BotRegistration(Class.forName(\"%s\"), \"%s\", \"%s\", \"%s\"));", annotatedBot.botClass, prepareDescription(annotatedBot.botInfo.name()), prepareDescription(annotatedBot.botInfo.description()), annotatedBot.botInfo.abbreviation()));
                     }
                     addLine(writer, "       } catch (ClassNotFoundException e) {");
                     addLine(writer, "           e.printStackTrace();");

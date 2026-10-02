@@ -12,9 +12,10 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-@BotInfo(description =
+@BotInfo(name = "Forager", description =
         "Can forage, botanize, collect grass and flowers in an area surrounding player. " +
         "Bot can be configured to process rectangular area of any size. " +
         "Picked items, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. " +
@@ -22,7 +23,7 @@ import java.util.stream.Collectors;
         "Bot can be configured to drop picked items on the floor. ",
         abbreviation = "fg")
 public class ForagerBot extends Bot {
-    static String DEFAULT_CONTAINER_NAME = "backpack";
+    private static final String DEFAULT_CONTAINER_NAME = "backpack";
     private static final Set<String> forageSet = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "oregano","rosemary","lingonberry","pumpkin",
             "thyme","tomato","lovage","fennel plant",
@@ -39,7 +40,6 @@ public class ForagerBot extends Bot {
     private static final Set<String> forageSetKeywords = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "fresh","seedling","sprout","mushroom","bouquet")));
 
-    private float staminaThreshold;
     private Comparator<InventoryMetaItem> weightComparator = Comparator.comparingDouble(InventoryMetaItem::getWeight);
     private AreaAssistant areaAssistant = new AreaAssistant(this);
     private long sickleId;
@@ -47,8 +47,8 @@ public class ForagerBot extends Bot {
     private final List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
     private List <Pair<Integer, Integer>> forageTilesInProcess = new ArrayList<>();
     private List <Pair<Integer, Integer>> botanizeTilesInProcess = new ArrayList<>();
-    private List <Pair<Integer, Integer>> foragedTiles = new ArrayList<>();
-    private List <Pair<Integer, Integer>> botanizedTiles = new ArrayList<>();
+    private Set<Pair<Integer, Integer>> foragedTiles = new HashSet<>();
+    private Set<Pair<Integer, Integer>> botanizedTiles = new HashSet<>();
     private String containerName = DEFAULT_CONTAINER_NAME;
     private ForageType forageType = ForageType.Default;
     private BotanizeType botanizeType = BotanizeType.Default;
@@ -63,7 +63,7 @@ public class ForagerBot extends Bot {
     private List<String> filterItemNames = new ArrayList<>();
 
     public ForagerBot() {
-        registerInputHandler(ForagerBot.InputKey.s, this::setStaminaThreshold);
+        registerStaminaThresholdHandler(ForagerBot.InputKey.s);
         registerInputHandler(ForagerBot.InputKey.g, input -> toggleGrassGathering());
         registerInputHandler(ForagerBot.InputKey.f, input -> toggleForaging());
         registerInputHandler(ForagerBot.InputKey.ftl, input -> showForagingTypes());
@@ -78,16 +78,28 @@ public class ForagerBot extends Bot {
         registerInputHandler(ForagerBot.InputKey.v, input -> toggleVerboseMode());
         registerInputHandler(ForagerBot.InputKey.scn, this::setContainerName);
         registerInputHandler(ForagerBot.InputKey.na, this::setMaxActions);
+        staminaThreshold = 0.9f;
+        timeout = 300;
+        maxActions = Utils.getMaxActionNumber();
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add("Clicks: " + maxActions);
+        lines.add("Foraging: " + onOff(foraging) + " (type: " + forageType.name() + ")");
+        lines.add("Botanizing: " + onOff(botanizing) + " (type: " + botanizeType.name() + ")");
+        lines.add("Grass gathering: " + onOff(grassGathering));
+        lines.add("Dropping: " + onOff(dropping) + (dropping ? (dropWhenFull ? " (when inventory is full)" : " (after every action)") : ""));
+        lines.add("Drop filter: " + (filterItemNames.isEmpty() ? "none" : String.join(", ", filterItemNames)));
+        lines.add("Container name: " + containerName);
+        lines.add("Verbose: " + onOff(verbose));
+        areaAssistant.describeSettings(lines);
     }
 
     @Override
     public void work() throws Exception{
-        setStaminaThreshold(0.9f);
-        setTimeout(300);
-
         World world = WurmHelper.hud.getWorld();
         PlayerObj player = world.getPlayer();
-        maxActions = Utils.getMaxActionNumber();
         registerEventProcessors();
         while (isActive()) {
             waitOnPause();
@@ -97,11 +109,13 @@ public class ForagerBot extends Bot {
             float botanizeSkill = player.getSkillSet().getSkillValue("botanizing");
 
             if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 30000 && (stamina + damage) > staminaThreshold && queuedTiles.size() > 0) {
-                if (verbose)
-                    queuedTiles.forEach(tile -> Utils.consolePrint("Removing tile from queue - " + tile.getKey() + " " + tile.getValue()));
-                queuedTiles.clear();
-                forageTilesInProcess.clear();
-                botanizeTilesInProcess.clear();
+                synchronized (queuedTiles) {
+                    if (verbose)
+                        queuedTiles.forEach(tile -> Utils.consolePrint("Removing tile from queue - " + tile.getKey() + " " + tile.getValue()));
+                    queuedTiles.clear();
+                    forageTilesInProcess.clear();
+                    botanizeTilesInProcess.clear();
+                }
                 if (verbose)
                     Utils.consolePrint(getClass().getSimpleName() + " queue cleared");
             }
@@ -119,7 +133,7 @@ public class ForagerBot extends Bot {
                                 || tileType.tilename.equals("Marsh")
                                 || tileType.tilename.equals("Moss")
                                 || tileType.tilename.equals("Steppe")) {
-                            if (botanizing && !botanizedTiles.contains(coordsPair) && !botanizeTilesInProcess.contains(coordsPair) && queuedTiles.size() < maxActions
+                            if (botanizing && !botanizedTiles.contains(coordsPair) && !botanizeTilesInProcess.contains(coordsPair)
                                     && (!tileType.tilename.equals("Marsh") || botanizeSkill > 27)
                                     && (!tileType.tilename.equals("Moss") || botanizeSkill > 35)) {
                                 if (verbose)
@@ -127,14 +141,6 @@ public class ForagerBot extends Bot {
                                 WurmHelper.hud.sendAction(botanizeType.action, Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0));
                                 queuedTiles.add(coordsPair);
                                 botanizeTilesInProcess.add(coordsPair);
-                                if (tileType.isGrass()){
-                                    if (botanizeSkill > 80)
-                                        botanizeTilesInProcess.add(coordsPair);
-                                    if (botanizeSkill > 53)
-                                        botanizeTilesInProcess.add(coordsPair);
-                                    if (botanizeSkill > 26)
-                                        botanizeTilesInProcess.add(coordsPair);
-                                }
                                 lastActionFinishedTime = System.currentTimeMillis();
                             }
                         }
@@ -143,22 +149,14 @@ public class ForagerBot extends Bot {
                                 || tileType.tilename.equals("Tundra")
                                 || tileType.tilename.equals("Marsh")) {
                             if (foraging && !foragedTiles.contains(coordsPair) && !forageTilesInProcess.contains(coordsPair) && queuedTiles.size() < maxActions
-                                    && (!tileType.tilename.equals("Steppe") || botanizeSkill > 23)
-                                    && (!tileType.tilename.equals("Tundra") || botanizeSkill > 33)
-                                    && (!tileType.tilename.equals("Marsh") || botanizeSkill > 43)) {
+                                    && (!tileType.tilename.equals("Steppe") || forageSkill > 23)
+                                    && (!tileType.tilename.equals("Tundra") || forageSkill > 33)
+                                    && (!tileType.tilename.equals("Marsh") || forageSkill > 43)) {
                                 if (verbose)
                                     Utils.consolePrint("Start foraging at tile - " + checkedtiles[tileIndex][0] + " " + checkedtiles[tileIndex][1]);
                                 WurmHelper.hud.sendAction(forageType.action, Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0));
                                 queuedTiles.add(coordsPair);
                                 forageTilesInProcess.add(coordsPair);
-                                if (tileType.isGrass()) {
-                                    if (forageSkill > 80)
-                                        forageTilesInProcess.add(coordsPair);
-                                    if (forageSkill > 53)
-                                        forageTilesInProcess.add(coordsPair);
-                                    if (forageSkill > 26)
-                                        forageTilesInProcess.add(coordsPair);
-                                }
                                 lastActionFinishedTime = System.currentTimeMillis();
                             }
                         }
@@ -172,7 +170,7 @@ public class ForagerBot extends Bot {
                                     Utils.consolePrint("Start cutting flowers at tile - " + checkedtiles[tileIndex][0] + " " + checkedtiles[tileIndex][1]);
                                 lastActionFinishedTime = System.currentTimeMillis();
                             }
-                            if (grassGathering && ((tileType.isGrass() && GrassData.GrowthStage.decodeTileData(tileData) != GrassData.GrowthStage.SHORT) ||
+                            if (((tileType.isGrass() && GrassData.GrowthStage.decodeTileData(tileData) != GrassData.GrowthStage.SHORT) ||
                                     ((tileType.isTree() || tileType.isBush()) && GrassData.GrowthTreeStage.decodeTileData(tileData) != GrassData.GrowthTreeStage.LAWN
                                             && GrassData.GrowthTreeStage.decodeTileData(tileData) != GrassData.GrowthTreeStage.SHORT)) && queuedTiles.size() < maxActions) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendAction(sickleId,
@@ -199,11 +197,10 @@ public class ForagerBot extends Bot {
                             if (grassItem.getWeight()+totalWeight < 3.2) {
                                 forCombining.add(grassItem);
                                 totalWeight += grassItem.getWeight();
-                                if (totalWeight > 3.2) break;
                             }
                         if (forCombining.size() > 1) {
-                            long[] targetIds = new long[forCombining.size()];
-                            for(tileIndex = 0; tileIndex < Math.min(forCombining.size(), 64); tileIndex++)
+                            long[] targetIds = new long[Math.min(forCombining.size(), 64)];
+                            for(tileIndex = 0; tileIndex < targetIds.length; tileIndex++)
                                 targetIds[tileIndex] = forCombining.get(tileIndex).getId();
                             WurmHelper.hud.getWorld().getServerConnection().sendAction(
                                     targetIds[0], targetIds, PlayerAction.COMBINE);
@@ -223,7 +220,7 @@ public class ForagerBot extends Bot {
                     long[] foragablesIds = Utils.getItemIds(foragables);
                     if (foragablesIds != null && foragables.size() > 20) {
                         for (InventoryMetaItem container : containers) {
-                            if (container.getChildren().size() < 100) {
+                            if (container.getChildren() != null && container.getChildren().size() < 100) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
                                         container.getId(), foragablesIds);
                                 break;
@@ -253,6 +250,7 @@ public class ForagerBot extends Bot {
                     for (String name : filterItemNames) {
                         if (item.getBaseName().contains(name)) {
                             iter.remove();
+                            break;
                         }
                     }
                 }
@@ -283,15 +281,14 @@ public class ForagerBot extends Bot {
         registerEventProcessor(message -> (message.contains("inventory is full") && dropWhenFull),
                 this::dropItems);
     }
+    private static <T extends Enum<T>> void showTypes(String header, T[] types, Function<T, String> abbreviation) {
+        Utils.consolePrint(header + Arrays.stream(types)
+                .map(type -> abbreviation.apply(type) + "(" + type.name() + ")")
+                .collect(Collectors.joining(", ")));
+    }
+
     private void showForagingTypes() {
-        StringBuilder foragingTypes = new StringBuilder();
-        foragingTypes.append("Available foraging types - ");
-        for(ForageType forageType : ForageType.values())
-            foragingTypes.append(forageType.abbreviation)
-                    .append("(").append(forageType.name()).append("), ");
-        foragingTypes.deleteCharAt(foragingTypes.length() - 1);
-        foragingTypes.deleteCharAt(foragingTypes.length() - 1);
-        Utils.consolePrint(foragingTypes.toString());
+        showTypes("Available foraging types - ", ForageType.values(), type -> type.abbreviation);
     }
 
     private void setForagingType(String []input) {
@@ -306,17 +303,11 @@ public class ForagerBot extends Bot {
             return;
         }
         this.forageType = forageType;
+        Utils.feedback("Foraging type was set to " + forageType.name());
     }
 
     private void showBotanizingTypes() {
-        StringBuilder botanizingTypes = new StringBuilder();
-        botanizingTypes.append("Available botanizing types - ");
-        for(BotanizeType botanizingType : BotanizeType.values())
-            botanizingTypes.append(botanizingType.abbreviation)
-                    .append("(").append(botanizingType.name()).append("), ");
-        botanizingTypes.deleteCharAt(botanizingTypes.length() - 1);
-        botanizingTypes.deleteCharAt(botanizingTypes.length() - 1);
-        Utils.consolePrint(botanizingTypes.toString());
+        showTypes("Available botanizing types - ", BotanizeType.values(), type -> type.abbreviation);
     }
 
     private void setBotanizingType(String []input) {
@@ -327,89 +318,71 @@ public class ForagerBot extends Bot {
         BotanizeType botanizeType = BotanizeType.getByAbbreviation(input[0]);
         if (botanizeType == BotanizeType.Unknown) {
             Utils.consolePrint("Unknown botanizing type. Use " +
-                    "\"" + ForagerBot.InputKey.ftl.name() + "\" key to see available types");
+                    "\"" + ForagerBot.InputKey.btl.name() + "\" key to see available types");
             return;
         }
         this.botanizeType = botanizeType;
+        Utils.feedback("Botanizing type was set to " + botanizeType.name());
     }
 
     private void setMaxActions(String [] input) {
-        if (input.length != 1 ){
-            printInputKeyUsageString(ForagerBot.InputKey.na);
+        Integer value = parseIntArg(input, ForagerBot.InputKey.na, 1, 100);
+        if (value == null)
             return;
-        }
-        try {
-            maxActions = Integer.parseInt(input[0]);
-            Utils.consolePrint("Maximum actions was set " + maxActions);
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong max actions value!");
-        }
+        maxActions = value;
+        Utils.consolePrint("Maximum actions was set " + maxActions);
     }
 
     private void setContainerName(String []input) {
-        if (input.length < 1 ){
+        String name = joinArgs(input);
+        if (name == null) {
             printInputKeyUsageString(ForagerBot.InputKey.scn);
             return;
         }
-        StringBuilder containerNameBuilder = new StringBuilder(input[0]);
-        for (int i = 1; i < input.length; i++)
-            containerNameBuilder.append(" ").append(input[i]);
-        containerName = containerNameBuilder.toString();
-        Utils.consolePrint("Container name was set to \"" + containerName + "\"");
+        containerName = name;
+        Utils.feedback("Container name was set to \"" + containerName + "\"");
     }
 
     private void toggleVerboseMode() {
         verbose = !verbose;
-        if (verbose)
-            Utils.consolePrint("Verbose mode is on!");
-        else
-            Utils.consolePrint("Verbose mode is off!");
+        Utils.feedback("Verbose mode is " + onOff(verbose));
     }
 
     private void toggleDropping() {
         dropping = !dropping;
-        if (dropping)
-            Utils.consolePrint("Dropping is on!");
-        else
-            Utils.consolePrint("Dropping is off!");
+        Utils.feedback("Dropping is " + onOff(dropping));
     }
     private void toggleDroppingWhenFull() {
         dropWhenFull = !dropWhenFull;
         if (dropWhenFull)
-            Utils.consolePrint("Drop when inventory full.");
+            Utils.feedback("Drop when inventory full.");
         else
-            Utils.consolePrint("Drop when action done.");
+            Utils.feedback("Drop when action done.");
     }
 
     private void addItemToFilter(String[] input) {
-        if (input.length < 1 ){
+        List<String> names = parseNameList(input);
+        if (names.isEmpty()) {
             printInputKeyUsageString(InputKey.dfa);
             return;
         }
-        String itemName = Arrays.stream(input).collect(Collectors.joining(" "));
-        filterItemNames.add(itemName);
-        Utils.consolePrint("Added " + itemName + " to filter list. Current filter: [" + String.join(",", filterItemNames) + "]");
+        filterItemNames.addAll(names);
+        Utils.consolePrint("Added " + String.join(", ", names) + " to filter list. Current filter: [" + String.join(", ", filterItemNames) + "]");
     }
 
     private void clearFilter() {
-        Utils.consolePrint("Cleared drop filter.");
         filterItemNames.clear();
+        Utils.feedback("Cleared drop filter.");
     }
 
     private void toggleBotanizing() {
         botanizing = !botanizing;
-        if (botanizing)
-            Utils.consolePrint("Botanizing is on!");
-        else
-            Utils.consolePrint("Botanizing is off!");
+        Utils.feedback("Botanizing is " + onOff(botanizing));
     }
 
     private void toggleForaging() {
         foraging = !foraging;
-        if (foraging)
-            Utils.consolePrint("Foraging is on!");
-        else
-            Utils.consolePrint("Foraging is off!");
+        Utils.feedback("Foraging is " + onOff(foraging));
     }
 
     private void toggleGrassGathering() {
@@ -417,15 +390,15 @@ public class ForagerBot extends Bot {
         if (grassGathering) {
             InventoryMetaItem sickle = Utils.locateToolItem("sickle");
             if (sickle == null) {
-                Utils.consolePrint("You don't have a sickle! " + this.getClass().getSimpleName() + " won't start");
+                Utils.consolePrint("You don't have a sickle! Grass gathering stays off");
                 grassGathering = false;
                 return;
             }
             sickleId = sickle.getId();
             Utils.consolePrint(this.getClass().getSimpleName() + " will use " + sickle.getDisplayName() + " with QL:" + sickle.getQuality() + " DMG:" + sickle.getDamage());
-            Utils.consolePrint("Grass gathering is on!");
+            Utils.feedback("Grass gathering is on");
         } else
-            Utils.consolePrint("Grass gathering is off!");
+            Utils.feedback("Grass gathering is off");
     }
 
     private void actionFinished() {
@@ -444,25 +417,8 @@ public class ForagerBot extends Bot {
         synchronized (queuedTiles) {
             if (queuedTiles.size() > 0) {
                 Pair<Integer, Integer> tile = queuedTiles.get(queuedTiles.size() - 1);
-                float forageSkill = WurmHelper.hud.getWorld().getPlayer().getSkillSet().getSkillValue("foraging");
-                float botanizeSkill = WurmHelper.hud.getWorld().getPlayer().getSkillSet().getSkillValue("botanizing");
-                if (forageTilesInProcess.contains(tile)) {
-                    forageTilesInProcess.remove(tile);
-                    if (forageSkill > 80)
-                        forageTilesInProcess.remove(tile);
-                    if (forageSkill > 53)
-                        forageTilesInProcess.remove(tile);
-                    if(forageSkill > 26)
-                        forageTilesInProcess.remove(tile);
-                } else if (botanizeTilesInProcess.contains(tile)) {
+                if (!forageTilesInProcess.remove(tile))
                     botanizeTilesInProcess.remove(tile);
-                    if (botanizeSkill > 80)
-                        botanizeTilesInProcess.remove(tile);
-                    if (botanizeSkill > 53)
-                        botanizeTilesInProcess.remove(tile);
-                    if(botanizeSkill > 26)
-                        botanizeTilesInProcess.remove(tile);
-                }
                 if (verbose)
                     Utils.consolePrint("Too busy to queue tile - " + tile.getKey() + " " + tile.getValue());
                 queuedTiles.remove(queuedTiles.size() - 1);
@@ -495,63 +451,34 @@ public class ForagerBot extends Bot {
         }
     }
 
-    private void setStaminaThreshold(String input[]) {
-        if (input == null || input.length != 1)
-            printInputKeyUsageString(ForagerBot.InputKey.s);
-        else {
-            try {
-                float threshold = Float.parseFloat(input[0]);
-                setStaminaThreshold(threshold);
-            } catch (Exception e) {
-                Utils.consolePrint("Wrong threshold value!");
-            }
-        }
-    }
-
-    private void setStaminaThreshold(float s) {
-        staminaThreshold = s;
-        Utils.consolePrint("Current threshold for stamina is " + staminaThreshold);
-    }
-
     enum InputKey implements Bot.InputKey {
-        s("Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
-                "threshold(float value between 0 and 1)"),
-        g("Toggle the grass gathering", ""),
-        f("Toggle the foraging", ""),
-        ftl("Show the list of foraging types", ""),
-        ft("Set the foraging type", "type"),
-        b("Toggle the botanizing", ""),
-        btl("Show the list of botanizing types", ""),
-        bt("Set the botanizing type", "type"),
-        d("Toggle the dropping of collected items to the ground", ""),
-        dwf("Change drop mode between drop when full inventory or drop after every action", ""),
-        dfa("Add item to drop filter. Drop filter items won't be dropped", "name(string)"),
-        dfc("Clear filter", ""),
-        v("Toggle the verbose mode. " +
+        s("Stamina", "Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold",
+                "<threshold>"),
+        g("Grass", "Toggle the grass gathering", ""),
+        f("Forage", "Toggle the foraging", ""),
+        ftl("Forage Types", "Show the list of foraging types", ""),
+        ft("Forage Type", "Set the foraging type. Use the \"ftl\" key to see the available types", "<type>"),
+        b("Botanizing", "Toggle the botanizing", ""),
+        btl("Botanize Types", "Show the list of botanizing types", ""),
+        bt("Botanize Type", "Set the botanizing type. Use the \"btl\" key to see the available types", "<type>"),
+        d("Drop", "Toggle the dropping of collected items to the ground", ""),
+        dwf("Drop When Full", "Change drop mode between drop when full inventory or drop after every action", ""),
+        dfa("Add Item", "Add item name(s) to the drop filter, separated by commas. Items whose name contains a filter name won't be dropped", "<item name>[, <item name>...]"),
+        dfc("Clear Items", "Clear the drop filter", ""),
+        v("Verbose", "Toggle the verbose mode. " +
                 "Additional information will be shown in console during the work of the bot in verbose mode", ""),
-        scn("Set the new name for containers to put sprouts/harvest", "container_name"),
-        na("Set the number of actions bot will do each time", "number");
+        scn("Container Name", "Set the name of the containers to put sprouts/harvest in (may contain spaces)", "<container name>"),
+        na("Clicks", "Set the number of actions bot will do each time", "<clicks>");
 
-        private String description;
-        private String usage;
-        InputKey(String description, String usage) {
-            this.description = description;
-            this.usage = usage;
+        private final KeyInfo keyInfo;
+
+        InputKey(String fullName, String description, String usage) {
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 

@@ -1,22 +1,28 @@
 package net.ildar.wurm;
 
+import java.io.BufferedInputStream;
+import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineEvent;
+
 import org.gotti.wurmunlimited.modloader.ReflectionUtil;
-import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
 import com.wurmonline.client.game.PlayerObj;
@@ -53,6 +59,49 @@ public class Utils {
             consoleMessages.add(line);
     }
 
+    /**
+     * Report a state change (a bot or a feature turned on/off, paused...). Always printed to the console,
+     * and also shown on screen when the OnscreenFeedback option is on, so keybind users see it with the console closed
+     */
+    public static void feedback(String fmt, Object... args) {
+        String message = args.length == 0 ? fmt : String.format(fmt, args);
+        consolePrint(message);
+        if (WurmHelper.onscreenFeedback && WurmHelper.hud != null)
+            WurmHelper.hud.addOnscreenMessage(message, 1, 1, 1, (byte)1);
+    }
+
+    /**
+     * Report something the player must notice, like a bot that stopped by itself. Always shown on screen,
+     * and plays the alarm sound when the AlarmOnStop option is on
+     */
+    public static void alert(String message) {
+        consolePrint(message);
+        if (WurmHelper.hud != null)
+            WurmHelper.hud.addOnscreenMessage(message, 1, 0.4f, 0.4f, (byte)1);
+        if (WurmHelper.alarmOnStop)
+            playAlarm();
+    }
+
+    private static void playAlarm() {
+        try {
+            InputStream resource = WurmHelper.class.getResourceAsStream("/alarm_sound.wav");
+            if (resource == null) {
+                consolePrint("Couldn't find the alarm sound");
+                return;
+            }
+            AudioInputStream audio = AudioSystem.getAudioInputStream(new BufferedInputStream(resource));
+            Clip clip = AudioSystem.getClip();
+            clip.addLineListener(event -> {
+                if (event.getType() == LineEvent.Type.STOP)
+                    clip.close();
+            });
+            clip.open(audio);
+            clip.start();
+        } catch (Exception e) {
+            consolePrint("Couldn't play the alarm sound: " + e);
+        }
+    }
+
     public static void showOnScreenMessage(String message) {
         showOnScreenMessage(message, 1, 1, 1);
     }
@@ -61,12 +110,25 @@ public class Utils {
         consolePrint(message);
     }
     
+    //cache of ReflectionUtil.getField lookups, keyed by class and field name
+    private static final Map<Class<?>, Map<String, Field>> fieldCache = new ConcurrentHashMap<>();
+
+    private static Field lookupField(Class<?> cls, String field) throws NoSuchFieldException {
+        Map<String, Field> classFields = fieldCache.computeIfAbsent(cls, c -> new ConcurrentHashMap<>());
+        Field result = classFields.get(field);
+        if (result == null) {
+            result = ReflectionUtil.getField(cls, field);
+            classFields.put(field, result);
+        }
+        return result;
+    }
+
     public static <Cls, Ret> Ret getField(Cls what, String field) throws IllegalAccessException, NoSuchFieldException {
-        return ReflectionUtil.getPrivateField(what, ReflectionUtil.getField(what.getClass(), field));
+        return ReflectionUtil.getPrivateField(what, lookupField(what.getClass(), field));
     }
     
-    public static <Cls, Field> void setField(Cls what, String field, Field value) throws IllegalAccessException, NoSuchFieldException {
-        ReflectionUtil.setPrivateField(what, ReflectionUtil.getField(what.getClass(), field), value);
+    public static <Cls, Val> void setField(Cls what, String field, Val value) throws IllegalAccessException, NoSuchFieldException {
+        ReflectionUtil.setPrivateField(what, lookupField(what.getClass(), field), value);
     }
 
     /**
@@ -135,6 +197,8 @@ public class Utils {
     }
 
     public static void movePlayerBySteps(float x, float y, int steps, long duration) throws InterruptedException{
+        if (steps <= 0)
+            return;
         float curX = WurmHelper.hud.getWorld().getPlayerPosX();
         float curY = WurmHelper.hud.getWorld().getPlayerPosY();
         float xStep = (x - curX) / steps;
@@ -227,6 +291,18 @@ public class Utils {
         return new ArrayList<>(getField(node, "children"));
     }
 
+    //returns the "inventory" line among the root lines of the main inventory, falling back to the second line
+    private static Object getInventoryNode(List<Object> rootLines) throws NoSuchFieldException, IllegalAccessException {
+        int lineNum = 1;
+        for (int i = 0; i < rootLines.size(); i++) {
+            Object item = getField(rootLines.get(i), "item");
+            String itemName = getField(item, "itemName");
+            if (itemName.equals("inventory"))
+                lineNum = i;
+        }
+        return rootLines.get(lineNum);
+    }
+
     public static List<InventoryMetaItem>  getSelectedItems() {
         return getSelectedItems(false, true);
     }
@@ -234,18 +310,7 @@ public class Utils {
         InventoryListComponent ilc = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         List<InventoryMetaItem> selItems = new ArrayList<>();
         try {
-            Object rootNode = getInventoryRootNode(ilc);
-            List lines = getNodeChildren(rootNode);
-            int lineNum = 1;
-            int forEachIdx = 0;
-            for (Object line : lines) {
-                Object item = getField(line, "item");
-                String itemName = getField(item, "itemName");
-                if (itemName.equals("inventory"))
-                    lineNum = forEachIdx;
-                forEachIdx++;
-            }
-            Object invNode = lines.get(lineNum);
+            Object invNode = getInventoryNode(getNodeChildren(getInventoryRootNode(ilc)));
             List invLines = getNodeChildren(invNode);
             selItems =  getSelectedItems(invLines, getAll, recursive);
         } catch(Exception e){
@@ -314,17 +379,16 @@ public class Utils {
                 return null;
             }
 
-            // first try to find by startsWith 
+            // first try to find by startsWith
             for (InventoryMetaItem invItem : items) {
-                if (invItem.getBaseName().startsWith(itemName)) {
+                if (normalizeBaseName(invItem).startsWith(itemName)) {
                     return invItem;
                 }
             }
 
             // if not found by startsWith lets try to find by contains
             for (InventoryMetaItem invItem : items) {
-
-                if (invItem.getBaseName().contains(itemName) || itemName.contains("'") && invItem.getDisplayName().contains(itemName.replaceAll("'",""))) {
+                if (invItem.getBaseName().contains(itemName) || displayNameMatches(invItem, itemName)) {
                     return invItem;
                 }
             }
@@ -334,6 +398,34 @@ public class Utils {
             consolePrint( e.toString());
         }
         return null;
+    }
+
+    /**
+     * Check whether an item's display name matches a quoted pattern.
+     * Quoted patterns like "'lump, iron'" are split by comma and each
+     * part must be present in the display name. This handles parenthetical
+     * modifiers like "lump (glowing), iron".
+     */
+    private static boolean displayNameMatches(InventoryMetaItem item, String itemName) {
+        if (!itemName.contains("'")) return false;
+        String stripped = itemName.replaceAll("'", "");
+        String displayName = item.getDisplayName();
+        for (String part : stripped.split(",")) {
+            if (!displayName.contains(part.trim())) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Strip the "(glowing) " prefix from item base names so that hot metal items
+     * can be matched by their normal name (e.g. "iron lump" instead of "(glowing) iron lump").
+     */
+    public static String normalizeBaseName(InventoryMetaItem item) {
+        String baseName = item.getBaseName();
+        if (baseName.startsWith("(glowing) ")) {
+            return baseName.substring("(glowing) ".length());
+        }
+        return baseName;
     }
 
     public static List<InventoryMetaItem> getInventoryItems(String itemName) {
@@ -349,8 +441,7 @@ public class Utils {
             items,
             item ->
                 item.getBaseName().contains(itemName) ||
-                itemName.contains("'") &&
-                item.getDisplayName().contains(itemName.replaceAll("'",""))
+                displayNameMatches(item, itemName)
         );
     }
     
@@ -410,9 +501,8 @@ public class Utils {
     public static List<InventoryMetaItem> getFirstLevelItems() {
         InventoryListComponent ilc = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
         try {
-            Object rootNode = getInventoryRootNode(ilc);
-            List lines = getNodeChildren(rootNode);
-            Object nodeLineItem = getField(lines.get(1), "item");
+            Object invNode = getInventoryNode(getNodeChildren(getInventoryRootNode(ilc)));
+            Object nodeLineItem = getField(invNode, "item");
             InventoryMetaItem nodeItem = getField(nodeLineItem, "item");
             return new ArrayList<>(nodeItem.getChildren());
         } catch (Exception e) {
@@ -453,7 +543,7 @@ public class Utils {
             return null;
         }
         InventoryMetaItem item = selectedItems.get(0);
-        String baseName = item.getBaseName().toLowerCase();
+        String baseName = normalizeBaseName(item).toLowerCase();
         for (String validName : validToolNames) {
             if (baseName.equals(validName.toLowerCase())) {
                 return item;
@@ -482,8 +572,10 @@ public class Utils {
     
     public static WurmComponent getComponentAtPoint(int x, int y, Predicate<WurmComponent> filter) {
         try {
-            for (int i = 0; i < WurmHelper.getInstance().components.size(); i++) {
-                WurmComponent wurmComponent = WurmHelper.getInstance().components.get(i);
+            List<WurmComponent> components = WurmHelper.getInstance().components;
+            if (components == null)
+                return null;
+            for (WurmComponent wurmComponent : components) {
                 if (wurmComponent.contains(x, y)) {
                     if (filter != null && !filter.test(wurmComponent))
                         continue;
@@ -567,28 +659,6 @@ public class Utils {
         return area;
     }
 
-    public static URL getResource(String r) {
-        URL url = WurmHelper.class.getClassLoader().getResource(r);
-        if (url == null && WurmHelper.class.getClassLoader() == HookManager.getInstance().getLoader()) {
-            url = HookManager.getInstance().getClassPool().find(WurmHelper.class.getName());
-            if (url != null) {
-                String path = url.toString();
-                int pos = path.lastIndexOf('!');
-                if (pos != -1) {
-                    if (r.substring(0,1).equals("/"))
-                        r = r.substring(1);
-                    path = path.substring(0, pos) + "!/" + r;
-                }
-                try {
-                    url = new URL(path);
-                } catch (MalformedURLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        return url;
-    }
-
     public static float getTotalWeight() {
         PaperDollInventory paperDollInventory = WurmHelper.hud.getPaperDollInventory();
         try {
@@ -632,6 +702,8 @@ public class Utils {
     }
 
     public static void writeToConsoleInputLine(String s) {
+        if (!WurmHelper.prefillConsoleInput)
+            return;
         try {
             Object consoleComponent = getField(WurmHelper.hud, "consoleComponent");
             Object inputField = getField(consoleComponent, "inputField");
@@ -653,12 +725,16 @@ public class Utils {
             fn.run();
             return true;
         } catch (Exception err) {
-            String callingClass = err.getStackTrace()[2].getClassName();
+            StackTraceElement[] trace = new Throwable().getStackTrace();
+            String callingClass = trace.length > 1 ? trace[1].getClassName() : Utils.class.getName();
+            callingClass = callingClass.substring(callingClass.lastIndexOf('.') + 1);
+            Object[] fmtArgs = new Object[args.length + 2];
+            fmtArgs[0] = err.getClass().getName();
+            fmtArgs[1] = err.getMessage();
+            System.arraycopy(args, 0, fmtArgs, 2, args.length);
             Utils.consolePrint(
                 String.format("%s: %s", callingClass, fmt), // preserve format arg numbering
-                err.getClass().getName(),
-                err.getMessage(),
-                args
+                fmtArgs
             );
             err.printStackTrace();
             return false;

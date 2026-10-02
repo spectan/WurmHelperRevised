@@ -8,13 +8,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Map.Entry;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.client.renderer.gui.InventoryListComponent;
 import com.wurmonline.client.renderer.gui.InventoryWindow;
 import com.wurmonline.client.renderer.gui.ItemListWindow;
@@ -27,8 +25,7 @@ import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils.Vec2i;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(
-	description = "Investigates tiles and identifies fragments",
+@BotInfo(name = "Archeo", description = "Investigates tiles and identifies fragments",
 	abbreviation = "ac"
 )
 public class ArcheoBot extends Bot {
@@ -38,21 +35,23 @@ public class ArcheoBot extends Bot {
 	static final Pattern unidentifiedRegex = Pattern.compile("unidentified .*fragment");
 	static final Pattern identifiedRegex = Pattern.compile("^.+ fragment \\[\\d+/\\d+\\]");
 
-	boolean investigating = false;
-	boolean identifying = false;
-	boolean combining = false;
-	boolean useShovel = false;
+	// toggled from the console thread while the bot thread reads them
+	volatile boolean investigating = false;
+	volatile boolean identifying = false;
+	volatile boolean combining = false;
+	volatile boolean useShovel = false;
 
 	long trowelId = -1;
 	long shovelId = -1;
 	long chiselId = -1;
 	long brushId = -1;
 
-	List<InventoryListComponent> identifyInventories = new ArrayList<>();
+	// modified from the console thread while the bot thread iterates it
+	List<InventoryListComponent> identifyInventories = new CopyOnWriteArrayList<>();
 
 	AreaAssistant areaAssistant = new AreaAssistant(this);
 
-	boolean investigatingDone = false;
+	volatile boolean investigatingDone = false;
 
 	public ArcheoBot() {
 		registerInputHandler(InputKey.iv, this::toggleInvestigating);
@@ -62,20 +61,22 @@ public class ArcheoBot extends Bot {
 		registerInputHandler(InputKey.at, this::setIdentifyInventory);
 		registerInputHandler(InputKey.ct, this::clearIdentifyInventory);
 
-		registerEventProcessor(
-			msg -> {
-				msg = msg.toLowerCase();
-				return
-					msg.contains("the area looks picked clean") ||
-					msg.contains("you pick out a fragment of some item") ||
-					msg.contains("you can't find any traces of any abandoned settlements here")
-				;
-			},
-			() -> investigatingDone = true
-		);
-
 		areaAssistant.setMoveAheadDistance(3);
 		areaAssistant.setMoveRightDistance(3);
+	}
+
+	@Override
+	void describeSettings(List<String> lines) {
+		lines.add("Investigating: " + onOff(investigating) + " (with " + (useShovel ? "shovel" : "trowel") + ")");
+		lines.add("Identifying: " + onOff(identifying));
+		lines.add("Fragment combining: " + onOff(combining));
+		List<String> names = new ArrayList<>();
+		for(InventoryListComponent ilc: identifyInventories) {
+			InventoryMetaItem rootItem = Utils.getRootItem(ilc);
+			names.add(rootItem != null ? rootItem.getDisplayName() : "unknown inventory");
+		}
+		lines.add("Fragment inventories: " + (names.isEmpty() ? "none" : String.join(", ", names)));
+		areaAssistant.describeSettings(lines);
 	}
 
 	@Override
@@ -89,6 +90,18 @@ public class ArcheoBot extends Bot {
 			Utils.consolePrint("Missing required archaeology tools");
 			return;
 		}
+
+		registerEventProcessor(
+			msg -> {
+				msg = msg.toLowerCase();
+				return
+					msg.contains("the area looks picked clean") ||
+					msg.contains("you pick out a fragment of some item") ||
+					msg.contains("you can't find any traces of any abandoned settlements here")
+				;
+			},
+			() -> investigatingDone = true
+		);
 
 		Set<Vec2i> tilesInvestigated = new HashSet<>();
 		List<Vec2i> tilesToBeInvestigated = new ArrayList<>();
@@ -141,7 +154,7 @@ public class ArcheoBot extends Bot {
 						);
 						
 						if(waitActionStarted(() -> investigatingDone))
-						waitActionFinished();
+							waitActionFinished();
 						if(investigatingDone) {
 							tilesToBeInvestigated.remove(tilesToBeInvestigated.size() - 1);
 							tilesInvestigated.add(tile);
@@ -153,20 +166,16 @@ public class ArcheoBot extends Bot {
 			if(identifying) {
 				unidentified.clear();
 				for(InventoryListComponent ilc: identifyInventories) {
-					List<InventoryMetaItem> found = Utils.getInventoryItems(
+					unidentified.addAll(Utils.getInventoryItems(
 						ilc,
 						item -> unidentifiedRegex.matcher(item.getDisplayName()).find()
-					);
-					if(found != null)
-						unidentified.addAll(found);
+					));
 				}
 				
 				Iterator<InventoryMetaItem> iter = unidentified.iterator();
 				boolean anyQueued = false;
 				for(int action = 0; action < maxActions; action++) {
 					if(!iter.hasNext()) break;
-					anyQueued = true;
-
 
 					InventoryMetaItem fragment = iter.next();
 					int improveIcon = fragment.getImproveIconId();
@@ -176,12 +185,14 @@ public class ArcheoBot extends Bot {
 							new long[]{fragment.getId()},
 							PlayerAction.IDENTIFY
 						);
+						anyQueued = true;
 					} else if(improveIcon == identifyBrush) {
 						WurmHelper.hud.getWorld().getServerConnection().sendAction(
 							brushId,
 							new long[]{fragment.getId()},
 							PlayerAction.IDENTIFY
 						);
+						anyQueued = true;
 					} else {
 						Utils.consolePrint("Don't know how to identify fragment `%s`!", fragment.getDisplayName());
 						action--;
@@ -256,22 +267,22 @@ public class ArcheoBot extends Bot {
 
 	void toggleInvestigating(String[] input) {
 		investigating = !investigating;
-		Utils.consolePrint("Bot will%s investigate", investigating ? "" : " no longer");
+		Utils.feedback("Bot will%s investigate", investigating ? "" : " no longer");
 	}
 
 	void toggleIdentifying(String[] input) {
 		identifying = !identifying;
-		Utils.consolePrint("Bot will%s identify fragments", identifying ? "" : " no longer");
+		Utils.feedback("Bot will%s identify fragments", identifying ? "" : " no longer");
 	}
 
 	void toggleCombining(String[] input) {
 		combining = !combining;
-		Utils.consolePrint("Bot will%s combine fragments", combining ? "" : " no longer");
+		Utils.feedback("Bot will%s combine fragments", combining ? "" : " no longer");
 	}
 
 	void toggleUseShovel(String[] input) {
 		useShovel = !useShovel;
-		Utils.consolePrint("Bot will use %s to investigate", useShovel ? "shovel" : "trowel");
+		Utils.feedback("Bot will use %s to investigate", useShovel ? "shovel" : "trowel");
 	}
 
 	void setIdentifyInventory(String[] input) {
@@ -287,33 +298,33 @@ public class ArcheoBot extends Bot {
             Utils.consolePrint("Unable to get inventory information");
             return;
         }
-        identifyInventories.add(ilc);
-
 		String title;
 		try {
 			title = Utils.getField(inventoryComponent, "title");
 		} catch(IllegalAccessException | NoSuchFieldException err) {
 			title = "<unknown>";
 		}
-		Utils.consolePrint("Bot will now identify fragments in %s", title);
+		if(identifyInventories.contains(ilc)) {
+			Utils.consolePrint("Bot already identifies fragments in %s", title);
+			return;
+		}
+		identifyInventories.add(ilc);
+		Utils.feedback("Bot will now identify fragments in %s", title);
 	}
 
 	void clearIdentifyInventory(String[] input) {
 		identifyInventories.clear();
-		Utils.consolePrint("Fragment inventories cleared");
+		Utils.feedback("Fragment inventories cleared");
 	}
 
 	boolean waitActionStarted(Supplier<Boolean> failed) throws Exception {
-		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
 		final long start = System.currentTimeMillis();
 		while(isActive()) {
 			if(failed != null && failed.get()) {
 				return false;
 			}
 
-			float progress = Utils.getField(progressBar, "progress");
-			if(progress != 0f) {
+			if(!isProgressZero()) {
 				return true;
 			}
 			Thread.sleep(250);
@@ -328,11 +339,8 @@ public class ArcheoBot extends Bot {
 	}
 	
 	void waitActionFinished() throws Exception {
-		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
 		while(isActive()) {
-			float progress = Utils.getField(progressBar, "progress");
-			if(progress == 0f) {
+			if(isProgressZero()) {
 				break;
 			}
 			Thread.sleep(250);
@@ -340,34 +348,23 @@ public class ArcheoBot extends Bot {
 	}
 
 	enum InputKey implements Bot.InputKey {
-		iv("Toggle investigating", ""),
-		id("Toggle identifying", ""),
-		co("Toggle fragment combining", ""),
-		sh("Toggle investigating with shovel", ""),
-		at("Add target inventory to identify fragments in", ""),
-		ct("Clear inventories to identify fragments in", ""),
+		iv("Investigating", "Toggle investigating", ""),
+		id("Identifying", "Toggle identifying", ""),
+		co("Fragment Combining", "Toggle fragment combining", ""),
+		sh("Shovel", "Toggle investigating with shovel instead of trowel", ""),
+		at("Add Target", "Add the inventory under the mouse cursor to identify fragments in", ""),
+		ct("Clear Targets", "Clear inventories to identify fragments in", ""),
 		;
 
-		public String description;
-        public String usage;
-        InputKey(String description, String usage) {
-            this.description = description;
-            this.usage = usage;
-        }
+		private final KeyInfo keyInfo;
 
-        @Override
-        public String getName() {
-            return name();
-        }
+		InputKey(String fullName, String description, String usage) {
+			keyInfo = new KeyInfo(fullName, description, usage);
+		}
 
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
-        }
+		@Override
+		public KeyInfo keyInfo() {
+			return keyInfo;
+		}
 	}
 }

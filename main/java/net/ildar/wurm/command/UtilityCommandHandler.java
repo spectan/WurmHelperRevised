@@ -176,7 +176,10 @@ public class UtilityCommandHandler {
             e.printStackTrace();
             return;
         }
-        List<InventoryMetaItem> items = Utils.getInventoryItems(itemName);
+        // take the items from the hovered container; for the main inventory window only search the "inventory" node
+        List<InventoryMetaItem> items = inventoryComponent instanceof InventoryWindow
+                ? Utils.getInventoryItems(itemName)
+                : Utils.getInventoryItems(ilc, itemName);
         if (items == null || items.size() == 0) {
             Utils.consolePrint("No items");
             return;
@@ -199,13 +202,14 @@ public class UtilityCommandHandler {
         }
         for (WurmComponent component : components) {
             if (component instanceof ItemListWindow) {
+                InventoryListComponent altarIlc;
                 try {
-                    ilc = Utils.getField(component, "component");
+                    altarIlc = Utils.getField(component, "component");
                 } catch (Exception e) {
                     e.printStackTrace();
                     return;
                 }
-                InventoryMetaItem rootItem = Utils.getRootItem(ilc);
+                InventoryMetaItem rootItem = Utils.getRootItem(altarIlc);
                 if (rootItem == null) {
                     Utils.consolePrint("Internal error on moving items");
                     return;
@@ -221,29 +225,5 @@ public class UtilityCommandHandler {
             }
         }
         Utils.consolePrint("Didn't find an opened altar");
-    }
-
-    private static abstract class SimpleHandler implements ConsoleCommandHandler {
-        private final String usage;
-        private final String description;
-
-        SimpleHandler(String usage, String description) {
-            this.usage = usage;
-            this.description = description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        protected void printUsage(String name) {
-            Utils.consolePrint("Usage: " + name + " " + usage);
-        }
     }
 }

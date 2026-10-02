@@ -25,9 +25,9 @@ public class Pair<Key, Value>
     @SuppressWarnings("rawtypes")
     public boolean equals(Object obj) {
         if(this == obj) return true;
-        
+        if(!(obj instanceof Pair)) return false;
+
         Pair pair = (Pair)obj;
-        if(pair == null) return false;
         return Objects.equals(key, pair.key) && Objects.equals(value, pair.value);
     }
 }

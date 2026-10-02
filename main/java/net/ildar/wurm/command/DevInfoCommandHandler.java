@@ -157,24 +157,4 @@ public class DevInfoCommandHandler {
         Utils.consolePrint(" Model name: %s", data.getModelName());
         Utils.consolePrint(" Description: \"%s\"", data.getDescription());
     }
-
-    private static abstract class SimpleHandler implements ConsoleCommandHandler {
-        private final String usage;
-        private final String description;
-
-        SimpleHandler(String usage, String description) {
-            this.usage = usage;
-            this.description = description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-    }
 }

@@ -13,13 +13,13 @@ import java.util.PriorityQueue;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
 import com.wurmonline.client.game.NearTerrainDataBuffer;
-import com.wurmonline.client.game.PlayerObj;
-import com.wurmonline.client.game.TerrainDataBuffer;
 import com.wurmonline.client.game.World;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.PickableUnit;
@@ -42,7 +42,7 @@ import net.ildar.wurm.Utils.Cell;
 import net.ildar.wurm.Utils.Vec2i;
 import net.ildar.wurm.annotations.BotInfo;
 
-@BotInfo(abbreviation = "pt", description = "Bot that can perform pathfinding to accomplish its various tasks")
+@BotInfo(name = "Pathing", abbreviation = "pt", description = "Bot that can perform pathfinding to accomplish its various tasks")
 public class PathingBot extends Bot
 {
 	final ForkJoinPool pool = new ForkJoinPool(
@@ -76,16 +76,19 @@ public class PathingBot extends Bot
 	
 	final HeadsUpDisplay hud = WurmHelper.hud;
     final World world = hud.getWorld();
-	final PlayerObj player = world.getPlayer();
 	
-	boolean exiting = false;
+	volatile boolean exiting = false;
 	
 	static final float tickDelta = 1 / 6f;
-	float topSpeedMPS = (15f * 1000) / 60 / 60;
+	volatile float topSpeedMPS = (15f * 1000) / 60 / 60;
 	
+	// commands run as tasks on the pool, which only works while the bot thread runs (it registers the event processors and shuts the pool down)
 	InputHandler inPool(InputHandler fn)
 	{
-		return args -> pool.execute(() -> fn.handle(args));
+		return args -> {
+			if(!requireRunning()) return;
+			pool.execute(() -> fn.handle(args));
+		};
 	}
 	
 	boolean waitOnPauseFJ()
@@ -93,30 +96,26 @@ public class PathingBot extends Bot
 		try
 		{
 			ForkJoinPool.managedBlock(new PauseBlocker(this));
-			return true;
+			return !exiting;
 		}
 		catch(InterruptedException err) { return false; }
 	}
 	
 	public PathingBot()
 	{
-		registerInputHandler(Inputs.speed, inPool(this::cmdSpeed));
+		registerInputHandler(Inputs.speed, this::cmdSpeed);
 		registerInputHandler(Inputs.walkto, inPool(this::cmdWalkto));
 		registerInputHandler(Inputs.follow, inPool(this::cmdFollow));
 		registerInputHandler(Inputs.murder, inPool(this::cmdMurder));
-		registerInputHandler(Inputs.groom, inPool(this::cmdGroom));
-		registerInputHandler(Inputs.shear, inPool(this::cmdShear));
+		registerInputHandler(Inputs.groom, inPool(args -> runCreatureTask(groomTask)));
+		registerInputHandler(Inputs.shear, inPool(args -> runCreatureTask(shearTask)));
 	}
 	
 	void cmdSpeed(String[] args)
 	{
-		if(args == null || args.length == 0)
-		{
-			printInputKeyUsageString(Inputs.speed);
+		final Float newSpeed = parseFloatArg(args, Inputs.speed, 0.1f, 1000f);
+		if(newSpeed == null)
 			return;
-		}
-		
-		float newSpeed = Float.parseFloat(args[0]);
 		topSpeedMPS = (newSpeed * 1000) / 60 / 60;
 		Utils.consolePrint(
 			"Bot will now move at %f kph (%f m/s)",
@@ -125,13 +124,34 @@ public class PathingBot extends Bot
 		);
 	}
 	
-	void enforceNoTasksRunning()
+	/**
+	 * @return true when no other task runs; otherwise tells the user and returns false
+	 */
+	boolean checkNoTasksRunning()
 	{
-		if(walking || following || murdering || grooming)
-			throw new RuntimeException("Another task is already enabled");
+		if(walking || following || murdering || groomTask.running || shearTask.running)
+		{
+			Utils.consolePrint("Another task is already running - turn it off first");
+			return false;
+		}
+		return true;
 	}
 	
-	boolean walking = false;
+	@Override
+	void describeSettings(List<String> lines)
+	{
+		lines.add(String.format("Speed: %.1f km/h", topSpeedMPS * 60 * 60 / 1000));
+		final String task;
+		if(walking) task = "walking";
+		else if(following) task = "following " + followTargetName;
+		else if(murdering) task = "murdering";
+		else if(groomTask.running) task = "grooming";
+		else if(shearTask.running) task = "shearing";
+		else task = "none";
+		lines.add("Task: " + task);
+	}
+	
+	volatile boolean walking = false;
 	void cmdWalkto(String[] args)
 	{
 		final Vec2i target;
@@ -160,12 +180,23 @@ public class PathingBot extends Bot
 			}
 		}
 		else
-			target = new Vec2i(
-				Integer.parseInt(args[0]),
-				Integer.parseInt(args[1])
-			);
+		{
+			try
+			{
+				target = new Vec2i(
+					Integer.parseInt(args[0]),
+					Integer.parseInt(args[1])
+				);
+			}
+			catch(NumberFormatException err)
+			{
+				Utils.consolePrint("Tile coordinates must be integers");
+				printInputKeyUsageString(Inputs.walkto);
+				return;
+			}
+		}
 		
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
 		walking = true;
 		
 		Utils.consolePrint("Pathfinding to %d,%d", target.x, target.y);
@@ -174,27 +205,41 @@ public class PathingBot extends Bot
 		walking = false;
 	}
 	
-	boolean following = false;
+	volatile boolean following = false;
+	volatile String followTargetName = null;
 	void cmdFollow(String[] args)
 	{
+		final String name = joinArgs(args);
 		if(following)
 		{
-			following = false;
+			if(name == null)
+			{
+				following = false;
+				Utils.feedback("Stopped following");
+			}
+			else
+			{
+				// already following: switch to the new player instead of stopping
+				followTargetName = name.toLowerCase();
+				Utils.feedback("Now following `%s`", name);
+			}
 			return;
 		}
 		
-		if(args == null || args.length < 1)
+		if(name == null)
 		{
 			printInputKeyUsageString(Inputs.follow);
 			return;
 		}
-		final String targetPlayerName = args[0].toLowerCase();
 		
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
 		
+		followTargetName = name.toLowerCase();
 		following = true;
+		Utils.feedback("Following `%s`", name);
 		while(!exiting && following)
 		{
+			final String targetPlayerName = followTargetName;
 			CreatureCellRenderable _targetPlayer = null;
 			for(int i = 0; i < 10; i++)
 			{
@@ -251,37 +296,21 @@ public class PathingBot extends Bot
 		following = false;
 	}
 	
-	boolean murdering = false;
+	volatile boolean murdering = false;
 	static final Pattern petItemRe = Pattern.compile("\\w's pet$", Pattern.CASE_INSENSITIVE);
 	void cmdMurder(String[] args)
 	{
 		if(murdering)
 		{
 			murdering = false;
+			Utils.feedback("Murdering is off");
 			return;
 		}
 		
 		// TODO: only target hostile/passive
-		/* String type = "all";
-		if(args != null || args.length >= 1)
-		{
-			type = args[0].toLowerCase();
-			switch(type)
-			{
-				case "all":
-				case "passive":
-				case "hostile":
-					break;
-				default:
-					Utils.consolePrint("Unknown mode `%s`, expected one of all/passive/hostile", type);
-					return;
-			}
-		}
 		
-		final boolean passive = type.equals("all") || type.equals("passive");
-		final boolean hostile = type.equals("all") || type.equals("hostile"); */
-		
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
+		Utils.feedback("Murdering is on");
 		
 		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
@@ -302,11 +331,6 @@ public class PathingBot extends Bot
 					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
 					if(exiting || !murdering) break outer;
 				}
-				else if(targetId <= 0)
-				{
-					target = null;
-					continue outer;
-				}
 				
 				if(Utils.sqdistFromPlayer(target) > 4 * 4)
 				{
@@ -323,14 +347,8 @@ public class PathingBot extends Bot
 						hud.sendAction(PlayerAction.NO_TARGET, -1);
 						continue outer;
 					}
-					else
-					{
-						if(exiting || !murdering) break outer;
-						// TODO: position player a reasonable distance from target
-						/* Utils.moveToCenter();
-						Vector2f remainder = new Vector2f(target.getXPos(), target.getYPos());
-						remainder.subtract(world.getPlayerPosX(), world.getPlayerPosY()); */
-					}
+					// TODO: position player a reasonable distance from target
+					if(exiting || !murdering) break outer;
 				}
 				
 				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
@@ -371,172 +389,99 @@ public class PathingBot extends Bot
 		murdering = false;
 	}
 	
-	boolean grooming = false;
-	Runnable onGroomingStart = null;
-	Runnable onGroomingDone = null;
-	void cmdGroom(String[] args)
+	// a task that walks to each matching creature in turn and uses a tool on it
+	static final class CreatureTask
 	{
-		if(grooming)
+		final String toolName;
+		final String noToolMessage;
+		final String verb; // e.g. "groom"
+		final String label; // e.g. "Grooming"
+		final PlayerAction action;
+		final Predicate<CreatureCellRenderable> filter;
+		volatile boolean running = false;
+		// set by the task, run by the message processors when the action starts/finishes
+		volatile Runnable onStart = null;
+		volatile Runnable onDone = null;
+		
+		CreatureTask(String toolName, String noToolMessage, String verb, String label, PlayerAction action, Predicate<CreatureCellRenderable> filter)
 		{
-			grooming = false;
-			return;
+			this.toolName = toolName;
+			this.noToolMessage = noToolMessage;
+			this.verb = verb;
+			this.label = label;
+			this.action = action;
+			this.filter = filter;
 		}
-
-		enforceNoTasksRunning();
-
-		final InventoryMetaItem brushItem = Utils.locateToolItem("grooming brush");
-		if(brushItem == null)
+		
+		void started()
 		{
-			Utils.consolePrint("Cannot groom without a brush!");
-			return;
+			final Runnable fn = onStart;
+			if(fn != null)
+				fn.run();
 		}
-
-		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
-
-		grooming = true;
-		final HashSet<Long> ignoredCreatures = new HashSet<>();
-		List<CreatureCellRenderable> creatures;
-		final Cell<CreatureCellRenderable> target = new Cell<>(null);
-		final Cell<Boolean> started = new Cell<>(false);
-		final Cell<Boolean> done = new Cell<>(false);
-		outer: while(!exiting && grooming)
+		
+		void done()
 		{
-			if(done.val)
-			{
-				if(target.val != null)
-					ignoredCreatures.add(target.val.getId());
-				target.val = null;
-				done.val = false;
-			}
-
-			if(target.val == null)
-			{
-				creatures = Utils.findCreatures((creature, data) ->
-					!ignoredCreatures.contains(creature.getId()) &&
-					!creature.isItem() &&
-					creature.getKingdomId() == 0 &&
-					!creature.isControlled() &&
-					!creature.getHoverName().startsWith("preserved") &&
-					Utils.isGroomableCreature(creature) &&
-					!petItemRe.matcher(data.getHoverText()).find()
-				);
-				creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
-
-				target.val = creatures.stream().findFirst().orElse(null);
-				if(target.val == null)
-				{
-					Utils.consolePrint("Can't find any creatures to groom");
-					break;
-				}
-				
-				onGroomingDone = () -> {
-					done.val = true;
-					onGroomingDone = null;
-				};
-			}
-
-			while(Utils.sqdistFromPlayer(target.val) > 4 * 4)
-			{
-				if(exiting || !grooming)
-					break outer;
-
-				final Supplier<Vec2i> targetPos = () -> new Vec2i(
-					(int)(target.val.getXPos() / 4f),
-					(int)(target.val.getYPos() / 4f)
-				);
-				WalkStatus res = walkPath(targetPos);
-				if(res == WalkStatus.noPath)
-				{
-					ignoredCreatures.add(target.val.getId());
-					onGroomingDone = null;
-					target.val = null;
-					hud.sendAction(PlayerAction.NO_TARGET, -1);
-					continue outer;
-				}
-				else if(res == WalkStatus.interrupted)
-					continue;
-				break;
-			}
-
-			final long actionSent = System.currentTimeMillis();
-			started.val = false;
-			onGroomingStart = () -> {
-				started.val = true;
-				onGroomingStart = null;
-			};
-			hud.getWorld().getServerConnection().sendAction(
-				brushItem.getId(),
-				new long[]{target.val.getId()},
-				PlayerAction.GROOM
-			);
-			Utils.consolePrint("Grooming `%s`", target.val.getHoverName());
-			
-			while(!started.val && !done.val)
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				if(exiting || !grooming) break outer;
-				
-				// action never started
-				if(System.currentTimeMillis() - actionSent >= 5000)
-				{
-					Utils.consolePrint("Timed out waiting for grooming to start");
-					continue outer;
-				}
-			}
-			// already groomed
-			if(done.val) continue outer;
-
-			while(
-				Utils.getPlayerStamina() < 0.99 ||
-				creationWindow.getActionInUse() > 0 ||
-				Utils.rethrow(() -> Utils.<Object, Float>getField(progressBar, "progress")) > 0f
-			)
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				if(exiting || !grooming) break outer;
-			}
+			final Runnable fn = onDone;
+			if(fn != null)
+				fn.run();
 		}
-		grooming = false;
 	}
-
-	boolean shearing = false;
-	Runnable onShearingStart = null;
-	Runnable onShearingDone = null;
-	void cmdShear(String[] args)
+	
+	final CreatureTask groomTask = new CreatureTask(
+		"grooming brush",
+		"Cannot groom without a brush!",
+		"groom",
+		"Grooming",
+		PlayerAction.GROOM,
+		creature -> Utils.isGroomableCreature(creature)
+	);
+	final CreatureTask shearTask = new CreatureTask(
+		"scissors",
+		"Cannot shear without scissors!",
+		"shear",
+		"Shearing",
+		PlayerAction.SHEAR,
+		creature -> creature.getHoverName().endsWith("sheep") || creature.getHoverName().endsWith("ram")
+	);
+	
+	void runCreatureTask(CreatureTask task)
 	{
-		if(shearing)
+		if(task.running)
 		{
-			shearing = false;
+			task.running = false;
+			Utils.feedback("%s is off", task.label);
 			return;
 		}
 
-		enforceNoTasksRunning();
+		if(!checkNoTasksRunning()) return;
 
-		final InventoryMetaItem scissorsItem = Utils.locateToolItem("scissors");
-		if(scissorsItem == null)
+		final InventoryMetaItem toolItem = Utils.locateToolItem(task.toolName);
+		if(toolItem == null)
 		{
-			Utils.consolePrint("Cannot shear without scissors!");
+			Utils.consolePrint(task.noToolMessage);
 			return;
 		}
 
 		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
 
-		shearing = true;
+		task.running = true;
+		Utils.feedback("%s is on", task.label);
 		final HashSet<Long> ignoredCreatures = new HashSet<>();
 		List<CreatureCellRenderable> creatures;
 		final Cell<CreatureCellRenderable> target = new Cell<>(null);
-		final Cell<Boolean> started = new Cell<>(false);
-		final Cell<Boolean> done = new Cell<>(false);
-		outer: while(!exiting && shearing)
+		// written by the message processors
+		final AtomicBoolean started = new AtomicBoolean(false);
+		final AtomicBoolean done = new AtomicBoolean(false);
+		outer: while(!exiting && task.running)
 		{
-			if(done.val)
+			if(done.get())
 			{
 				if(target.val != null)
 					ignoredCreatures.add(target.val.getId());
 				target.val = null;
-				done.val = false;
+				done.set(false);
 			}
 
 			if(target.val == null)
@@ -547,7 +492,7 @@ public class PathingBot extends Bot
 					creature.getKingdomId() == 0 &&
 					!creature.isControlled() &&
 					!creature.getHoverName().startsWith("preserved") &&
-					(creature.getHoverName().endsWith("sheep") || creature.getHoverName().endsWith("ram")) &&
+					task.filter.test(creature) &&
 					!petItemRe.matcher(data.getHoverText()).find()
 				);
 				creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
@@ -555,19 +500,19 @@ public class PathingBot extends Bot
 				target.val = creatures.stream().findFirst().orElse(null);
 				if(target.val == null)
 				{
-					Utils.consolePrint("Can't find any creatures to shear");
+					Utils.consolePrint("Can't find any creatures to %s", task.verb);
 					break;
 				}
 				
-				onShearingDone = () -> {
-					done.val = true;
-					onShearingDone = null;
+				task.onDone = () -> {
+					done.set(true);
+					task.onDone = null;
 				};
 			}
 
 			while(Utils.sqdistFromPlayer(target.val) > 4 * 4)
 			{
-				if(exiting || !shearing)
+				if(exiting || !task.running)
 					break outer;
 
 				final Supplier<Vec2i> targetPos = () -> new Vec2i(
@@ -578,7 +523,7 @@ public class PathingBot extends Bot
 				if(res == WalkStatus.noPath)
 				{
 					ignoredCreatures.add(target.val.getId());
-					onShearingDone = null;
+					task.onDone = null;
 					target.val = null;
 					hud.sendAction(PlayerAction.NO_TARGET, -1);
 					continue outer;
@@ -589,32 +534,35 @@ public class PathingBot extends Bot
 			}
 
 			final long actionSent = System.currentTimeMillis();
-			started.val = false;
-			onShearingStart = () -> {
-				started.val = true;
-				onShearingStart = null;
+			started.set(false);
+			task.onStart = () -> {
+				started.set(true);
+				task.onStart = null;
 			};
 			hud.getWorld().getServerConnection().sendAction(
-				scissorsItem.getId(),
+				toolItem.getId(),
 				new long[]{target.val.getId()},
-				PlayerAction.SHEAR
+				task.action
 			);
-			Utils.consolePrint("Shearing `%s`", target.val.getHoverName());
+			Utils.consolePrint("%s `%s`", task.label, target.val.getHoverName());
 			
-			while(!started.val && !done.val)
+			while(!started.get() && !done.get())
 			{
 				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				if(exiting || !shearing) break outer;
+				if(exiting || !task.running) break outer;
 				
-				// action never started
+				// action never started; skip this creature rather than retrying it forever
 				if(System.currentTimeMillis() - actionSent >= 5000)
 				{
-					Utils.consolePrint("Timed out waiting for shearing to start");
+					Utils.consolePrint("Timed out waiting for %s to start", task.label.toLowerCase());
+					ignoredCreatures.add(target.val.getId());
+					task.onDone = null;
+					target.val = null;
 					continue outer;
 				}
 			}
-			// already sheared
-			if(done.val) continue outer;
+			// already done
+			if(done.get()) continue outer;
 
 			while(
 				Utils.getPlayerStamina() < 0.99 ||
@@ -623,10 +571,10 @@ public class PathingBot extends Bot
 			)
 			{
 				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				if(exiting || !shearing) break outer;
+				if(exiting || !task.running) break outer;
 			}
 		}
-		shearing = false;
+		task.running = false;
 	}
 
 	@Override
@@ -634,10 +582,7 @@ public class PathingBot extends Bot
 	{
 		registerEventProcessor(
 			line -> line.contains("You start to tend to"),
-			() -> {
-				if(onGroomingStart != null)
-					onGroomingStart.run();
-			}
+			groomTask::started
 		);
 		registerEventProcessor(
 			line ->
@@ -645,27 +590,18 @@ public class PathingBot extends Bot
 				line.contains("is already well tended") ||
 				line.contains("That would be illegal here.")
 			,
-			() -> {
-				if(onGroomingDone != null)
-					onGroomingDone.run();
-			}
+			groomTask::done
 		);
 
 		registerEventProcessor(
 			line -> line.contains("You start shearing"),
-			() -> {
-				if(onShearingStart != null)
-					onShearingStart.run();
-			}
+			shearTask::started
 		);
 		registerEventProcessor(
 			line ->
 				line.contains("You finish shearing") ||
 				line.contains("is already sheared"),
-			() -> {
-				if(onShearingDone != null)
-					onShearingDone.run();
-			}
+			shearTask::done
 		);
 
 		try
@@ -680,6 +616,8 @@ public class PathingBot extends Bot
 		finally
 		{
 			exiting = true;
+			// wake tasks blocked on pause so they can see that we're exiting
+			synchronized(this) { notifyAll(); }
 			pool.shutdown();
 			if(!pool.awaitTermination(10, TimeUnit.SECONDS))
 				Utils.consolePrint(
@@ -765,7 +703,6 @@ public class PathingBot extends Bot
 	
 	ArrayList<Vec2i> findPath(int tileX, int tileY)
 	{
-		// final long startTime = System.nanoTime(); // perf logging
 		final Vec2i startTile = new Vec2i(world.getPlayerCurrentTileX(), world.getPlayerCurrentTileY());
 		final Vec2i endTile = new Vec2i(tileX, tileY);
 		CollisionCache cache = new CollisionCache();
@@ -875,13 +812,13 @@ public class PathingBot extends Bot
 				
 				if(edgePassable && cost < neighbor.distFromStart)
 				{
+					// the queue doesn't reorder on mutation, so take the node out before lowering its cost
+					if(enqueued.contains(neighborTile))
+						queue.remove(neighbor);
 					neighbor.distFromStart = cost;
 					neighbor.previous = head;
-					if(!enqueued.contains(neighborTile))
-					{
-						queue.add(neighbor);
-						enqueued.add(neighborTile);
-					}
+					queue.add(neighbor);
+					enqueued.add(neighborTile);
 				}
 			}
 		}
@@ -901,42 +838,29 @@ public class PathingBot extends Bot
 			node = node.previous;
 		}
 		Collections.reverse(path); // needed path is player -> goal
-		// final long endTime = System.nanoTime();
-		// Utils.consolePrint("Found path in %.4fms", (endTime - startTime) / 1_000_000.0);
 		return path;
 	}
 	
 	static enum Inputs implements Bot.InputKey
 	{
-		speed("Set speed at which bot will move, in km/h", "real"),
-		walkto("Walk to given tile coordinates", "x y"),
-		follow("Follow the given player", "name"),
-		murder("Find and murder nearby creatures", ""),
-		groom("Find and groom nearby creatures", ""),
-		shear("Find and shear nearby sheep", ""),
+		speed("Speed", "Set speed at which bot will move, in km/h", "<km/h>"),
+		walkto("Walk To", "Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running", "[<x> <y>]"),
+		follow("Follow", "Follow the player whose name starts with the given text. Without a name it stops following; with a name while following it switches to that player. Needs the bot running", "[<player name>]"),
+		murder("Murder", "Toggle finding and murdering nearby creatures. Needs the bot running", ""),
+		groom("Grooming", "Toggle finding and grooming nearby creatures. Needs the bot running", ""),
+		shear("Shear", "Toggle finding and shearing nearby sheep. Needs the bot running", ""),
 		;
-		
-		String description;
-        String usage;
-        Inputs(String description, String usage) {
-            this.description = description;
-            this.usage = usage;
-        }
 
-        @Override
-        public String getName() {
-            return name();
-        }
+		private final KeyInfo keyInfo;
 
-        @Override
-        public String getDescription() {
-            return description;
-        }
+		Inputs(String fullName, String description, String usage) {
+			keyInfo = new KeyInfo(fullName, description, usage);
+		}
 
-        @Override
-        public String getUsage() {
-            return usage;
-        }
+		@Override
+		public KeyInfo keyInfo() {
+			return keyInfo;
+		}
 	}
 }
 
@@ -989,14 +913,18 @@ class PauseBlocker implements ForkJoinPool.ManagedBlocker
 	@Override
 	public boolean block() throws InterruptedException
 	{
-		synchronized(bot) { bot.wait(); }
-		return !bot.getPaused();
+		synchronized(bot)
+		{
+			while(bot.getPaused() && !bot.exiting)
+				bot.wait();
+		}
+		return true;
 	}
 
 	@Override
 	public boolean isReleasable()
 	{
-		return !bot.getPaused();
+		return !bot.getPaused() || bot.exiting;
 	}
 }
 
@@ -1063,7 +991,8 @@ class PathNode
 	{
 		this.pos = pos;
 		this.distFromStart = distFromStart;
-		this.distToEnd = Math.pow(pos.x - goal.x, 2) + Math.pow(pos.y - goal.y, 2);
+		// diagonal steps cost the same as straight ones, so Chebyshev distance is the admissible estimate
+		this.distToEnd = Math.max(Math.abs(pos.x - goal.x), Math.abs(pos.y - goal.y));
 		this.previous = previous;
 	}
 
@@ -1074,7 +1003,9 @@ class PathNode
 	
 	public static int compare(PathNode lhs, PathNode rhs)
 	{
-		return Double.compare(lhs.cost(), rhs.cost());
+		final int res = Double.compare(lhs.cost(), rhs.cost());
+		// on ties prefer nodes closer to the goal, which avoids exploring many equally good paths
+		return res != 0 ? res : Double.compare(lhs.distToEnd, rhs.distToEnd);
 	}
 }
 
@@ -1089,7 +1020,7 @@ class CollisionCache
 	World world;
 	ServerConnectionListenerClass serverConnection;
 	Map<Long, StructureData> structures;
-	TerrainDataBuffer groundBuffer;
+	NearTerrainDataBuffer groundBuffer;
 	
 	byte[] cache;
 	Vec2i origin;
@@ -1101,9 +1032,7 @@ class CollisionCache
 		world = WurmHelper.hud.getWorld();
 		serverConnection = world.getServerConnection().getServerConnectionListener();
 		structures = Utils.rethrow(() -> Utils.getField(serverConnection, "structures"));
-		groundBuffer = world.getNearTerrainBuffer();	
-		
-		cache = new byte[pvsDiameter * pvsDiameter];
+		groundBuffer = world.getNearTerrainBuffer();
 	}
 	
 	public void refresh()
@@ -1112,8 +1041,7 @@ class CollisionCache
 		mins = new Vec2i(origin.x - pvsRadius, origin.y - pvsRadius);
 		maxs = new Vec2i(origin.x + pvsRadius, origin.y + pvsRadius);
 		
-		for(int i = 0; i < cache.length; i++)
-			cache[i] = 0;
+		cache = new byte[pvsDiameter * pvsDiameter];
 		
 		for(int y = mins.y; y < maxs.y; y++)
 			for(int x = mins.x; x < maxs.x; x++)
@@ -1149,19 +1077,9 @@ class CollisionCache
 			// collision data is only recorded for north/west, east/south must check
 			// opposite borders of adjacent tile
 			case east:
-				try { return isPassable(tileX + Dir.east.offset.x, tileY, Dir.west); }
-				catch(IllegalArgumentException err)
-				{
-					Utils.consolePrint(err.getMessage());
-					return false;
-				}
+				return isPassable(tileX + Dir.east.offset.x, tileY, Dir.west);
 			case south:
-				try { return isPassable(tileX, tileY + Dir.south.offset.y, Dir.north); }
-				catch(IllegalArgumentException err)
-				{
-					Utils.consolePrint(err.getMessage());
-					return false;
-				}
+				return isPassable(tileX, tileY + Dir.south.offset.y, Dir.north);
 			
 			default:
 				throw new RuntimeException("unknown direction");
@@ -1178,16 +1096,6 @@ class CollisionCache
 			return;
 		
 		insert(fence.getTileX(), fence.getTileY(), fence.getDir());
-		
-		// for debugging
-		/* final Vec2i pos = new Vec2i(fence.getTileX(), fence.getTileY());
-		Utils.consolePrint(
-			"inserting fence `%s` at %s with direction `%s` and type `%s`",
-			fence.getModel().getModelData().getUrl(),
-			pos,
-			fence.getDir(),
-			fence.getType().type
-		); */
 	}
 	
 	void insert(HouseData house)
@@ -1207,16 +1115,6 @@ class CollisionCache
 			return;
 		
 		insert(wall.getTileX(), wall.getTileY(), wall.getDir());
-		
-		// for debugging
-		/* final Vec2i pos = new Vec2i(wall.getTileX(), wall.getTileY());
-		Utils.consolePrint(
-			"inserting house wall `%s` at %s with direction `%s` and type `%s`",
-			wall.getModel().getModelData().getUrl(),
-			pos,
-			wall.getDir(),
-			wall.getType().type
-		); */
 	}
 	
 	void insert(int tileX, int tileY, int wurmDirection)
@@ -1330,14 +1228,10 @@ class CollisionCache
 			default:
 		}
 		
-		NearTerrainDataBuffer terrain = world.getNearTerrainBuffer();
-		final float nw = terrain.getHeight(tileX, tileY);
-		final float ne = terrain.getHeight(tileX + 1, tileY);
-		final float sw = terrain.getHeight(tileX, tileY + 1);
-		final float se = terrain.getHeight(tileX + 1, tileY + 1);
-		
-		// if(tileX == world.getPlayerCurrentTileX() && tileY == world.getPlayerCurrentTileY())
-		// 	Utils.consolePrint("nw %.4f ne %.4f sw %.4f se %.4f", nw, ne, sw, se);
+		final float nw = groundBuffer.getHeight(tileX, tileY);
+		final float ne = groundBuffer.getHeight(tileX + 1, tileY);
+		final float sw = groundBuffer.getHeight(tileX, tileY + 1);
+		final float se = groundBuffer.getHeight(tileX + 1, tileY + 1);
 		
 		final float maxSlope = 30 / 10f;
 		final float minHeight = -15 / 10f;

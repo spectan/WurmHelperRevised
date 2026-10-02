@@ -57,14 +57,11 @@ public class Chat {
 
     //colorizes with blue the part of the message describing the part of your body that your enemy set target to
     private static void modifyCombatMessage(List<MulticolorLineSegment> segments) {
-        for (Iterator<MulticolorLineSegment> iter = segments.iterator(); iter.hasNext(); ) {
+        for (ListIterator<MulticolorLineSegment> iter = segments.listIterator(); iter.hasNext(); ) {
             MulticolorLineSegment segment = iter.next();
             if (segment.getText().startsWith(" targets your")) {
-                iter.remove();
-                MulticolorLineSegment newsegment = new MulticolorLineSegment(" targets ", (byte)0);
-                segments.add(newsegment);
-                newsegment = new MulticolorLineSegment(segment.getText().substring(9), (byte)12);
-                segments.add(newsegment);
+                iter.set(new MulticolorLineSegment(" targets ", (byte)0));
+                iter.add(new MulticolorLineSegment(segment.getText().substring(9), (byte)12));
                 break;
             }
         }

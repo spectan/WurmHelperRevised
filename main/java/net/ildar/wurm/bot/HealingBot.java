@@ -1,7 +1,6 @@
 package net.ildar.wurm.bot;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
-import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.shared.constants.PlayerAction;
 import net.ildar.wurm.WurmHelper;
 import net.ildar.wurm.Utils;
@@ -9,26 +8,28 @@ import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
 
-@BotInfo(description =
+@BotInfo(name = "Healing", description =
         "Heals the player's wounds with cotton found in inventory",
         abbreviation = "h")
 public class HealingBot extends Bot {
     private final Set<String> WOUND_NAMES = new HashSet<>(Arrays.asList("Cut", "Bite", "Bruise", "Burn", "Hole", "Acid", "Infection"));
-    private float minDamage = 0;
+    private volatile float minDamage = 0;
 
     public HealingBot() {
         registerInputHandler(HealingBot.InputKey.md, this::setMinimumDamage);
+        timeout = 500;
+    }
+
+    @Override
+    void describeSettings(List<String> lines) {
+        lines.add(String.format("Minimum wound damage: %.2f", minDamage));
     }
 
     @Override
     protected void work() throws Exception{
-        setTimeout(500);
-        CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
-        Object progressBar = Utils.getField(creationWindow, "progressBar");
         while (isActive()) {
             waitOnPause();
-            float progress = Utils.getField(progressBar, "progress");
-            if (progress != 0f) {
+            if (!isProgressZero()) {
                 sleep(timeout);
                 continue;
             }
@@ -37,23 +38,27 @@ public class HealingBot extends Bot {
                 Utils.consolePrint("The player is fully healed");
                 return;
             }
-            InventoryMetaItem cottonItem = Utils.getInventoryItems("cotton").stream().filter(item -> item.getBaseName().equals("cotton")).findFirst().orElse(null);
+            InventoryMetaItem cottonItem = Utils.getInventoryItems("cotton").stream().filter(item -> Utils.normalizeBaseName(item).equals("cotton")).findFirst().orElse(null);
             if (cottonItem == null) {
-                Utils.consolePrint("The player don't have a cotton!");
+                Utils.consolePrint("The player doesn't have any cotton!");
                 return;
             }
-            List<InventoryMetaItem> inventoryItems = new ArrayList<>();
-            inventoryItems.add(Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent()));
+            InventoryMetaItem inventoryRoot = Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent());
+            if (inventoryRoot == null) {
+                sleep(timeout);
+                continue;
+            }
+            Deque<InventoryMetaItem> inventoryItems = new ArrayDeque<>();
+            inventoryItems.add(inventoryRoot);
             List<InventoryMetaItem> wounds = new ArrayList<>();
-            while (inventoryItems.size() > 0) {
-                InventoryMetaItem item = inventoryItems.get(0);
+            while (!inventoryItems.isEmpty()) {
+                InventoryMetaItem item = inventoryItems.poll();
                 if (WOUND_NAMES.contains(item.getBaseName())
                         && !item.getDisplayName().contains("bandaged")
                         && item.getDamage() > minDamage)
                     wounds.add(item);
                 if (item.getChildren() != null)
                     inventoryItems.addAll(item.getChildren());
-                inventoryItems.remove(item);
             }
             if (wounds.size() == 0) {
                 Utils.consolePrint("All wounds were treated");
@@ -72,42 +77,26 @@ public class HealingBot extends Bot {
     }
 
     private void setMinimumDamage(String[] input) {
-        if (input == null || input.length != 1) {
-            printInputKeyUsageString(HealingBot.InputKey.md);
+        Float value = parseFloatArg(input, HealingBot.InputKey.md, 0, 100);
+        if (value == null)
             return;
-        }
-        try {
-            minDamage = Float.parseFloat(input[0]);
-            Utils.consolePrint(String.format("The wound must have damage greater than %.2f in order to be treated", minDamage));
-        } catch (NumberFormatException e) {
-            Utils.consolePrint("Wrong value!");
-        }
+        minDamage = value;
+        Utils.consolePrint(String.format("The wound must have damage greater than %.2f in order to be treated", minDamage));
     }
 
 
     private enum InputKey implements Bot.InputKey {
-        md("Set the minimum damage of the wound to be treated", "min_damage");
+        md("Min Damage", "Only treat wounds with damage greater than this value (0 to 100)", "<damage>");
 
-        private String description;
-        private String usage;
-        InputKey(String description, String usage) {
-            this.description = description;
-            this.usage = usage;
+        private final KeyInfo keyInfo;
+
+        InputKey(String fullName, String description, String usage) {
+            keyInfo = new KeyInfo(fullName, description, usage);
         }
 
         @Override
-        public String getName() {
-            return name();
-        }
-
-        @Override
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String getUsage() {
-            return usage;
+        public KeyInfo keyInfo() {
+            return keyInfo;
         }
     }
 }
