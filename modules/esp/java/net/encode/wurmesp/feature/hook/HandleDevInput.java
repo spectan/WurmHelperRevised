@@ -82,7 +82,7 @@ public class HandleDevInput {
                         break;
                     }
                     case "reload": {
-                        ConfigUtils.loadProperties("wurmesp");
+                        ConfigUtils.loadProperties("esp");
                         ConfigUtils.DoConfig(WurmEspMod.modProperties);
                         WurmEspMod.hud.consoleOutput("[WurmEspMod] Config Reloaded");
                         break;

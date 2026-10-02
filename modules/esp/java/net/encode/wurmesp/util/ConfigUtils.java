@@ -162,12 +162,20 @@ public class ConfigUtils {
         } else {
             XrayColors.addMapping(Tiles.Tile.TILE_CAVE_WALL_ROCKSALT, Color.WHITE.darker());
         }
-        Unit.aggroMOBS = properties.getProperty("aggroMOBS").split(";");
-        Unit.uniqueMOBS = properties.getProperty("uniqueMOBS").split(";");
-        Unit.specialITEMS = properties.getProperty("specialITEMS").split(";");
-        Unit.spottedITEMS = properties.getProperty("spottedITEMS").split(";");
-        Unit.conditionedMOBS = properties.getProperty("conditionedMOBS").split(";");
-        WurmEspMod.tilesFlowerSearch = properties.getProperty("tilesFlowerSearch").split(";");
+        Unit.aggroMOBS = splitList(properties.getProperty("aggroMOBS"),
+                "anaconda;black bear;black wolf;brown bear;cave bug;crab;crocodile;fog Spider;goblin;hell hound;hell scorpious;huge spider;large rat;lava fiend;mountain lion;rabid hyena;scorpion;sea serpent;seal;shark;troll;wild cat;lava spider");
+        Unit.uniqueMOBS = splitList(properties.getProperty("uniqueMOBS"),
+                "forest giant;goblin leader;kyklops;troll king; dragon");
+        Unit.specialITEMS = splitList(properties.getProperty("specialITEMS"), "treasure");
+        Unit.spottedITEMS = splitList(properties.getProperty("spottedITEMS"),
+                "source spring;source fountain;mushroom");
+        Unit.conditionedMOBS = splitList(properties.getProperty("conditionedMOBS"),
+                "alert;angry;champion;diseased;fierce;greenish;hardened;lurking;raging;scared;slow;sly");
+        WurmEspMod.tilesFlowerSearch = splitList(properties.getProperty("tilesFlowerSearch"), "flowers");
+    }
+
+    private static String[] splitList(String value, String defaultValue) {
+        return (value != null ? value : defaultValue).split(";");
     }
 
     private static float[] colorStringToFloatA(String color) {
