@@ -399,7 +399,7 @@ is turned on. See the README for the general usage.
 | `bud <milliseconds>` | Bury Delay | Set the delay before burying corpses (to allow other bots time to move items). Default is 2500 |
 | `follow [<player name>]` | Follow | Follow the player whose name starts with the given text. Without a name it stops following; with a name while following it switches to that player. Needs the bot running |
 | `groom` | Grooming | Toggle finding and grooming nearby creatures. Needs the bot running |
-| `mb <keyword>[, <keyword>...]` | Add Murder Blacklist | Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked |
+| `mb <keyword>[, <keyword>...]` | Add Murder Blacklist | Add keywords (comma separated) to the murder blacklist, matched against the creature's name and hover text. Creatures matching them are never attacked, so named animals (a bred horse's name) can be excluded |
 | `mbc` | Clear Murder Blacklist | Clear the murder blacklist |
 | `murder` | Murder | Toggle finding and murdering nearby creatures. Needs the bot running |
 | `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped) |

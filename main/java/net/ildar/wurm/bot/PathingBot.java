@@ -341,6 +341,7 @@ public class PathingBot extends Bot
 	}
 	
 	volatile boolean murdering = false;
+	volatile CreatureCellRenderable murderTarget = null;
 	static final Pattern petItemRe = Pattern.compile("\\w's pet$", Pattern.CASE_INSENSITIVE);
 	void cmdMurder(String[] args)
 	{
@@ -350,20 +351,20 @@ public class PathingBot extends Bot
 			Utils.feedback("Murdering is off");
 			return;
 		}
-		
+
 		// TODO: only target hostile/passive
-		
+
 		if(!checkNoTasksRunning()) return;
 		Utils.feedback("Murdering is on");
-		
+
 		CreationWindow creationWindow = WurmHelper.hud.getCreationWindow();
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
-		
+
 		murdering = true;
 		HashSet<Long> ignoredCreatures = new HashSet<>();
 		List<CreatureCellRenderable> creatures;
 		TargetWindow targetWindow = Utils.rethrow(() -> Utils.getField(hud, "targetWindow"));
-		CreatureCellRenderable target = null;
+		CreatureCellRenderable target = murderTarget = null;
 		outer: while(!exiting && murdering)
 		{
 			long targetId = -1;
@@ -381,11 +382,11 @@ public class PathingBot extends Bot
 				{
 					Utils.consolePrint("Attacking `%s` is illegal here, ignoring it", target.getHoverName());
 					ignoredCreatures.add(target.getId());
-					target = null;
+					target = murderTarget = null;
 					hud.sendAction(PlayerAction.NO_TARGET, -1);
 					continue outer;
 				}
-				
+
 				if(Utils.sqdistFromPlayer(target) > 4 * 4)
 				{
 					final CreatureCellRenderable _target = target; // capture restrictions
@@ -397,14 +398,14 @@ public class PathingBot extends Bot
 					if(res == WalkStatus.noPath)
 					{
 						ignoredCreatures.add(target.getId());
-						target = null;
+						target = murderTarget = null;
 						hud.sendAction(PlayerAction.NO_TARGET, -1);
 						continue outer;
 					}
 					// TODO: position player a reasonable distance from target
 					if(exiting || !murdering) break outer;
 				}
-				
+
 				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
 				if(exiting || !murdering) break outer;
 			}
@@ -423,27 +424,31 @@ public class PathingBot extends Bot
 				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
 				if(exiting || !murdering) break outer;
 			}
-			
+
 			creatures = Utils.findCreatures((creature, data) ->
 				!ignoredCreatures.contains(creature.getId()) &&
 				!creature.isItem() &&
 				creature.getKingdomId() == 0 &&
 				!creature.isControlled() &&
 				!creature.getHoverName().startsWith("preserved") &&
-				murderBlacklist.stream().noneMatch(kw -> creature.getHoverName().toLowerCase().contains(kw)) &&
+				murderBlacklist.stream().noneMatch(kw ->
+					creature.getHoverName().toLowerCase().contains(kw) ||
+					data.getHoverText().toLowerCase().contains(kw)
+				) &&
 				(!avoidPassives || !isPassive(creature)) &&
 				!petItemRe.matcher(data.getHoverText()).find()
 			);
 			creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
-			
+
 			target = creatures.stream().findFirst().orElse(null);
 			if(target == null)
 			{
 				Utils.consolePrint("Can't find any creatures to target");
 				break;
 			}
+			murderTarget = target;
 			illegalStrikes.set(0);
-			
+
 			hud.sendAction(PlayerAction.TARGET, target.getId());
 			Utils.consolePrint("Murdering `%s`", target.getHoverName());
 
@@ -468,11 +473,12 @@ public class PathingBot extends Bot
 			{
 				Utils.consolePrint("Couldn't target `%s`, ignoring it", unconfirmed.getHoverName());
 				ignoredCreatures.add(unconfirmed.getId());
-				target = null;
+				target = murderTarget = null;
 				hud.sendAction(PlayerAction.NO_TARGET, -1);
 			}
 		}
 		murdering = false;
+		murderTarget = null;
 	}
 	
 	// a task that walks to each matching creature in turn and uses a tool on it
@@ -694,7 +700,7 @@ public class PathingBot extends Bot
 		// creature on a deed; the murder loop ignores the target after two strikes
 		registerEventProcessor(
 			line -> line.contains("That would be illegal here."),
-			illegalStrikes::incrementAndGet
+			this::onIllegalMessage
 		);
 
 		try
@@ -1248,6 +1254,15 @@ public class PathingBot extends Bot
 		Utils.feedback("Bot will " + (avoidPassives ? "only murder hostile creatures" : "murder creatures of any attitude"));
 	}
 
+	void onIllegalMessage()
+	{
+		// butcher/bury attempts can draw the same message, and their responses arrive
+		// late; only an active murder target in melee range can actually be the cause
+		final CreatureCellRenderable target = murderTarget;
+		if(murdering && target != null && Utils.sqdistFromPlayer(target) <= 4 * 4)
+			illegalStrikes.incrementAndGet();
+	}
+
 	boolean isPassive(CreatureCellRenderable creature)
 	{
 		// no getter for attitude; AttitudeConstants.ATTITUDE_HOSTILE == 2
@@ -1270,7 +1285,7 @@ public class PathingBot extends Bot
 			"\"rift\" is in the blacklist by default", "<keyword>[, <keyword>...]"),
 		bubc("Clear Corpse Blacklist", "Clear the corpse blacklist", ""),
 		r("Repair", "Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped)", ""),
-		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked", "<keyword>[, <keyword>...]"),
+		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist, matched against the creature's name and hover text. Creatures matching them are never attacked, so named animals (a bred horse's name) can be excluded", "<keyword>[, <keyword>...]"),
 		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
 		ap("Avoid Passives", "Toggle murdering only hostile creatures, leaving passive animals alone", ""),
 		;
