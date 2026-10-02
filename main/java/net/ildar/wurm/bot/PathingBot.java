@@ -12,11 +12,11 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -107,9 +107,8 @@ public class PathingBot extends Bot
 	volatile boolean repairing = false;
 	final Set<String> murderBlacklist = ConcurrentHashMap.newKeySet();
 	volatile boolean avoidPassives = false;
-	// the client has no deed data, so token locations are marked by hand
-	static final int tokenSafeRadius = 50; // tiles
-	final List<Vec2i> tokenLocations = new CopyOnWriteArrayList<>();
+	// strikes for "That would be illegal here." while the current murder target is active
+	final AtomicInteger illegalStrikes = new AtomicInteger(0);
 	
 	// commands run as tasks on the pool, which only works while the bot thread runs (it registers the event processors and shuts the pool down)
 	InputHandler inPool(InputHandler fn)
@@ -148,8 +147,6 @@ public class PathingBot extends Bot
 		registerInputHandler(Inputs.mb, this::addMurderBlacklist);
 		registerInputHandler(Inputs.mbc, input -> clearMurderBlacklist());
 		registerInputHandler(Inputs.ap, input -> toggleAvoidPassives());
-		registerInputHandler(Inputs.token, this::cmdAddToken);
-		registerInputHandler(Inputs.tokenclear, input -> clearTokens());
 	}
 	
 	void cmdSpeed(String[] args)
@@ -196,7 +193,6 @@ public class PathingBot extends Bot
 		lines.add("Repair: " + onOff(repairing));
 		lines.add("Murder blacklist: " + (murderBlacklist.isEmpty() ? "empty" : String.join(", ", murderBlacklist)));
 		lines.add("Avoid passives: " + onOff(avoidPassives));
-		lines.add("Tokens: " + (tokenLocations.isEmpty() ? "none recorded" : tokenLocations.size() + " recorded (safe radius " + tokenSafeRadius + " tiles)"));
 	}
 	
 	volatile boolean walking = false;
@@ -379,6 +375,16 @@ public class PathingBot extends Bot
 					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
 					if(exiting || !murdering) break outer;
 				}
+
+				// attacking a creature on a deed draws "That would be illegal here."
+				if(illegalStrikes.get() >= 2)
+				{
+					Utils.consolePrint("Attacking `%s` is illegal here, ignoring it", target.getHoverName());
+					ignoredCreatures.add(target.getId());
+					target = null;
+					hud.sendAction(PlayerAction.NO_TARGET, -1);
+					continue outer;
+				}
 				
 				if(Utils.sqdistFromPlayer(target) > 4 * 4)
 				{
@@ -425,7 +431,6 @@ public class PathingBot extends Bot
 				!creature.isControlled() &&
 				!creature.getHoverName().startsWith("preserved") &&
 				murderBlacklist.stream().noneMatch(kw -> creature.getHoverName().toLowerCase().contains(kw)) &&
-				!isNearToken(creature) &&
 				(!avoidPassives || !isPassive(creature)) &&
 				!petItemRe.matcher(data.getHoverText()).find()
 			);
@@ -437,6 +442,7 @@ public class PathingBot extends Bot
 				Utils.consolePrint("Can't find any creatures to target");
 				break;
 			}
+			illegalStrikes.set(0);
 			
 			hud.sendAction(PlayerAction.TARGET, target.getId());
 			Utils.consolePrint("Murdering `%s`", target.getHoverName());
@@ -682,6 +688,13 @@ public class PathingBot extends Bot
 				line.contains("You finish shearing") ||
 				line.contains("is already sheared"),
 			shearTask::done
+		);
+
+		// the server says this when an action breaks settlement laws, e.g. attacking a
+		// creature on a deed; the murder loop ignores the target after two strikes
+		registerEventProcessor(
+			line -> line.contains("That would be illegal here."),
+			illegalStrikes::incrementAndGet
 		);
 
 		try
@@ -1235,57 +1248,6 @@ public class PathingBot extends Bot
 		Utils.feedback("Bot will " + (avoidPassives ? "only murder hostile creatures" : "murder creatures of any attitude"));
 	}
 
-	void cmdAddToken(String[] args)
-	{
-		Vec2i token = null;
-		final PickableUnit unit = world.getCurrentHoveredObject();
-		if(unit instanceof TilePicker)
-		{
-			final TilePicker tile = (TilePicker)unit;
-			try
-			{
-				token = new Vec2i(
-					Utils.getField(tile, "x"),
-					Utils.getField(tile, "y")
-				);
-			}
-			catch(Exception err)
-			{
-				Utils.consolePrint("Couldn't get coords for hovered tile:\n%s", err);
-				return;
-			}
-		}
-		if(token == null)
-			token = new Vec2i(world.getPlayerCurrentTileX(), world.getPlayerCurrentTileY());
-		tokenLocations.add(token);
-		Utils.feedback(
-			"Recorded a token at %d,%d; creatures within %d tiles of it will not be murdered",
-			token.x,
-			token.y,
-			tokenSafeRadius
-		);
-	}
-
-	void clearTokens()
-	{
-		tokenLocations.clear();
-		Utils.consolePrint("Token locations cleared");
-	}
-
-	boolean isNearToken(CreatureCellRenderable creature)
-	{
-		final int tx = (int)(creature.getXPos() / 4f);
-		final int ty = (int)(creature.getYPos() / 4f);
-		for(Vec2i token: tokenLocations)
-		{
-			final long dx = token.x - tx;
-			final long dy = token.y - ty;
-			if(dx * dx + dy * dy <= (long)tokenSafeRadius * tokenSafeRadius)
-				return true;
-		}
-		return false;
-	}
-
 	boolean isPassive(CreatureCellRenderable creature)
 	{
 		// no getter for attitude; AttitudeConstants.ATTITUDE_HOSTILE == 2
@@ -1311,8 +1273,6 @@ public class PathingBot extends Bot
 		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked", "<keyword>[, <keyword>...]"),
 		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
 		ap("Avoid Passives", "Toggle murdering only hostile creatures, leaving passive animals alone", ""),
-		token("Add Token", "Record the hovered tile (or your current tile when not hovering a tile) as a deed token. Creatures within 50 tiles of a recorded token are not murdered. The client has no deed data, so tokens are marked by hand", ""),
-		tokenclear("Clear Tokens", "Forget all recorded token locations", ""),
 		;
 
 		private final KeyInfo keyInfo;
