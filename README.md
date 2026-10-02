@@ -39,6 +39,20 @@ If you bind console commands to keys, these work well:
 With `OnscreenFeedback` on (the default), state changes show on screen too, so you can use keybinds with
 the console closed. Set `PrefillConsoleInput=false` if you don't want commands to rewrite the console input line.
 
+**Merged mods:**
+
+WurmHelper includes these client mods, so they don't need to be installed separately:
+UI Scale, Archeology Grouping, Improved Compass, WurmEspRevisited, EZBulk, Fish Buddy, FreecamMod,
+Improved Improve, Live HUD Map, Skill Gain Tracker, Time Lock, Max Toolbelt and Better Tooltips.
+See [modules/README.md](modules/README.md) for their authors, licenses and console commands.
+
+  * **Remove the separate copies** of these mods from your `mods` folder (their `.properties` file and folder).
+    A mod that is still installed separately is skipped by WurmHelper, so nothing gets applied twice.
+  * Each mod's settings now live in `mods/WurmHelper/<id>.properties` (for example `mods/WurmHelper/uiscale.properties`).
+    Copy your old settings there, without the `classname`, `classpath` and `sharedClassLoader` lines.
+  * Switch a mod off with `module.<id>=false` in `mods/WurmHelper.properties`.
+  * Type `modules` in the console to see which mods are on.
+
 **Options:**
 
 Set these in `mods/WurmHelper.properties`:
@@ -50,6 +64,7 @@ Set these in `mods/WurmHelper.properties`:
 | `OnscreenFeedback` | `true` | Also show bot state changes on screen |
 | `AlarmOnStop` | `false` | Play a sound when a bot stops by itself (error, missing tool...) |
 | `PrefillConsoleInput` | `true` | Put the last bot command back into the console input line |
+| `module.<id>` | `true` | Turn a merged mod on or off (ids are listed in [modules/README.md](modules/README.md)) |
 
 A bot that stops by itself always shows an on-screen message.
 
