@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.TimeUnit;
@@ -105,6 +106,10 @@ public class PathingBot extends Bot
 	}
 	volatile boolean repairing = false;
 	final Set<String> murderBlacklist = ConcurrentHashMap.newKeySet();
+	volatile boolean avoidPassives = false;
+	// the client has no deed data, so token locations are marked by hand
+	static final int tokenSafeRadius = 50; // tiles
+	final List<Vec2i> tokenLocations = new CopyOnWriteArrayList<>();
 	
 	// commands run as tasks on the pool, which only works while the bot thread runs (it registers the event processors and shuts the pool down)
 	InputHandler inPool(InputHandler fn)
@@ -142,6 +147,9 @@ public class PathingBot extends Bot
 		registerInputHandler(Inputs.r, input -> toggleRepairing());
 		registerInputHandler(Inputs.mb, this::addMurderBlacklist);
 		registerInputHandler(Inputs.mbc, input -> clearMurderBlacklist());
+		registerInputHandler(Inputs.ap, input -> toggleAvoidPassives());
+		registerInputHandler(Inputs.token, this::cmdAddToken);
+		registerInputHandler(Inputs.tokenclear, input -> clearTokens());
 	}
 	
 	void cmdSpeed(String[] args)
@@ -187,6 +195,8 @@ public class PathingBot extends Bot
 		lines.add("Corpse blacklist: " + (blacklistedCorpseNames.isEmpty() ? "empty" : String.join(", ", blacklistedCorpseNames)));
 		lines.add("Repair: " + onOff(repairing));
 		lines.add("Murder blacklist: " + (murderBlacklist.isEmpty() ? "empty" : String.join(", ", murderBlacklist)));
+		lines.add("Avoid passives: " + onOff(avoidPassives));
+		lines.add("Tokens: " + (tokenLocations.isEmpty() ? "none recorded" : tokenLocations.size() + " recorded (safe radius " + tokenSafeRadius + " tiles)"));
 	}
 	
 	volatile boolean walking = false;
@@ -415,6 +425,8 @@ public class PathingBot extends Bot
 				!creature.isControlled() &&
 				!creature.getHoverName().startsWith("preserved") &&
 				murderBlacklist.stream().noneMatch(kw -> creature.getHoverName().toLowerCase().contains(kw)) &&
+				!isNearToken(creature) &&
+				(!avoidPassives || !isPassive(creature)) &&
 				!petItemRe.matcher(data.getHoverText()).find()
 			);
 			creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
@@ -1217,6 +1229,69 @@ public class PathingBot extends Bot
 		;
 	}
 
+	void toggleAvoidPassives()
+	{
+		avoidPassives = !avoidPassives;
+		Utils.feedback("Bot will " + (avoidPassives ? "only murder hostile creatures" : "murder creatures of any attitude"));
+	}
+
+	void cmdAddToken(String[] args)
+	{
+		Vec2i token = null;
+		final PickableUnit unit = world.getCurrentHoveredObject();
+		if(unit instanceof TilePicker)
+		{
+			final TilePicker tile = (TilePicker)unit;
+			try
+			{
+				token = new Vec2i(
+					Utils.getField(tile, "x"),
+					Utils.getField(tile, "y")
+				);
+			}
+			catch(Exception err)
+			{
+				Utils.consolePrint("Couldn't get coords for hovered tile:\n%s", err);
+				return;
+			}
+		}
+		if(token == null)
+			token = new Vec2i(world.getPlayerCurrentTileX(), world.getPlayerCurrentTileY());
+		tokenLocations.add(token);
+		Utils.feedback(
+			"Recorded a token at %d,%d; creatures within %d tiles of it will not be murdered",
+			token.x,
+			token.y,
+			tokenSafeRadius
+		);
+	}
+
+	void clearTokens()
+	{
+		tokenLocations.clear();
+		Utils.consolePrint("Token locations cleared");
+	}
+
+	boolean isNearToken(CreatureCellRenderable creature)
+	{
+		final int tx = (int)(creature.getXPos() / 4f);
+		final int ty = (int)(creature.getYPos() / 4f);
+		for(Vec2i token: tokenLocations)
+		{
+			final long dx = token.x - tx;
+			final long dy = token.y - ty;
+			if(dx * dx + dy * dy <= (long)tokenSafeRadius * tokenSafeRadius)
+				return true;
+		}
+		return false;
+	}
+
+	boolean isPassive(CreatureCellRenderable creature)
+	{
+		// no getter for attitude; AttitudeConstants.ATTITUDE_HOSTILE == 2
+		return Utils.rethrow(() -> Utils.<CreatureCellRenderable, Integer>getField(creature, "attitude")) != 2;
+	}
+
 	static enum Inputs implements Bot.InputKey
 	{
 		speed("Speed", "Set speed at which bot will move, in km/h", "<km/h>"),
@@ -1235,6 +1310,9 @@ public class PathingBot extends Bot
 		r("Repair", "Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped)", ""),
 		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked", "<keyword>[, <keyword>...]"),
 		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
+		ap("Avoid Passives", "Toggle murdering only hostile creatures, leaving passive animals alone", ""),
+		token("Add Token", "Record the hovered tile (or your current tile when not hovering a tile) as a deed token. Creatures within 50 tiles of a recorded token are not murdered. The client has no deed data, so tokens are marked by hand", ""),
+		tokenclear("Clear Tokens", "Forget all recorded token locations", ""),
 		;
 
 		private final KeyInfo keyInfo;

@@ -390,6 +390,7 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
+| `ap` | Avoid Passives | Toggle murdering only hostile creatures, leaving passive animals alone |
 | `b` | Butchering | Toggle butchering of corpses on the ground while murdering |
 | `bu` | Burying | Toggle burying of corpses on the ground while murdering |
 | `bua` | Bury All | Toggle burying corpses with the "Bury all" action (default) vs the normal bury action |
@@ -404,6 +405,8 @@ is turned on. See the README for the general usage.
 | `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped) |
 | `shear` | Shear | Toggle finding and shearing nearby sheep. Needs the bot running |
 | `speed <km/h>` | Speed | Set speed at which bot will move, in km/h |
+| `token` | Add Token | Record the hovered tile (or your current tile when not hovering a tile) as a deed token. Creatures within 50 tiles of a recorded token are not murdered. The client has no deed data, so tokens are marked by hand |
+| `tokenclear` | Clear Tokens | Forget all recorded token locations |
 | `walkto [<x> <y>]` | Walk To | Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running |
 
 ## Pile Collector
