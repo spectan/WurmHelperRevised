@@ -78,9 +78,11 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.0</version>
                 <configuration>
+                    <!-- the uiscale module uses the JDK's internal ASM copy (jdk.internal.org.objectweb.asm),
+                         which javac 8 hides unless it compiles against the real rt.jar; the flag is only
+                         honored by a forked javac, not by the in-process compiler -->
+                    <fork>true</fork>
                     <compilerArgs>
-                        <!-- the uiscale module uses the JDK's internal ASM copy (jdk.internal.org.objectweb.asm),
-                             which javac 8 hides unless it compiles against the real rt.jar -->
                         <arg>-XDignore.symbol.file</arg>
                     </compilerArgs>
                 </configuration>

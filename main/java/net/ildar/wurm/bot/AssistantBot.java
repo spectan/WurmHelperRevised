@@ -598,13 +598,13 @@ public class AssistantBot extends Bot {
                         list.add(lump.getId());
                     }
 
-                    lumpsToCombine.values().forEach(lumps -> {
-                        if(lumps.size() < 2)
+                    lumpsToCombine.values().forEach(group -> {
+                        if(group.size() < 2)
                             return;
 
                         // utter Java moment
                         // wtb slices, and generics that aren't lies to children
-                        long[] lumpIds = lumps.stream().mapToLong(Long::longValue).toArray();
+                        long[] lumpIds = group.stream().mapToLong(Long::longValue).toArray();
                         serverConnection.sendAction(lumpIds[0], lumpIds, PlayerAction.COMBINE);
                     });
                 }
