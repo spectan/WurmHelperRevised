@@ -14,6 +14,7 @@ import net.ildar.wurm.bot.Bot;
 import net.ildar.wurm.bot.BulkItemGetterBot;
 import net.ildar.wurm.command.CommandRegistry;
 import net.ildar.wurm.command.ConsoleCommandHandler;
+import net.ildar.wurm.modules.ModuleManager;
 import net.ildar.wurm.command.DevInfoCommandHandler;
 import net.ildar.wurm.command.MovementCommandHandler;
 import net.ildar.wurm.command.UtilityCommandHandler;
@@ -35,6 +36,8 @@ import javax.vecmath.Color3f;
 
 public class WurmHelper implements WurmClientMod, Initable, Configurable, PreInitable {
     public static final String BOT_COMMAND = "bot";
+    private static final String MODULES_COMMAND = "modules";
+    private final ModuleManager modules = new ModuleManager();
     private static final String INFO_COMMAND = "info";
     private final long BLESS_TIMEOUT = 1800000;
 
@@ -94,6 +97,23 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             @Override
             public String getDescription() {
                 return "Shows the description of a console command, lists all bots, or describes a bot by abbreviation.";
+            }
+        });
+        commandRegistry.register(MODULES_COMMAND, new ConsoleCommandHandler() {
+            @Override
+            public void handle(String[] args) {
+                Utils.consolePrint("Mods merged into WurmHelper (switch one off with module.<id>=false in WurmHelper.properties):");
+                modules.describe().forEach(Utils::consolePrint);
+            }
+
+            @Override
+            public String getUsage() {
+                return "";
+            }
+
+            @Override
+            public String getDescription() {
+                return "Lists the mods merged into WurmHelper and whether each is on.";
             }
         });
         WurmHelper.instance = this;
@@ -225,6 +245,7 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
                 WurmHelper.class.getSimpleName()
             );
         }
+        modules.configure(properties);
     }
 
     @Override
@@ -309,9 +330,12 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             logger.log(Level.SEVERE, e.toString());
             throw new RuntimeException(e);
         }
+        // the merged mods hook the client after WurmHelper
+        modules.preInit();
     }
 
     public void init() {
+        modules.initEarly();
         try {
             HookManager.getInstance().registerHook("com.wurmonline.client.renderer.gui.HeadsUpDisplay", "init", "(II)V", () -> (proxy, method, args) -> {
                 method.invoke(proxy, args);
@@ -373,5 +397,6 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             logger.log(Level.SEVERE, "Error loading mod", e);
             logger.log(Level.SEVERE, e.toString());
         }
+        modules.init();
     }
 }
