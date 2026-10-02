@@ -429,20 +429,22 @@ public class PathingBot extends Bot
 			hud.sendAction(PlayerAction.TARGET, target.getId());
 			Utils.consolePrint("Murdering `%s`", target.getHoverName());
 
-			// wait for the server to confirm the target; a creature the client still lists
-			// but the server doesn't know (despawned/died/another layer) never confirms,
-			// and without this check the bot would retry it forever, standing still
+			// wait for the server to confirm the target, re-sending the action like the
+			// original loop did; a creature the client still lists but the server doesn't
+			// know (despawned/died/another layer) never confirms, and without the retry
+			// limit the bot would try it forever, standing still
 			final CreatureCellRenderable unconfirmed = target;
 			boolean confirmed = false;
-			for(int i = 0; i < 20; i++)
+			for(int i = 0; i < 10; i++)
 			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(500)));
 				if(exiting || !murdering) break outer;
 				if(Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId")) == unconfirmed.getId())
 				{
 					confirmed = true;
 					break;
 				}
+				hud.sendAction(PlayerAction.TARGET, unconfirmed.getId());
 			}
 			if(!confirmed)
 			{
