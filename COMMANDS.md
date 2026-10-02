@@ -401,7 +401,7 @@ is turned on. See the README for the general usage.
 | `mb <keyword>[, <keyword>...]` | Add Murder Blacklist | Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked |
 | `mbc` | Clear Murder Blacklist | Clear the murder blacklist |
 | `murder` | Murder | Toggle finding and murdering nearby creatures. Needs the bot running |
-| `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 10% damage it is repaired between kills |
+| `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped) |
 | `shear` | Shear | Toggle finding and shearing nearby sheep. Needs the bot running |
 | `speed <km/h>` | Speed | Set speed at which bot will move, in km/h |
 | `walkto [<x> <y>]` | Walk To | Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running |

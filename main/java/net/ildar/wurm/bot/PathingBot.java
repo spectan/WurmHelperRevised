@@ -1147,7 +1147,8 @@ public class PathingBot extends Bot
 				if(slot == null || slot.getEquippedItem() == null)
 					continue;
 				InventoryMetaItem item = slot.getEquippedItem().getItem();
-				if(item != null && item.getDamage() > 10)
+				// summer hats can't be repaired, skip them
+				if(item != null && item.getDamage() >= 2 && !item.getDisplayName().toLowerCase().contains("summer hat"))
 					WurmHelper.hud.sendAction(PlayerAction.REPAIR, item.getId());
 			}
 		}
@@ -1231,7 +1232,7 @@ public class PathingBot extends Bot
 		bub("Add Corpse Blacklist", "Add keywords (comma separated) to the corpse blacklist. Corpses with names containing them are not buried. " +
 			"\"rift\" is in the blacklist by default", "<keyword>[, <keyword>...]"),
 		bubc("Clear Corpse Blacklist", "Clear the corpse blacklist", ""),
-		r("Repair", "Toggle automatic repairing of equipped items while murdering. When an equipped item gets 10% damage it is repaired between kills", ""),
+		r("Repair", "Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped)", ""),
 		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked", "<keyword>[, <keyword>...]"),
 		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
 		;
