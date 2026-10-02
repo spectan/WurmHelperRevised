@@ -390,9 +390,18 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
+| `b` | Butchering | Toggle butchering of corpses on the ground while murdering |
+| `bu` | Burying | Toggle burying of corpses on the ground while murdering |
+| `bua` | Bury All | Toggle burying corpses with the "Bury all" action (default) vs the normal bury action |
+| `bub <keyword>[, <keyword>...]` | Add Corpse Blacklist | Add keywords (comma separated) to the corpse blacklist. Corpses with names containing them are not buried. "rift" is in the blacklist by default |
+| `bubc` | Clear Corpse Blacklist | Clear the corpse blacklist |
+| `bud <milliseconds>` | Bury Delay | Set the delay before burying corpses (to allow other bots time to move items). Default is 2500 |
 | `follow [<player name>]` | Follow | Follow the player whose name starts with the given text. Without a name it stops following; with a name while following it switches to that player. Needs the bot running |
 | `groom` | Grooming | Toggle finding and grooming nearby creatures. Needs the bot running |
+| `mb <keyword>[, <keyword>...]` | Add Murder Blacklist | Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked |
+| `mbc` | Clear Murder Blacklist | Clear the murder blacklist |
 | `murder` | Murder | Toggle finding and murdering nearby creatures. Needs the bot running |
+| `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 10% damage it is repaired between kills |
 | `shear` | Shear | Toggle finding and shearing nearby sheep. Needs the bot running |
 | `speed <km/h>` | Speed | Set speed at which bot will move, in km/h |
 | `walkto [<x> <y>]` | Walk To | Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running |

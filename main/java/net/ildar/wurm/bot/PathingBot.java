@@ -10,21 +10,27 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
+import com.wurmonline.client.comm.SimpleServerConnectionClass;
 import com.wurmonline.client.game.NearTerrainDataBuffer;
 import com.wurmonline.client.game.World;
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.PickableUnit;
 import com.wurmonline.client.renderer.TilePicker;
 import com.wurmonline.client.renderer.cell.CreatureCellRenderable;
+import com.wurmonline.client.renderer.GroundItemData;
+import com.wurmonline.client.renderer.cell.GroundItemCellRenderable;
 import com.wurmonline.client.renderer.gui.CreationWindow;
 import com.wurmonline.client.renderer.gui.HeadsUpDisplay;
 import com.wurmonline.client.renderer.gui.TargetWindow;
@@ -32,7 +38,10 @@ import com.wurmonline.client.renderer.structures.FenceData;
 import com.wurmonline.client.renderer.structures.HouseData;
 import com.wurmonline.client.renderer.structures.HouseWallData;
 import com.wurmonline.client.renderer.structures.StructureData;
+import com.wurmonline.client.renderer.gui.PaperDollInventory;
+import com.wurmonline.client.renderer.gui.PaperDollSlot;
 import com.wurmonline.math.Vector2f;
+import com.wurmonline.mesh.Tiles.Tile;
 import com.wurmonline.shared.constants.PlayerAction;
 import com.wurmonline.shared.constants.StructureTypeEnum;
 
@@ -78,9 +87,24 @@ public class PathingBot extends Bot
     final World world = hud.getWorld();
 	
 	volatile boolean exiting = false;
-	
+
 	static final float tickDelta = 1 / 6f;
 	volatile float topSpeedMPS = (15f * 1000) / 60 / 60;
+
+	volatile boolean butchering = false;
+	long butcheringKnife = -10;
+	volatile boolean burying = false;
+	long shovel = -10;
+	long pickaxe = -10;
+	volatile boolean buryAll = true;
+	volatile long buryDelay = 2500;
+	final Map<Long, Long> corpseTimes = new ConcurrentHashMap<>();
+	final Set<String> blacklistedCorpseNames = ConcurrentHashMap.newKeySet();
+	{
+		blacklistedCorpseNames.add("rift");
+	}
+	volatile boolean repairing = false;
+	final Set<String> murderBlacklist = ConcurrentHashMap.newKeySet();
 	
 	// commands run as tasks on the pool, which only works while the bot thread runs (it registers the event processors and shuts the pool down)
 	InputHandler inPool(InputHandler fn)
@@ -109,6 +133,15 @@ public class PathingBot extends Bot
 		registerInputHandler(Inputs.murder, inPool(this::cmdMurder));
 		registerInputHandler(Inputs.groom, inPool(args -> runCreatureTask(groomTask)));
 		registerInputHandler(Inputs.shear, inPool(args -> runCreatureTask(shearTask)));
+		registerInputHandler(Inputs.b, input -> toggleButchering());
+		registerInputHandler(Inputs.bu, input -> toggleBurying());
+		registerInputHandler(Inputs.bua, input -> toggleBuryAll());
+		registerInputHandler(Inputs.bud, this::setBuryDelay);
+		registerInputHandler(Inputs.bub, this::addCorpseBlacklist);
+		registerInputHandler(Inputs.bubc, input -> clearCorpseBlacklist());
+		registerInputHandler(Inputs.r, input -> toggleRepairing());
+		registerInputHandler(Inputs.mb, this::addMurderBlacklist);
+		registerInputHandler(Inputs.mbc, input -> clearMurderBlacklist());
 	}
 	
 	void cmdSpeed(String[] args)
@@ -149,6 +182,11 @@ public class PathingBot extends Bot
 		else if(shearTask.running) task = "shearing";
 		else task = "none";
 		lines.add("Task: " + task);
+		lines.add("Butchering: " + onOff(butchering));
+		lines.add("Burying: " + onOff(burying) + " (bury all: " + onOff(buryAll) + ", delay: " + buryDelay + " ms)");
+		lines.add("Corpse blacklist: " + (blacklistedCorpseNames.isEmpty() ? "empty" : String.join(", ", blacklistedCorpseNames)));
+		lines.add("Repair: " + onOff(repairing));
+		lines.add("Murder blacklist: " + (murderBlacklist.isEmpty() ? "empty" : String.join(", ", murderBlacklist)));
 	}
 	
 	volatile boolean walking = false;
@@ -354,7 +392,12 @@ public class PathingBot extends Bot
 				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
 				if(exiting || !murdering) break outer;
 			}
-			
+
+			// the target is dead or gone: clean up and repair before picking the next one
+			processCorpses();
+			if(repairing)
+				repairEquipped();
+
 			while(
 				Utils.getPlayerStamina() < 0.99 ||
 				creationWindow.getActionInUse() > 0 ||
@@ -371,6 +414,7 @@ public class PathingBot extends Bot
 				creature.getKingdomId() == 0 &&
 				!creature.isControlled() &&
 				!creature.getHoverName().startsWith("preserved") &&
+				murderBlacklist.stream().noneMatch(kw -> creature.getHoverName().toLowerCase().contains(kw)) &&
 				!petItemRe.matcher(data.getHoverText()).find()
 			);
 			creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
@@ -384,7 +428,29 @@ public class PathingBot extends Bot
 			
 			hud.sendAction(PlayerAction.TARGET, target.getId());
 			Utils.consolePrint("Murdering `%s`", target.getHoverName());
-			Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+
+			// wait for the server to confirm the target; a creature the client still lists
+			// but the server doesn't know (despawned/died/another layer) never confirms,
+			// and without this check the bot would retry it forever, standing still
+			final CreatureCellRenderable unconfirmed = target;
+			boolean confirmed = false;
+			for(int i = 0; i < 20; i++)
+			{
+				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+				if(exiting || !murdering) break outer;
+				if(Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId")) == unconfirmed.getId())
+				{
+					confirmed = true;
+					break;
+				}
+			}
+			if(!confirmed)
+			{
+				Utils.consolePrint("Couldn't target `%s`, ignoring it", unconfirmed.getHoverName());
+				ignoredCreatures.add(unconfirmed.getId());
+				target = null;
+				hud.sendAction(PlayerAction.NO_TARGET, -1);
+			}
 		}
 		murdering = false;
 	}
@@ -841,6 +907,292 @@ public class PathingBot extends Bot
 		return path;
 	}
 	
+	void toggleButchering()
+	{
+		if(butchering)
+		{
+			butchering = false;
+			butcheringKnife = -10;
+			Utils.feedback("Bot will no longer butcher corpses");
+			return;
+		}
+		InventoryMetaItem item = Utils.locateToolItem("butchering knife");
+		if(item == null)
+		{
+			Utils.consolePrint("Couldn't find a butchering knife, butchering is disabled.");
+			return;
+		}
+		butcheringKnife = item.getId();
+		butchering = true;
+		Utils.feedback("Bot will butcher corpses while murdering");
+	}
+
+	void toggleBurying()
+	{
+		corpseTimes.clear();
+		if(burying)
+		{
+			burying = false;
+			shovel = -10;
+			pickaxe = -10;
+			Utils.feedback("Bot will no longer bury corpses");
+			return;
+		}
+		InventoryMetaItem item = Utils.locateToolItem("shovel");
+		if(item == null)
+		{
+			Utils.consolePrint("Couldn't find a shovel, burying is disabled.");
+			return;
+		}
+		shovel = item.getId();
+
+		item = Utils.locateToolItem("pickaxe");
+		if(item == null)
+		{
+			pickaxe = -10;
+			Utils.consolePrint("Couldn't find a pickaxe, bot will be unable to bury on rock");
+		}
+		else
+			pickaxe = item.getId();
+		burying = true;
+		Utils.feedback("Bot will bury corpses while murdering using %s", buryAll ? "\"Bury all\" action" : "normal bury action");
+	}
+
+	void toggleBuryAll()
+	{
+		buryAll ^= true;
+		Utils.feedback(
+			"Bot will use %s",
+			buryAll ?
+				"\"Bury all\" action" :
+				"normal bury action (items will spill onto ground!)"
+		);
+	}
+
+	void setBuryDelay(String[] input)
+	{
+		Integer newBuryDelay = parseIntArg(input, Inputs.bud, 0, Integer.MAX_VALUE);
+		if(newBuryDelay == null)
+			return;
+		buryDelay = newBuryDelay;
+		Utils.consolePrint("Bot will bury corpses after %d milliseconds", buryDelay);
+	}
+
+	void addCorpseBlacklist(String[] input)
+	{
+		List<String> keywords = parseNameList(input);
+		if(keywords.isEmpty())
+		{
+			Utils.consolePrint("Must specify something to blacklist!");
+			printInputKeyUsageString(Inputs.bub);
+			return;
+		}
+		for(String keyword: keywords)
+			blacklistedCorpseNames.add(keyword.toLowerCase());
+		Utils.consolePrint(
+			"Bot will not bury corpses with names containing: %s",
+			String.join(", ", blacklistedCorpseNames)
+		);
+	}
+
+	void clearCorpseBlacklist()
+	{
+		blacklistedCorpseNames.clear();
+		Utils.consolePrint("Corpse blacklist cleared, bot will bury all corpses");
+	}
+
+	void toggleRepairing()
+	{
+		repairing = !repairing;
+		Utils.feedback("Bot will " + (repairing ? "repair equipped items while murdering" : "no longer repair equipped items"));
+	}
+
+	void addMurderBlacklist(String[] input)
+	{
+		List<String> keywords = parseNameList(input);
+		if(keywords.isEmpty())
+		{
+			Utils.consolePrint("Must specify something to blacklist!");
+			printInputKeyUsageString(Inputs.mb);
+			return;
+		}
+		for(String keyword: keywords)
+			murderBlacklist.add(keyword.toLowerCase());
+		Utils.consolePrint(
+			"Bot will not murder creatures with names containing: %s",
+			String.join(", ", murderBlacklist)
+		);
+	}
+
+	void clearMurderBlacklist()
+	{
+		murderBlacklist.clear();
+		Utils.consolePrint("Murder blacklist cleared, bot will murder any creature");
+	}
+
+	void processCorpses()
+	{
+		final int maxActions = Utils.getMaxActionNumber();
+		final SimpleServerConnectionClass serverConnection = world.getServerConnection();
+
+		if(butchering && butcheringKnife > 0)
+		{
+			List<GroundItemCellRenderable> corpses = findCorpses(
+				(item, data) -> !data.getModelName().toString().toLowerCase().contains("butchered")
+			);
+
+			int actions = 0;
+			for(GroundItemCellRenderable corpse: corpses)
+			{
+				serverConnection.sendAction(
+					butcheringKnife,
+					new long[]{corpse.getId()},
+					PlayerAction.BUTCHER
+				);
+
+				if(++actions >= maxActions)
+					break;
+			}
+		}
+		else if(butchering)
+		{
+			Utils.consolePrint("Don't have a butchering knife to butcher with!");
+			butchering = false;
+		}
+
+		if(burying && shovel > 0)
+		{
+			List<GroundItemCellRenderable> corpses = findCorpses(
+				(item, data) -> {
+					final String modelName = data.getModelName().toString().toLowerCase();
+					final String displayName = item.getHoverName().toLowerCase();
+					return
+						(!butchering || modelName.contains("butchered")) &&
+						(pickaxe > 0 || !needsPickaxeToBury(item)) &&
+						blacklistedCorpseNames
+							.stream()
+							.noneMatch(displayName::contains)
+					;
+				}
+			);
+			// item lists seem to have consistent ordering between multiple clients,
+			// so this should help parallelize corpses across alts
+			Collections.shuffle(corpses);
+
+			final long now = System.currentTimeMillis();
+			int actions = 0;
+			for(GroundItemCellRenderable item: corpses)
+			{
+				final long id = item.getId();
+				// the console thread may clear corpseTimes at any time, so don't read it back
+				final Long firstSeen = corpseTimes.putIfAbsent(id, now);
+
+				if(now - (firstSeen != null ? firstSeen : now) > buryDelay)
+				{
+					serverConnection.sendAction(
+						needsPickaxeToBury(item) ? pickaxe : shovel,
+						new long[]{item.getId()},
+						buryAll ? PlayerAction.BURY_ALL : PlayerAction.BURY
+					);
+				}
+
+				if(++actions >= maxActions)
+					break;
+			}
+
+			corpseTimes
+				.entrySet()
+				.removeIf(e -> now - e.getValue() > 3 * buryDelay)
+			;
+		}
+		else if(burying)
+		{
+			Utils.consolePrint("Don't have a shovel to bury with!");
+			burying = false;
+		}
+	}
+
+	void repairEquipped()
+	{
+		try
+		{
+			PaperDollInventory pdi = Utils.getField(WurmHelper.hud, "paperdollInventory");
+			Map<Long, PaperDollSlot> frameList = Utils.getField(pdi, "frameList");
+			for(Map.Entry<Long, PaperDollSlot> frame: frameList.entrySet())
+			{
+				PaperDollSlot slot = frame.getValue();
+				if(slot == null || slot.getEquippedItem() == null)
+					continue;
+				InventoryMetaItem item = slot.getEquippedItem().getItem();
+				if(item != null && item.getDamage() > 10)
+					WurmHelper.hud.sendAction(PlayerAction.REPAIR, item.getId());
+			}
+		}
+		catch(Exception err)
+		{
+			Utils.consolePrint("Couldn't check equipped items for repair: %s", err);
+		}
+	}
+
+	List<GroundItemCellRenderable> findCorpses(BiPredicate<GroundItemCellRenderable, GroundItemData> predicate)
+	{
+		predicate = ((BiPredicate<GroundItemCellRenderable, GroundItemData>)this::isCorpse)
+			.and((item, data) -> Utils.isNearbyPlayer(item))
+			.and(predicate)
+		;
+		List<GroundItemCellRenderable> items = new ArrayList<>();
+		try
+		{
+			ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
+			Map<Long, GroundItemCellRenderable> groundItemsMap = Utils.getField(sscc, "groundItems");
+
+			for(GroundItemCellRenderable item: groundItemsMap.values())
+			{
+				GroundItemData data;
+				try
+				{
+					data = Utils.getField(item, "item");
+				}
+				catch(Exception err)
+				{
+					Utils.consolePrint(err.toString());
+					continue;
+				}
+
+				if(predicate.test(item, data))
+					items.add(item);
+			}
+		}
+		catch(Exception err)
+		{
+			Utils.consolePrint(err.toString());
+		}
+		return items;
+	}
+
+	boolean isCorpse(GroundItemCellRenderable item, GroundItemData data)
+	{
+		return item.getHoverName().toLowerCase().startsWith("corpse of");
+	}
+
+	boolean needsPickaxeToBury(GroundItemCellRenderable item)
+	{
+		if(item.getLayer() < 0)
+			return true;
+		final byte tileID = world
+			.getNearTerrainBuffer()
+			.getTileType(
+				(int)(item.getXPos() / 4f),
+				(int)(item.getYPos() / 4f)
+			)
+			.id
+		;
+		return
+			tileID == Tile.TILE_ROCK.id ||
+			tileID == Tile.TILE_CLIFF.id
+		;
+	}
+
 	static enum Inputs implements Bot.InputKey
 	{
 		speed("Speed", "Set speed at which bot will move, in km/h", "<km/h>"),
@@ -849,6 +1201,16 @@ public class PathingBot extends Bot
 		murder("Murder", "Toggle finding and murdering nearby creatures. Needs the bot running", ""),
 		groom("Grooming", "Toggle finding and grooming nearby creatures. Needs the bot running", ""),
 		shear("Shear", "Toggle finding and shearing nearby sheep. Needs the bot running", ""),
+		b("Butchering", "Toggle butchering of corpses on the ground while murdering", ""),
+		bu("Burying", "Toggle burying of corpses on the ground while murdering", ""),
+		bua("Bury All", "Toggle burying corpses with the \"Bury all\" action (default) vs the normal bury action", ""),
+		bud("Bury Delay", "Set the delay before burying corpses (to allow other bots time to move items). Default is 2500", "<milliseconds>"),
+		bub("Add Corpse Blacklist", "Add keywords (comma separated) to the corpse blacklist. Corpses with names containing them are not buried. " +
+			"\"rift\" is in the blacklist by default", "<keyword>[, <keyword>...]"),
+		bubc("Clear Corpse Blacklist", "Clear the corpse blacklist", ""),
+		r("Repair", "Toggle automatic repairing of equipped items while murdering. When an equipped item gets 10% damage it is repaired between kills", ""),
+		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist. Creatures with names containing them are never attacked", "<keyword>[, <keyword>...]"),
+		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
 		;
 
 		private final KeyInfo keyInfo;
