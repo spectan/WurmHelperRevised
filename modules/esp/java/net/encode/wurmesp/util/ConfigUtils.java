@@ -4,11 +4,13 @@ import com.wurmonline.mesh.Tiles;
 import java.awt.Color;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
+import java.util.logging.Level;
 import net.encode.wurmesp.Unit;
 import net.encode.wurmesp.WurmEspMod;
 
@@ -174,6 +176,82 @@ public class ConfigUtils {
         WurmEspMod.tilesFlowerSearch = splitList(properties.getProperty("tilesFlowerSearch"), "flowers");
     }
 
+    public static void saveProperties(String name) {
+        Properties p = new Properties();
+        p.setProperty("players", Boolean.toString(WurmEspMod.players));
+        p.setProperty("mobs", Boolean.toString(WurmEspMod.mobs));
+        p.setProperty("animals", Boolean.toString(WurmEspMod.animals));
+        p.setProperty("specials", Boolean.toString(WurmEspMod.specials));
+        p.setProperty("items", Boolean.toString(WurmEspMod.items));
+        p.setProperty("uniques", Boolean.toString(WurmEspMod.uniques));
+        p.setProperty("conditioned", Boolean.toString(WurmEspMod.conditioned));
+        p.setProperty("tilescloseby", Boolean.toString(WurmEspMod.tilescloseby));
+        p.setProperty("deedsize", Boolean.toString(WurmEspMod.deedsize));
+        p.setProperty("xray", Boolean.toString(WurmEspMod.xray));
+        p.setProperty("xraythread", Boolean.toString(WurmEspMod.xraythread));
+        p.setProperty("xrayrefreshthread", Boolean.toString(WurmEspMod.xrayrefreshthread));
+        p.setProperty("xraydiameter", Integer.toString(WurmEspMod.xraydiameter));
+        p.setProperty("xrayrefreshrate", Integer.toString(WurmEspMod.xrayrefreshrate));
+        p.setProperty("tilenotrideable", Integer.toString(WurmEspMod.tilenotrideable));
+        p.setProperty("flowerdiameter", Integer.toString(WurmEspMod.flowerdiameter));
+        p.setProperty("playsoundspecial", Boolean.toString(WurmEspMod.playsoundspecial));
+        p.setProperty("playsounditem", Boolean.toString(WurmEspMod.playsounditem));
+        p.setProperty("playsoundunique", Boolean.toString(WurmEspMod.playsoundunique));
+        p.setProperty("soundspecial", WurmEspMod.soundspecial);
+        p.setProperty("sounditem", WurmEspMod.sounditem);
+        p.setProperty("soundunique", WurmEspMod.soundunique);
+        p.setProperty("conditionedcolorsallways", Boolean.toString(WurmEspMod.conditionedcolorsallways));
+        p.setProperty("championmcoloralways", Boolean.toString(WurmEspMod.championmcoloralways));
+        p.setProperty("colorPlayers", ConfigUtils.colorFloatAToString(Unit.colorPlayers));
+        p.setProperty("colorPlayersEnemy", ConfigUtils.colorFloatAToString(Unit.colorPlayersEnemy));
+        p.setProperty("colorMobs", ConfigUtils.colorFloatAToString(Unit.colorMobs));
+        p.setProperty("colorMobsAggro", ConfigUtils.colorFloatAToString(Unit.colorMobsAggro));
+        p.setProperty("colorSpecials", ConfigUtils.colorFloatAToString(Unit.colorSpecials));
+        p.setProperty("colorSpotted", ConfigUtils.colorFloatAToString(Unit.colorSpotted));
+        p.setProperty("colorUniques", ConfigUtils.colorFloatAToString(Unit.colorUniques));
+        p.setProperty("colorAlert", ConfigUtils.colorFloatAToString(Unit.colorAlert));
+        p.setProperty("colorAngry", ConfigUtils.colorFloatAToString(Unit.colorAngry));
+        p.setProperty("colorChampion", ConfigUtils.colorFloatAToString(Unit.colorChampion));
+        p.setProperty("colorDiseased", ConfigUtils.colorFloatAToString(Unit.colorDiseased));
+        p.setProperty("colorFierce", ConfigUtils.colorFloatAToString(Unit.colorFierce));
+        p.setProperty("colorGreenish", ConfigUtils.colorFloatAToString(Unit.colorGreenish));
+        p.setProperty("colorHardened", ConfigUtils.colorFloatAToString(Unit.colorHardened));
+        p.setProperty("colorLurking", ConfigUtils.colorFloatAToString(Unit.colorLurking));
+        p.setProperty("colorRaging", ConfigUtils.colorFloatAToString(Unit.colorRaging));
+        p.setProperty("colorScared", ConfigUtils.colorFloatAToString(Unit.colorScared));
+        p.setProperty("colorSlow", ConfigUtils.colorFloatAToString(Unit.colorSlow));
+        p.setProperty("colorSly", ConfigUtils.colorFloatAToString(Unit.colorSly));
+        p.setProperty("oreColorOreIron", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_IRON)));
+        p.setProperty("oreColorOreCopper", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_COPPER)));
+        p.setProperty("oreColorOreTin", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_TIN)));
+        p.setProperty("oreColorOreGold", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_GOLD)));
+        p.setProperty("oreColorOreAdamantine", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_ADAMANTINE)));
+        p.setProperty("oreColorOreGlimmersteel", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_GLIMMERSTEEL)));
+        p.setProperty("oreColorOreSilver", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_SILVER)));
+        p.setProperty("oreColorOreLead", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_LEAD)));
+        p.setProperty("oreColorOreZinc", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ORE_ZINC)));
+        p.setProperty("oreColorSlate", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_SLATE)));
+        p.setProperty("oreColorMarble", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_MARBLE)));
+        p.setProperty("oreColorSandstone", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_SANDSTONE)));
+        p.setProperty("oreColorRocksalt", ConfigUtils.colorToString(XrayColors.getColorFor(Tiles.Tile.TILE_CAVE_WALL_ROCKSALT)));
+        p.setProperty("aggroMOBS", String.join(";", Unit.aggroMOBS));
+        p.setProperty("uniqueMOBS", String.join(";", Unit.uniqueMOBS));
+        p.setProperty("specialITEMS", String.join(";", Unit.specialITEMS));
+        p.setProperty("spottedITEMS", String.join(";", Unit.spottedITEMS));
+        p.setProperty("conditionedMOBS", String.join(";", Unit.conditionedMOBS));
+        p.setProperty("tilesFlowerSearch", String.join(";", WurmEspMod.tilesFlowerSearch));
+        Path path = Paths.get("mods", "WurmHelper").resolve(name + ".properties");
+        try {
+            Files.createDirectories(path.getParent());
+            try (OutputStream out = Files.newOutputStream(path)) {
+                p.store(out, "WurmEsp settings; rewritten when a setting is changed with the esp console command");
+            }
+        }
+        catch (IOException e) {
+            WurmEspMod.logger.log(Level.WARNING, "[WurmEspMod] Couldn't save " + path, e);
+        }
+    }
+
     private static String[] splitList(String value, String defaultValue) {
         return (value != null ? value : defaultValue).split(";");
     }
@@ -185,8 +263,12 @@ public class ConfigUtils {
     }
 
     private static String colorFloatAToString(float[] color) {
-        String colors = String.valueOf(color[0] * 255.0f) + "," + String.valueOf(color[1] * 255.0f) + "," + String.valueOf(color[2] * 255.0f);
+        String colors = String.valueOf(Math.round(color[0] * 255.0f)) + "," + String.valueOf(Math.round(color[1] * 255.0f)) + "," + String.valueOf(Math.round(color[2] * 255.0f));
         return colors;
+    }
+
+    private static String colorToString(Color color) {
+        return color.getRed() + "," + color.getGreen() + "," + color.getBlue();
     }
 }
 

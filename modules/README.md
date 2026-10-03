@@ -31,7 +31,7 @@ The release zip carries all of these files under `WurmHelper/licenses/`.
 
 ## Changes made when merging
 
-- `esp`: reads `mods/WurmHelper/esp.properties` instead of `mods/wurmesp.properties` (both at startup and on `esp reload`).
+- `esp`: reads `mods/WurmHelper/esp.properties` instead of `mods/wurmesp.properties` (both at startup and on `esp reload`). Changing a setting with the `esp` console command saves the file, so settings persist across sessions.
 - `ezbulk`: reads `mods/WurmHelper/ezbulk.properties` instead of `mods/ezbulk.properties`.
 - `uiscale`: its log and remembered `uifade` setting go to `mods/WurmHelper/` (the folder of the jar it is in) instead of `mods/uiscale/`.
 - Test code (`uiscaletest`, LiveHudMap's unit tests) and build files are not included.

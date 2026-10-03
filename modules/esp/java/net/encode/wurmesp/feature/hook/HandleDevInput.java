@@ -32,41 +32,49 @@ public class HandleDevInput {
                     case "players": {
                         WurmEspMod.players = !WurmEspMod.players;
                         WurmEspMod.hud.consoleOutput("ESP players changed to: " + Boolean.toString(WurmEspMod.players));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "mobs": {
                         WurmEspMod.mobs = !WurmEspMod.mobs;
                         WurmEspMod.hud.consoleOutput("ESP mobs changed to: " + Boolean.toString(WurmEspMod.mobs));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "specials": {
                         WurmEspMod.specials = !WurmEspMod.specials;
                         WurmEspMod.hud.consoleOutput("ESP specials changed to: " + Boolean.toString(WurmEspMod.specials));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "uniques": {
                         WurmEspMod.uniques = !WurmEspMod.uniques;
                         WurmEspMod.hud.consoleOutput("ESP uniques changed to: " + Boolean.toString(WurmEspMod.uniques));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "conditioned": {
                         WurmEspMod.conditioned = !WurmEspMod.conditioned;
                         WurmEspMod.hud.consoleOutput("ESP champions changed to: " + Boolean.toString(WurmEspMod.conditioned));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "xray": {
                         WurmEspMod.xray = !WurmEspMod.xray;
                         WurmEspMod.hud.consoleOutput("ESP xray changed to: " + Boolean.toString(WurmEspMod.xray));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "tilescloseby": {
                         WurmEspMod.tilescloseby = !WurmEspMod.tilescloseby;
                         WurmEspMod.hud.consoleOutput("ESP tilescloseby changed to: " + Boolean.toString(WurmEspMod.tilescloseby));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "deedsize": {
                         WurmEspMod.deedsize = !WurmEspMod.deedsize;
                         WurmEspMod.hud.consoleOutput("ESP deedsize changed to: " + Boolean.toString(WurmEspMod.deedsize));
+                        ConfigUtils.saveProperties("esp");
                         break;
                     }
                     case "search": {
