@@ -107,7 +107,7 @@ public class PathingBot extends Bot
 	volatile boolean repairing = false;
 	final Set<String> murderBlacklist = ConcurrentHashMap.newKeySet();
 	volatile boolean avoidPassives = false;
-	volatile boolean avoidNamed = false;
+	volatile boolean avoidNamed = true;
 	// strikes for "That would be illegal here." while the current murder target is active
 	final AtomicInteger illegalStrikes = new AtomicInteger(0);
 	
@@ -1319,7 +1319,7 @@ public class PathingBot extends Bot
 		mb("Add Murder Blacklist", "Add keywords (comma separated) to the murder blacklist, matched against the creature's name and hover text. Creatures matching them are never attacked, so named animals (a bred horse's name) can be excluded", "<keyword>[, <keyword>...]"),
 		mbc("Clear Murder Blacklist", "Clear the murder blacklist", ""),
 		ap("Avoid Passives", "Toggle murdering only hostile creatures, leaving passive animals alone", ""),
-		an("Avoid Named", "Toggle avoiding named creatures while murdering. Any creature with a hover text (tamed, bred or otherwise named animals) is left alone", ""),
+		an("Avoid Named", "Toggle avoiding named creatures while murdering (on by default). Any creature with a hover text (tamed, bred or otherwise named animals) is left alone", ""),
 		;
 
 		private final KeyInfo keyInfo;
