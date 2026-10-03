@@ -28,7 +28,7 @@ public class ImproverBot extends Bot {
     // changed from the console thread while the bot thread iterates it
     private final List<InventoryListComponent> targets = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile boolean improveActionFinished;
-    private boolean groundMode;
+    private volatile boolean groundMode;
     /**
      * The skill set by user. {@link ToolSkill#UNKNOWN} means the skill is determined by the material of improved item
      */
@@ -191,6 +191,7 @@ public class ImproverBot extends Bot {
                     }
 
                     improveActionFinished = false;
+                    // ground items carry no damage info client-side, so repair is unconditional here
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickableUnit.getId());
                     for (Tool tool : getToolsBySkill(groundSkill)) {
                         if (tool.itemId == 0 || !tool.fixed) {
@@ -211,10 +212,11 @@ public class ImproverBot extends Bot {
                 // wait for improve completion
                 if (improveInitiated) {
                     int counter = 0;
-                    while (!improveActionFinished && counter++ < 10) {
+                    while (!improveActionFinished && (counter < 10 || creationWindow.getActionInUse() != 0) && counter < 100) {
                         sleep(200);
+                        counter++;
                     }
-                    if (!improveActionFinished)
+                    if (!improveActionFinished && creationWindow.getActionInUse() != 0)
                         Utils.consolePrint("Improve action didn't finish!");
                 }
             }
@@ -434,7 +436,7 @@ public class ImproverBot extends Bot {
 
     static class Tool{
         int improveIconId;
-        long itemId;
+        volatile long itemId;
         String name;
         //items like water or stone will be searched in player's inventory on each use and will have this value set to false
         boolean fixed;

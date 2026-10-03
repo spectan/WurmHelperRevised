@@ -30,6 +30,11 @@ extends Hook {
                         int perimSize = bb.getInt();
                         WurmEspMod.tilesHighlightManager.addData(startX, startY, endX, endY);
                         WurmEspMod.tileshighlight = true;
+                        break;
+                    }
+                    default: {
+                        bb.rewind();
+                        method.invoke(proxy, args);
                     }
                 }
             } else {

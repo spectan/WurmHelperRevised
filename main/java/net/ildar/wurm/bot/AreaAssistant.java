@@ -8,20 +8,20 @@ import java.util.List;
 class AreaAssistant {
     private final static int STEPS_IN_MOVE = 5;//each moving is divided to this number of steps for each tile
 
-    private int moveAheadDistance = 3;//in tiles
-    private int moveRightDistance = 3;//in tiles
-    private long stepTimeout = 1000;
+    private volatile int moveAheadDistance = 3;//in tiles
+    private volatile int moveRightDistance = 3;//in tiles
+    private volatile long stepTimeout = 1000;
 
     private Bot bot;
-    private MoveStrategy moveStrategy = Utils::movePlayerBySteps;
-    private int height = 0, width = 0;
+    private volatile MoveStrategy moveStrategy = Utils::movePlayerBySteps;
+    private volatile int height = 0, width = 0;
 
     //start point - bottom left corner of area
-    private int movedAhead = 0, movedToRight = 0;
-    private int startX, startY;
-    private int startDirection;
+    private volatile int movedAhead = 0, movedToRight = 0;
+    private volatile int startX, startY;
+    private volatile int startDirection;
 
-    private boolean turnedRight = false;
+    private volatile boolean turnedRight = false;
 
     AreaAssistant(Bot bot) {
         this.bot = bot;
@@ -126,7 +126,7 @@ class AreaAssistant {
         startY = WurmHelper.hud.getWorld().getPlayerCurrentTileY();
         turnedRight = false;
         Utils.stabilizePlayer();
-        startDirection = Math.round(WurmHelper.hud.getWorld().getPlayerRotX() / 90);
+        startDirection = Math.round(WurmHelper.hud.getWorld().getPlayerRotX() / 90) % 4;
     }
 
     void setMoveAheadDistance(int moveAheadDistance) {

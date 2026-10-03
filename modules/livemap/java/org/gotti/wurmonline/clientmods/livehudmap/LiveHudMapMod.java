@@ -78,31 +78,24 @@ public class LiveHudMapMod implements WurmClientMod, Initable, PreInitable, Conf
 	}
 	
 	private void initLiveMap(HeadsUpDisplay hud) {
-		
-		new Runnable() {
-			
-			@Override
-			public void run() {
-				try {
-					World world = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "world"));
-		
-					LiveMapWindow liveMapWindow = new LiveMapWindow(world);
-					liveMap = liveMapWindow;
-		
-					MainMenu mainMenu = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "mainMenu"));
-					mainMenu.registerComponent("Live map", liveMapWindow);
-		
-					List<WurmComponent> components = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "components"));
-					components.add(liveMapWindow);
-					
-					SavePosManager savePosManager = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "savePosManager"));
-					savePosManager.registerAndRefresh(liveMapWindow, "livemapwindow");
-				}
-				catch (IllegalArgumentException | IllegalAccessException | ClassCastException | NoSuchFieldException e) {
-					throw new RuntimeException(e);
-				}
-			}
-		}.run();
+		try {
+			World world = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "world"));
+
+			LiveMapWindow liveMapWindow = new LiveMapWindow(world);
+			liveMap = liveMapWindow;
+
+			MainMenu mainMenu = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "mainMenu"));
+			mainMenu.registerComponent("Live map", liveMapWindow);
+
+			List<WurmComponent> components = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "components"));
+			components.add(liveMapWindow);
+
+			SavePosManager savePosManager = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "savePosManager"));
+			savePosManager.registerAndRefresh(liveMapWindow, "livemapwindow");
+		}
+		catch (IllegalArgumentException | IllegalAccessException | ClassCastException | NoSuchFieldException e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
 	@Override

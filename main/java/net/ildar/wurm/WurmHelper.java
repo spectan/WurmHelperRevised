@@ -379,6 +379,11 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
                 components = new ArrayList<>(Utils.getField(proxy, "components"));
                 return null;
             });
+            HookManager.getInstance().registerHook("com.wurmonline.client.renderer.gui.HeadsUpDisplay", "removeComponent", "(Lcom/wurmonline/client/renderer/gui/WurmComponent;)Z", () -> (proxy, method, args) -> {
+                Object o = method.invoke(proxy, args);
+                components = new ArrayList<>(Utils.getField(proxy, "components"));
+                return o;
+            });
 
             Chat.registerMessageProcessor(":Event", message -> message.contains("You fail to relax"), () -> {
                 try {

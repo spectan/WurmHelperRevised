@@ -89,14 +89,15 @@ public class Utils {
                 consolePrint("Couldn't find the alarm sound");
                 return;
             }
-            AudioInputStream audio = AudioSystem.getAudioInputStream(new BufferedInputStream(resource));
-            Clip clip = AudioSystem.getClip();
-            clip.addLineListener(event -> {
-                if (event.getType() == LineEvent.Type.STOP)
-                    clip.close();
-            });
-            clip.open(audio);
-            clip.start();
+            try (AudioInputStream audio = AudioSystem.getAudioInputStream(new BufferedInputStream(resource))) {
+                Clip clip = AudioSystem.getClip();
+                clip.addLineListener(event -> {
+                    if (event.getType() == LineEvent.Type.STOP)
+                        clip.close();
+                });
+                clip.open(audio);
+                clip.start();
+            }
         } catch (Exception e) {
             consolePrint("Couldn't play the alarm sound: " + e);
         }
@@ -106,7 +107,8 @@ public class Utils {
         showOnScreenMessage(message, 1, 1, 1);
     }
     public static void showOnScreenMessage(String message, float r, float g, float b) {
-        WurmHelper.hud.addOnscreenMessage(message, r, g, b, (byte)1);
+        if (WurmHelper.hud != null)
+            WurmHelper.hud.addOnscreenMessage(message, r, g, b, (byte)1);
         consolePrint(message);
     }
     
@@ -242,7 +244,7 @@ public class Utils {
     public static void stabilizeLook() {
         try{
             float xRot = getField(WurmHelper.hud.getWorld().getPlayer(), "xRotUsed");
-            xRot = Math.round(xRot/90)*90;
+            xRot = Math.round(xRot/90)*90 % 360;
             setField(WurmHelper.hud.getWorld().getPlayer(), "xRotUsed", xRot);
             setField(WurmHelper.hud.getWorld().getPlayer(), "yRotUsed", (float)0.0);
         } catch (Exception e) {
@@ -297,9 +299,13 @@ public class Utils {
         for (int i = 0; i < rootLines.size(); i++) {
             Object item = getField(rootLines.get(i), "item");
             String itemName = getField(item, "itemName");
-            if (itemName.equals("inventory"))
+            if (itemName.equals("inventory")) {
                 lineNum = i;
+                break;
+            }
         }
+        if (lineNum >= rootLines.size())
+            throw new IllegalStateException("Couldn't find the \"inventory\" line in the inventory window");
         return rootLines.get(lineNum);
     }
 
@@ -336,8 +342,8 @@ public class Utils {
     public static List<InventoryMetaItem> getSelectedItems(List nodes, boolean getAll, boolean recursive) {
         //List<WTreeListNode<InventoryListComponent.InventoryTreeListItem>> nodes
         List<InventoryMetaItem> selItems = new ArrayList<>();
-        try {
-            for (Object currentNode : nodes) {
+        for (Object currentNode : nodes) {
+            try {
                 boolean isSelected = getField(currentNode, "isSelected");
                 List children = getNodeChildren(currentNode);
                 Object lineItem = getField(currentNode, "item");
@@ -357,10 +363,10 @@ public class Utils {
                         selItems.addAll(getSelectedItems(children, getAll || isSelected, recursive));
                 } else if (!isInventoryGroup && (getAll || isSelected))
                     selItems.add(item);
+            } catch(Exception e){
+                consolePrint("Unexpected error while getting selected items - " + e.getMessage());
+                consolePrint(e.toString());
             }
-        } catch(Exception e){
-            consolePrint("Unexpected error while getting selected items - " + e.getMessage());
-            consolePrint(e.toString());
         }
         return selItems;
     }
@@ -575,7 +581,8 @@ public class Utils {
             List<WurmComponent> components = WurmHelper.getInstance().components;
             if (components == null)
                 return null;
-            for (WurmComponent wurmComponent : components) {
+            for (int i = components.size() - 1; i >= 0; i--) {
+                WurmComponent wurmComponent = components.get(i);
                 if (wurmComponent.contains(x, y)) {
                     if (filter != null && !filter.test(wurmComponent))
                         continue;
@@ -767,7 +774,7 @@ public class Utils {
         try {
             ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
             Map<Long, CreatureCellRenderable> creaturesMap = getField(sscc, "creatures");
-            for(CreatureCellRenderable creature: creaturesMap.values()) {
+            for(CreatureCellRenderable creature: new ArrayList<>(creaturesMap.values())) {
                 CreatureData data;
                 try {
                     data = getField(creature, "creature");

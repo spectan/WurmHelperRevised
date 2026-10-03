@@ -131,9 +131,11 @@ public class ItemMoverBot extends Bot {
         } catch (Exception ignored) {
             // the name is only for the message
         }
-        target = id;
-        targetName = name != null ? "\"" + name + "\" (id " + id + ")" : "item with id " + id;
+        target = 0;
+        targetComponent = null;
         targetType = TargetType.Item;
+        targetName = name != null ? "\"" + name + "\" (id " + id + ")" : "item with id " + id;
+        target = id;
         Utils.feedback("New target is " + targetName);
     }
 
@@ -203,9 +205,11 @@ public class ItemMoverBot extends Bot {
         try {
             InventoryListComponent ilc = Utils.getField(wurmComponent, "component");
             InventoryMetaItem rootItem = Utils.getRootItem(ilc);
-            targetComponent = ilc;
-            this.containerName = newContainer;
+            target = 0;
+            targetComponent = null;
             targetType = TargetType.Containers;
+            this.containerName = newContainer;
+            targetComponent = ilc;
             Utils.feedback("Items will go to \"" + containerName + "\" containers inside \""
                     + (rootItem != null ? rootItem.getBaseName() : "the target window") + "\"");
         } catch(Exception e) {
@@ -230,9 +234,11 @@ public class ItemMoverBot extends Bot {
         }
         InventoryMetaItem rootItem = Utils.getRootItem(ilc);
         if (rootItem!=null) {
-            Utils.feedback("Items will go to the \"" + rootItem.getBaseName() + "\"");
+            target = 0;
+            targetComponent = null;
             targetType = TargetType.ContainerRoot;
             targetComponent = ilc;
+            Utils.feedback("Items will go to the \"" + rootItem.getBaseName() + "\"");
         } else {
             Utils.consolePrint("Failed on configuring the target container");
         }
@@ -243,9 +249,11 @@ public class ItemMoverBot extends Bot {
             int y = WurmHelper.hud.getWorld().getClient().getYMouse();
             long [] targets = WurmHelper.hud.getCommandTargetsFrom(x,y);
             if (targets != null && targets.length > 0) {
-                target = targets[0];
-                targetName = describeHoveredTarget(targets[0], x, y);
+                target = 0;
+                targetComponent = null;
                 targetType = TargetType.Item;
+                targetName = describeHoveredTarget(targets[0], x, y);
+                target = targets[0];
                 Utils.feedback("New target is " + targetName);
             } else
                 Utils.consolePrint("Can't find the target");

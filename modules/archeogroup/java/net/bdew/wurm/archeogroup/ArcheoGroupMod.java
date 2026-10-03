@@ -25,7 +25,12 @@ public class ArcheoGroupMod implements WurmClientMod, PreInitable {
                     .getMethod("updateDisplayName", "()V")
                     .insertAfter(
                             "if (this.groupName.contains(\"fragment\") && this.groupName.contains(\"[\")) {" +
-                                    "this.groupName = this.groupName.substring(0, this.groupName.indexOf('[') - 1) + this.groupName.substring(this.groupName.indexOf(']')+1);" +
+                                    "int openIdx = this.groupName.indexOf('[');" +
+                                    "int closeIdx = this.groupName.indexOf(']');" +
+                                    "if (openIdx > 0 && closeIdx > openIdx) {" +
+                                    "int endIdx = this.groupName.charAt(openIdx - 1) == ' ' ? openIdx - 1 : openIdx;" +
+                                    "this.groupName = this.groupName.substring(0, endIdx) + this.groupName.substring(closeIdx + 1);" +
+                                    "}" +
                                     "}"
                     );
 

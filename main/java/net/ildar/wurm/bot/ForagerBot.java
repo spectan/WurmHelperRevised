@@ -12,6 +12,8 @@ import net.ildar.wurm.Utils;
 import net.ildar.wurm.annotations.BotInfo;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
         abbreviation = "fg")
 public class ForagerBot extends Bot {
     private static final String DEFAULT_CONTAINER_NAME = "backpack";
+    private static final long WORKED_TILES_RESET_TIMEOUT = 30 * 60 * 1000;
     private static final Set<String> forageSet = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "oregano","rosemary","lingonberry","pumpkin",
             "thyme","tomato","lovage","fennel plant",
@@ -42,25 +45,27 @@ public class ForagerBot extends Bot {
 
     private Comparator<InventoryMetaItem> weightComparator = Comparator.comparingDouble(InventoryMetaItem::getWeight);
     private AreaAssistant areaAssistant = new AreaAssistant(this);
-    private long sickleId;
-    private int maxActions;
+    private volatile long sickleId;
+    private volatile int maxActions;
     private final List<Pair<Integer, Integer>> queuedTiles = new ArrayList<>();
     private List <Pair<Integer, Integer>> forageTilesInProcess = new ArrayList<>();
     private List <Pair<Integer, Integer>> botanizeTilesInProcess = new ArrayList<>();
-    private Set<Pair<Integer, Integer>> foragedTiles = new HashSet<>();
-    private Set<Pair<Integer, Integer>> botanizedTiles = new HashSet<>();
-    private String containerName = DEFAULT_CONTAINER_NAME;
-    private ForageType forageType = ForageType.Default;
-    private BotanizeType botanizeType = BotanizeType.Default;
-    private long lastActionFinishedTime;
+    private final Set<Pair<Integer, Integer>> foragedTiles = ConcurrentHashMap.newKeySet();
+    private final Set<Pair<Integer, Integer>> botanizedTiles = ConcurrentHashMap.newKeySet();
+    private volatile long lastTileProcessedTime;
+    private boolean areaTourWasActive;
+    private volatile String containerName = DEFAULT_CONTAINER_NAME;
+    private volatile ForageType forageType = ForageType.Default;
+    private volatile BotanizeType botanizeType = BotanizeType.Default;
+    private volatile long lastActionFinishedTime;
 
-    private boolean grassGathering = false;
-    private boolean foraging = true;
-    private boolean botanizing = true;
-    private boolean dropping = false;
-    private boolean dropWhenFull = false;
-    private boolean verbose = false;
-    private List<String> filterItemNames = new ArrayList<>();
+    private volatile boolean grassGathering = false;
+    private volatile boolean foraging = true;
+    private volatile boolean botanizing = true;
+    private volatile boolean dropping = false;
+    private volatile boolean dropWhenFull = false;
+    private volatile boolean verbose = false;
+    private final List<String> filterItemNames = new CopyOnWriteArrayList<>();
 
     public ForagerBot() {
         registerStaminaThresholdHandler(ForagerBot.InputKey.s);
@@ -118,6 +123,20 @@ public class ForagerBot extends Bot {
                 }
                 if (verbose)
                     Utils.consolePrint(getClass().getSimpleName() + " queue cleared");
+            }
+            if (areaTourWasActive && !areaAssistant.areaTourActivated()) {
+                foragedTiles.clear();
+                botanizedTiles.clear();
+                if (verbose)
+                    Utils.consolePrint(getClass().getSimpleName() + " finished the area tour, worked tiles will be revisited");
+            }
+            areaTourWasActive = areaAssistant.areaTourActivated();
+            if ((!foragedTiles.isEmpty() || !botanizedTiles.isEmpty())
+                    && System.currentTimeMillis() - lastTileProcessedTime > WORKED_TILES_RESET_TIMEOUT) {
+                foragedTiles.clear();
+                botanizedTiles.clear();
+                if (verbose)
+                    Utils.consolePrint(getClass().getSimpleName() + " worked tiles timeout expired, tiles will be revisited");
             }
             if ((stamina + damage) > staminaThreshold && queuedTiles.size() == 0) {
                 int[][] checkedtiles = Utils.getAreaCoordinates();
@@ -218,7 +237,7 @@ public class ForagerBot extends Bot {
                             .filter(item->item.getBaseName().contains(containerName))
                             .collect(Collectors.toList());
                     long[] foragablesIds = Utils.getItemIds(foragables);
-                    if (foragablesIds != null && foragables.size() > 20) {
+                    if (foragables.size() > 20) {
                         for (InventoryMetaItem container : containers) {
                             if (container.getChildren() != null && container.getChildren().size() < 100) {
                                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(
@@ -256,8 +275,7 @@ public class ForagerBot extends Bot {
                 }
             }
             long[] foragablesIds = Utils.getItemIds(foragables);
-            if (foragablesIds != null)
-                WurmHelper.hud.sendAction(PlayerAction.DROP, foragablesIds);
+            WurmHelper.hud.sendAction(PlayerAction.DROP, foragablesIds);
         }
     }
 
@@ -436,11 +454,13 @@ public class ForagerBot extends Bot {
                         Utils.consolePrint("Finish foraging at tile - " + tile.getKey() + " " + tile.getValue());
                     foragedTiles.add(tile);
                     forageTilesInProcess.remove(tile);
+                    lastTileProcessedTime = System.currentTimeMillis();
                 } else if (botanizeTilesInProcess.contains(tile)) {
                     if (verbose)
                         Utils.consolePrint("Finish botanizing at tile - " + tile.getKey() + " " + tile.getValue());
                     botanizedTiles.add(tile);
                     botanizeTilesInProcess.remove(tile);
+                    lastTileProcessedTime = System.currentTimeMillis();
                 } else {
                     if (verbose)
                         Utils.consolePrint("found unchecked fb tile!");

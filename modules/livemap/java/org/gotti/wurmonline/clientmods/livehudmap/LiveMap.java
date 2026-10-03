@@ -27,7 +27,7 @@ public class LiveMap implements TerrainChangeListener, CaveBufferChangeListener 
 	private MapLayerView surface;
 	private MapLayerView cave;
 
-	private boolean dirty = true;
+	private volatile boolean dirty = true;
 	private BufferedImage image;
 	private ImageTexture texture;
 

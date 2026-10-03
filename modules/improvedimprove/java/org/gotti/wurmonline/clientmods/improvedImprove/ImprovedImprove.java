@@ -53,7 +53,7 @@ public class ImprovedImprove implements WurmMod, /*Configurable, */Initable {
                     if (methodCall.getClassName().equals("com.wurmonline.client.comm.SimpleServerConnectionClass") && methodCall.getMethodName().equals("sendAction")) {
                         String replaceString =
                             //Check if the action is 192 IMPROVE and the toolbelt exists
-                            "if (action.getId() == 192 && this.toolbeltComponent != null) {\n" +
+                            "if (action.getId() == 192 && this.toolbeltComponent != null && limitedTargetIds.length > 0) {\n" +
 //                            "   this.chatManager.textMessage(\"test\", 1.00f, 1.00f, 1.00f, \"This is an improve action\", false);\n" +
                             "   com.wurmonline.client.game.inventory.InventoryMetaItem matchedItem = null;\n" +
 
@@ -189,10 +189,9 @@ public class ImprovedImprove implements WurmMod, /*Configurable, */Initable {
      * injected in the client before it launches. It's the only way I found to get debug info.
      */
     public static void appendToFile(Exception e) {
-        try {
-            FileWriter fstream = new FileWriter("exception.txt", true);
-            BufferedWriter out = new BufferedWriter(fstream);
-            PrintWriter pWriter = new PrintWriter(out, true);
+        try (FileWriter fstream = new FileWriter("exception.txt", true);
+             BufferedWriter out = new BufferedWriter(fstream);
+             PrintWriter pWriter = new PrintWriter(out, true)) {
             e.printStackTrace(pWriter);
         }
         catch (Exception ie) {

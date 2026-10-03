@@ -80,6 +80,10 @@ public class DevInfoCommandHandler {
         int checkedtiles[][] = Utils.getAreaCoordinates();
         for (int[] checkedtile : checkedtiles) {
             Tiles.Tile tileType = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(checkedtile[0], checkedtile[1]);
+            if (tileType == null) {
+                Utils.consolePrint("Tile (" + checkedtile[0] + ", " + checkedtile[1] + ") is not loaded");
+                continue;
+            }
             Utils.consolePrint("Tile (" + checkedtile[0] + ", " + checkedtile[1] + ") " + tileType.tilename);
         }
     }

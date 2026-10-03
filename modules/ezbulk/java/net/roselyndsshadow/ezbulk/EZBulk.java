@@ -20,11 +20,11 @@ import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 public class EZBulk implements WurmClientMod, Initable, PreInitable {
@@ -48,41 +48,37 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
     private static final java.util.IdentityHashMap<Object, Boolean> answeredBml =
             new java.util.IdentityHashMap<Object, Boolean>();
     private static long[] lastDropSourceIds = new long[0];
-    private static boolean pendingAutoAll = false;
+    private static volatile boolean pendingAutoAll = false;
     private static long pendingDestId = -1L;
     private static int pendingAmount = 0;
     private static InventoryMetaItem pendingSource = null;
-    private static final List<Long> moveQueue = new ArrayList<Long>();
-    private static final Map<Long, Integer> retryCount = new HashMap<Long, Integer>();
-    private static int moveQueueIndex = 0;
-    private static long lastSentId = 0L;
+    private static final List<Long> moveQueue =
+            java.util.Collections.synchronizedList(new ArrayList<Long>());
+    private static final Map<Long, Integer> retryCount =
+            new java.util.concurrent.ConcurrentHashMap<Long, Integer>();
+    private static final AtomicInteger moveQueueIndex = new AtomicInteger(0);
+    private static volatile long lastSentId = 0L;
     private static final int MAX_RETRIES = 5;
     private static final long STEP_GAP_MS = 50L;
-    private static boolean waitingForDone = false;
+    private static volatile boolean waitingForDone = false;
     private static boolean moveStarted = false;
-    private static long waitStartedAt = 0L;
-    private static long expectedMoveMs = 8000L;
-    private static int queueGen = 0;
-    private static int stepToken = 0;
+    private static final AtomicInteger queueGen = new AtomicInteger(0);
+    private static final AtomicInteger stepToken = new AtomicInteger(0);
     private static final Timer watchdog = new Timer("EZBulk-watch", true);
     private static long rescanParentId = -1L;
     private static boolean shiftRescan = false;
-    private static boolean destRefused = false;
+    private static volatile boolean destRefused = false;
     private static boolean dumpEntire = false;
     private static int rescanPass = 0;
     private static final int MAX_RESCAN_PASSES = 20;
     private static long tSend = 0L;
     private static long tBml = 0L;
-    private static long tHeave = 0L;
     private static int lastHeaveAmount = 0;
     private static int lastHeaveRate = 0;
-    private static int inFlight = 0;
+    private static final AtomicInteger inFlight = new AtomicInteger(0);
     private static final int MAX_IN_FLIGHT = 5;
     private static boolean stepClosed = false;
-    private static boolean suppressShiftBml = false;
     private static long lastPlayerTarget = -1L;
-    private static long lastPlayerArg1 = -1L;
-    private static long lastPlayerArg2 = -1L;
     private static InventoryMetaItem lastShiftSource = null;
     private static long lastShiftDestId = -1L;
     private static boolean sawAmountMenu = false;
@@ -140,8 +136,7 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         if (space > 0) c = c.substring(0, space);
         return c.equalsIgnoreCase("STOP_OR_MAIN_MENU")
                 || c.equalsIgnoreCase("MAIN_MENU")
-                || c.equalsIgnoreCase("STOP")
-                || c.equalsIgnoreCase("stop_or_main_menu");
+                || c.equalsIgnoreCase("STOP");
     }
 
     private static Object lastAmountWindow;
@@ -203,26 +198,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         if (!esc && !menu) return;
         abortQueue(menu ? "main menu opened" : "KEY_ESCAPE / STOP_OR_MAIN_MENU");
         dismissAmountWindow();
-    }
-
-    private static void scheduleStartAfterMenu() {
-        if (lastShiftSource == null || lastShiftDestId <= 0) return;
-        if (!moveQueue.isEmpty() && moveQueueIndex < moveQueue.size()) return;
-        final InventoryMetaItem src = lastShiftSource;
-        final long dest = lastShiftDestId;
-        watchdog.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                try {
-                    if (destRefused) return;
-                    if (!moveQueue.isEmpty() && moveQueueIndex < moveQueue.size()) return;
-                    log("amount menu seen – start QL group queue dest=" + dest);
-                    tryExpandMove(dest, src);
-                } catch (Throwable t) {
-                    log("start after menu error: " + t.getMessage());
-                }
-            }
-        }, 50L);
     }
 
     // ==================== REFLECTION HELPERS ====================
@@ -814,7 +789,7 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         retryCount.put(key, Integer.valueOf(c + 1));
         moveQueue.add(key);
         log("defer id=" + lastSentId + " to end of queue (try " + (c + 1) + "/" + MAX_RETRIES
-                + ") queue=" + moveQueueIndex + "/" + moveQueue.size());
+                + ") queue=" + moveQueueIndex.get() + "/" + moveQueue.size());
     }
 
     private static void scheduleWatchdog(final int gen, final int step, final long delayMs) {
@@ -822,39 +797,39 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
             @Override
             public void run() {
                 try {
-                    if (gen != queueGen || step != stepToken) return;
+                    if (gen != queueGen.get() || step != stepToken.get()) return;
                     if (keyDown("KEY_ESCAPE")) {
                         abortQueue("KEY_ESCAPE");
                         return;
                     }
-                    if (moveQueueIndex >= moveQueue.size() && lastSentId == 0L) return;
+                    if (moveQueueIndex.get() >= moveQueue.size() && lastSentId == 0L) return;
                     if (pendingAutoAll) {
                         log("watchdog: no BML – wait for server, do not queue another");
                         pendingAutoAll = false;
                         waitingForDone = true;
-                        scheduleWatchdog(gen, stepToken, 8000L);
+                        scheduleWatchdog(gen, stepToken.get(), 8000L);
                         return;
                     }
                     if (waitingForDone) {
                         log("watchdog: still no Done! – skip this id and continue");
                         waitingForDone = false;
                         moveStarted = false;
-                        stepToken++;
+                        stepToken.incrementAndGet();
                         sendNextQueuedMoveSoon();
                         return;
                     }
-                    if (inFlight >= MAX_IN_FLIGHT) {
-                        inFlight = MAX_IN_FLIGHT - 1;
-                        log("watchdog: action bar full, release one slot inFlight=" + inFlight);
+                    if (inFlight.get() >= MAX_IN_FLIGHT) {
+                        inFlight.set(MAX_IN_FLIGHT - 1);
+                        log("watchdog: action bar full, release one slot inFlight=" + inFlight.get());
                         sendNextQueuedMoveSoon();
                         return;
                     }
-                    log("watchdog defer step " + moveQueueIndex + "/" + moveQueue.size()
+                    log("watchdog defer step " + moveQueueIndex.get() + "/" + moveQueue.size()
                             + " pendingBml=" + pendingAutoAll + " waitingDone=" + waitingForDone);
                     pendingAutoAll = false;
                     waitingForDone = false;
                     moveStarted = false;
-                    stepToken++;
+                    stepToken.incrementAndGet();
                     deferCurrentForLater();
                     sendNextQueuedMoveSoon();
                 } catch (Exception e) {
@@ -871,46 +846,46 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
             return;
         }
         if (hud == null || hud.getWorld() == null) return;
-        if (moveQueueIndex >= moveQueue.size()) {
+        if (moveQueueIndex.get() >= moveQueue.size()) {
             pendingAutoAll = false;
             waitingForDone = false;
             moveStarted = false;
             lastSentId = 0L;
             if (maybeRescanSource()) return;
-            suppressShiftBml = true;
+            moveQueue.clear();
+            moveQueueIndex.set(0);
+            retryCount.clear();
+            inFlight.set(0);
             log("queue finished");
             announceTransferComplete();
             return;
         }
-        if (inFlight >= MAX_IN_FLIGHT) {
-            log("action bar full (" + inFlight + ") – wait for a slot");
-            scheduleWatchdog(queueGen, stepToken, 8000L);
+        if (inFlight.get() >= MAX_IN_FLIGHT) {
+            log("action bar full (" + inFlight.get() + ") – wait for a slot");
+            scheduleWatchdog(queueGen.get(), stepToken.get(), 8000L);
             return;
         }
-        lastSentId = moveQueue.get(moveQueueIndex).longValue();
-        moveQueueIndex++;
+        lastSentId = moveQueue.get(moveQueueIndex.getAndIncrement()).longValue();
         pendingAutoAll = true;
         waitingForDone = false;
         moveStarted = false;
         tSend = System.currentTimeMillis();
         tBml = 0L;
-        tHeave = 0L;
         lastHeaveAmount = 0;
         lastHeaveRate = 0;
-        waitStartedAt = tSend;
         try {
             isMoving = true;
             hud.getWorld().getServerConnection().sendMoveSomeItems(pendingDestId, new long[] { lastSentId });
             Integer tries = retryCount.get(Long.valueOf(lastSentId));
-            inFlight++;
+            inFlight.incrementAndGet();
             stepClosed = false;
             log("sendMoveSomeItems dest=" + pendingDestId
                     + " id=" + lastSentId
-                    + " " + moveQueueIndex + "/" + moveQueue.size()
-                    + " inFlight=" + inFlight
+                    + " " + moveQueueIndex.get() + "/" + moveQueue.size()
+                    + " inFlight=" + inFlight.get()
                     + (tries != null ? " retry=" + tries : ""));
-            stepToken++;
-            scheduleWatchdog(queueGen, stepToken, 3000L);
+            stepToken.incrementAndGet();
+            scheduleWatchdog(queueGen.get(), stepToken.get(), 3000L);
         } catch (Exception e) {
             log("send error: " + e.getMessage());
             deferCurrentForLater();
@@ -921,11 +896,11 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
     }
 
     private static void sendNextQueuedMoveSoon() {
-        final int gen = queueGen;
+        final int gen = queueGen.get();
         watchdog.schedule(new TimerTask() {
             @Override
             public void run() {
-                if (gen != queueGen) return;
+                if (gen != queueGen.get()) return;
                 sendNextQueuedMove();
             }
         }, STEP_GAP_MS);
@@ -1044,7 +1019,7 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
 
     private static boolean transferActive() {
         if (pendingAutoAll || waitingForDone || moveStarted) return true;
-        return moveQueueIndex > 0 && moveQueueIndex < moveQueue.size();
+        return moveQueueIndex.get() > 0 && moveQueueIndex.get() < moveQueue.size();
     }
 
     private static boolean tryExpandMove(long destId, InventoryMetaItem source) {
@@ -1055,9 +1030,9 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
 
         if (isMoving) return true;
         if (transferActive() && !moveQueue.isEmpty()
-                && moveQueueIndex > 0 && moveQueueIndex < moveQueue.size()) {
+                && moveQueueIndex.get() > 0 && moveQueueIndex.get() < moveQueue.size()) {
             log("SHIFT ignored – already transferring "
-                    + moveQueueIndex + "/" + moveQueue.size()
+                    + moveQueueIndex.get() + "/" + moveQueue.size()
                     + " pending=" + pendingAutoAll + " waiting=" + waitingForDone);
             return true;
         }
@@ -1125,14 +1100,14 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         dumpEntire = dumpAll;
         destRefused = false;
         rescanPass = 0;
-        inFlight = 0;
+        inFlight.set(0);
         stepClosed = false;
         moveQueue.clear();
         retryCount.clear();
         lastSentId = 0L;
         for (int i = 0; i < ids.length; i++) moveQueue.add(Long.valueOf(ids[i]));
-        moveQueueIndex = 0;
-        queueGen++;
+        moveQueueIndex.set(0);
+        queueGen.incrementAndGet();
         waitingForDone = false;
         moveStarted = false;
         sendNextQueuedMove();
@@ -1258,7 +1233,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         if (destId > 0) lastShiftDestId = destId;
         if (source != null) lastShiftSource = source;
         destRefused = false;
-        suppressShiftBml = false;
         log("remember drop dest=" + destId
                 + " source=" + describeItem(source)
                 + " – wait for Removing items menu");
@@ -1306,36 +1280,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         return false;
     }
 
-    private static boolean onHandleDropUnused(Object[] args) {
-        if (isMoving || args == null || args.length < 2) return false;
-        if (!isShiftDown() && !isCtrlDown()) return false;
-        if (!(args[0] instanceof Long) || !(args[1] instanceof long[])) return false;
-
-        long destId = (Long) args[0];
-        long[] sourceIds = (long[]) args[1];
-        if (sourceIds.length == 0) return false;
-
-        InventoryMetaItem source = null;
-        for (long id : sourceIds) {
-            InventoryMetaItem it = findItemById(id);
-            if (it != null && isBulkCommodity(it)) { source = it; break; }
-        }
-        if (source == null) source = findItemById(sourceIds[0]);
-
-        InventoryMetaItem destItem = findItemById(destId);
-        InventoryMetaItem destBulk = destItem != null && isBulkContainer(destItem)
-                ? destItem : findBulkAncestor(destItem);
-        if (destBulk != null) destId = destBulk.getId();
-
-        log("handleDrop destId=" + destId
-                + " dest=" + describeItem(destBulk != null ? destBulk : destItem)
-                + " sources=" + sourceIds.length
-                + " first=" + describeItem(source));
-        if (source == null) return false;
-        rememberShiftDrop(destId, source);
-        return false;
-    }
-
     private static boolean onItemDroppedAmount(Object[] args) {
         if (isMoving || args == null || args.length < 2) return false;
         InventoryMetaItem source = extractItem(args[0]);
@@ -1357,15 +1301,7 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         return false;
     }
 
-    private static long heaveWorkMs() {
-        if (lastHeaveAmount > 0 && lastHeaveRate > 0) {
-            return ((lastHeaveAmount + lastHeaveRate - 1) / lastHeaveRate) * 1000L;
-        }
-        if (lastHeaveAmount > 0) return lastHeaveAmount * 200L;
-        return 0L;
-    }
-
-    private static long parseHeaveHoMs(String t) {
+    private static void parseHeaveHoMs(String t) {
         int amount = -1;
         int rate = -1;
         int paren = t.indexOf('(');
@@ -1390,13 +1326,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         }
         lastHeaveAmount = amount;
         lastHeaveRate = rate;
-        if (amount > 0 && rate > 0) {
-            return heaveWorkMs() + 1500L;
-        }
-        if (amount > 0) {
-            return amount * 200L + 5000L;
-        }
-        return 15000L;
     }
 
     private static boolean maybeRescanSource() {
@@ -1441,9 +1370,9 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         moveQueue.clear();
         retryCount.clear();
         for (int i = 0; i < left.size(); i++) moveQueue.add(Long.valueOf(left.get(i).getId()));
-        moveQueueIndex = 0;
+        moveQueueIndex.set(0);
         lastSentId = 0L;
-        queueGen++;
+        queueGen.incrementAndGet();
         log("rescan pass " + rescanPass + " – " + left.size() + " still in source, running again");
         sendNextQueuedMove();
         return true;
@@ -1503,17 +1432,16 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         lastShiftSource = null;
         lastShiftDestId = -1L;
         moveQueue.clear();
-        moveQueueIndex = 0;
+        moveQueueIndex.set(0);
         lastSentId = 0L;
         waitingForDone = false;
         pendingAutoAll = false;
         moveStarted = false;
-        inFlight = 0;
+        inFlight.set(0);
         stepClosed = true;
-        suppressShiftBml = true;
         shiftRescan = false;
         dumpEntire = false;
-        queueGen++;
+        queueGen.incrementAndGet();
         dismissAmountWindow();
         if (isGameCap(reason)) announceOnscreen("Transfer Capped!");
         else if (isPlayerAbort(reason)) announceOnscreen("Transfer Stopped!");
@@ -1523,8 +1451,9 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
     private static void onEventText(String text) {
         abortIfEscape();
         if (text == null || text.isEmpty()) return;
-        if (moveQueueIndex > moveQueue.size()) return;
-        if (!pendingAutoAll && !waitingForDone && moveQueueIndex == 0) return;
+        if (moveQueueIndex.get() > moveQueue.size()) return;
+        if (!pendingAutoAll && !waitingForDone
+                && (moveQueueIndex.get() == 0 || moveQueue.isEmpty())) return;
 
         String t = text.toLowerCase();
         if (t.contains("[") && t.contains("]")) {
@@ -1533,7 +1462,8 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         }
 
         boolean active = pendingAutoAll || waitingForDone
-                || (moveQueueIndex > 0 && moveQueueIndex <= moveQueue.size());
+                || (!moveQueue.isEmpty() && moveQueueIndex.get() > 0
+                        && moveQueueIndex.get() <= moveQueue.size());
         if (active) log("event: " + text);
 
         if (t.contains("can not even carry") || t.contains("cannot even carry")
@@ -1569,7 +1499,7 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         }
 
         if (t.contains("you may now queue")) {
-            inFlight = 0;
+            inFlight.set(0);
             log("action bar empty – inFlight=0");
             pendingAutoAll = false;
             waitingForDone = false;
@@ -1579,7 +1509,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         }
 
         if (t.contains("heave-ho") || t.contains("moving a whole")) {
-            tHeave = System.currentTimeMillis();
             parseHeaveHoMs(t);
             log("heave-ho amount=" + lastHeaveAmount + " rate=" + lastHeaveRate
                     + " (flavor, not used as a timer)");
@@ -1593,8 +1522,8 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
             waitingForDone = false;
             moveStarted = false;
             log("timing ACK id=" + lastSentId
-                    + " " + moveQueueIndex + "/" + moveQueue.size()
-                    + " inFlight=" + inFlight
+                    + " " + moveQueueIndex.get() + "/" + moveQueue.size()
+                    + " inFlight=" + inFlight.get()
                     + " send->ack=" + (tSend > 0 ? (System.currentTimeMillis() - tSend) : -1) + "ms");
             sendNextQueuedMoveSoon();
         }
@@ -1615,11 +1544,10 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         String title = titleObj instanceof String ? (String) titleObj : "";
         log("BML window title=\"" + title + "\" class=" + cls + " pending=" + pendingAutoAll
                 + " active=" + transferActive() + " shift=" + isShiftDown()
-                + " queue=" + moveQueueIndex + "/" + moveQueue.size());
-        if (!isShiftDown()) suppressShiftBml = false;
+                + " queue=" + moveQueueIndex.get() + "/" + moveQueue.size());
         if (!"Removing items".equals(title) && !looksLikeAmountPrompt(title)) return false;
         boolean ourJob = pendingAutoAll
-                || (waitingForDone && !moveQueue.isEmpty() && moveQueueIndex > 0);
+                || (waitingForDone && !moveQueue.isEmpty() && moveQueueIndex.get() > 0);
         boolean modifier = isShiftDown() || isCtrlDown();
         if (!ourJob && modifier) startFromAmountMenu();
         ourJob = pendingAutoAll
@@ -1653,7 +1581,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
             pendingAutoAll = false;
             waitingForDone = true;
             tBml = System.currentTimeMillis();
-            waitStartedAt = tBml;
             log("BML submit on \"" + title + "\" send->bml="
                     + (tSend > 0 ? (tBml - tSend) : -1) + "ms");
             return true;
@@ -1860,8 +1787,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
 
     private static void rememberPlayerAction(PlayerAction act, long a1, long a2) {
         if (act == null) return;
-        lastPlayerArg1 = a1;
-        lastPlayerArg2 = a2;
         lastPlayerTarget = a2 > 0 ? a2 : a1;
         log("player action id=" + act.getId() + " target=" + lastPlayerTarget
                 + " arg1=" + a1 + " arg2=" + a2);
@@ -1996,7 +1921,6 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
 
     private static void onBmlWindowSeen(Object wc) {
         if (wc == null) return;
-        if (!isShiftDown()) suppressShiftBml = false;
         Object titleObj = getFieldValue(wc, "title");
         String title = titleObj instanceof String ? (String) titleObj : "";
         if (!"Removing items".equals(title) && !looksLikeAmountPrompt(title)) return;

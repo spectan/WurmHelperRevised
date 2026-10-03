@@ -20,6 +20,7 @@ public class SkillTrackMod implements WurmClientMod, Initable, PreInitable {
     private static final Logger logger = Logger.getLogger("SkillTrackMod");
 
     public static GainTracker tracker;
+    private static GainTrackerWindow trackerWindow;
 
     public static void logException(String msg, Throwable e) {
         if (logger != null)
@@ -38,8 +39,9 @@ public class SkillTrackMod implements WurmClientMod, Initable, PreInitable {
             HookManager.getInstance().registerHook("com.wurmonline.client.renderer.gui.HeadsUpDisplay", "init", "(II)V", () -> (proxy, method, args) -> {
                 method.invoke(proxy, args);
 
-                GainTrackerWindow trackerWindow = new GainTrackerWindow();
-                tracker.setWindow(trackerWindow);
+                trackerWindow = new GainTrackerWindow();
+                if (tracker != null)
+                    tracker.setWindow(trackerWindow);
 
                 MainMenu mainMenu = ReflectionUtil.getPrivateField(proxy, ReflectionUtil.getField(proxy.getClass(), "mainMenu"));
                 List<WurmComponent> components = ReflectionUtil.getPrivateField(proxy, ReflectionUtil.getField(proxy.getClass(), "components"));
@@ -60,6 +62,8 @@ public class SkillTrackMod implements WurmClientMod, Initable, PreInitable {
 
                 tracker = new GainTracker();
                 tracker.register((SkillLogicSet) args[0]);
+                if (trackerWindow != null)
+                    tracker.setWindow(trackerWindow);
 
                 logInfo("Tracker registered");
 

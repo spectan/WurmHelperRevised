@@ -19,11 +19,6 @@ public class FishBuddy implements WurmClientMod, Initable, PreInitable {
             logger.log(Level.SEVERE, msg, e);
     }
 
-    public static void logInfo(String msg) {
-        if (logger != null)
-            logger.log(Level.INFO, msg);
-    }
-
     @Override
     public void preInit() {
         try {
@@ -34,9 +29,6 @@ public class FishBuddy implements WurmClientMod, Initable, PreInitable {
             ctListener.getMethod("setFishHooked", "(J)V")
                     .insertAfter("net.bdew.wurm.fishbuddy.Hooks.setFishHooked($1);");
 
-            ctListener.getMethod("showSpearStrike", "(JFF)V")
-                    .insertAfter("net.bdew.wurm.fishbuddy.Hooks.showSpearStrike($1, $2, $3);");
-
             ctListener.getMethod("cancelFishing", "(J)V")
                     .insertAfter("net.bdew.wurm.fishbuddy.Hooks.cancelFishing($1);");
 
@@ -45,12 +37,6 @@ public class FishBuddy implements WurmClientMod, Initable, PreInitable {
 
             ctListener.getMethod("startFishing", "(Lcom/wurmonline/client/renderer/FishingSystem$Mode;FFBBBBBBZ)V")
                     .insertAfter("net.bdew.wurm.fishbuddy.Hooks.startFishing($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);");
-
-            ctListener.getMethod("setFishCasted", "(JBFF)V")
-                    .insertAfter("net.bdew.wurm.fishbuddy.Hooks.setFishCasted($1, $2, $3, $4);");
-
-            ctListener.getMethod("showFishStrike", "()V")
-                    .insertAfter("net.bdew.wurm.fishbuddy.Hooks.showFishStrike();");
 
             ctListener.getMethod("textMessage", "(Ljava/lang/String;FFFLjava/lang/String;B)V")
                     .insertAfter("net.bdew.wurm.fishbuddy.Hooks.textMessage($1, $2, $3, $4, $5, $6);");

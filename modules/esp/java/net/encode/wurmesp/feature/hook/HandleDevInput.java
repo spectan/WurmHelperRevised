@@ -22,7 +22,6 @@ public class HandleDevInput {
         catch (CannotCompileException | NotFoundException ex) {
             Logger.getLogger(HandleDevInput.class.getName()).log(Level.SEVERE, null, ex);
         }
-        WurmEspMod.logger.log(Level.INFO, "[WurmEspMod] Return inserted on handleDevInput");
     }
 
     public static boolean handleInput(String cmd, String[] data) {
@@ -90,9 +89,14 @@ public class HandleDevInput {
                         break;
                     }
                     case "reload": {
-                        ConfigUtils.loadProperties("esp");
-                        ConfigUtils.DoConfig(WurmEspMod.modProperties);
-                        WurmEspMod.hud.consoleOutput("[WurmEspMod] Config Reloaded");
+                        try {
+                            ConfigUtils.loadProperties("esp");
+                            ConfigUtils.DoConfig(WurmEspMod.modProperties);
+                            WurmEspMod.hud.consoleOutput("[WurmEspMod] Config Reloaded");
+                        }
+                        catch (Exception e) {
+                            WurmEspMod.hud.consoleOutput("[WurmEspMod] Config reload failed: " + e.getMessage());
+                        }
                         break;
                     }
                     default: {
@@ -104,6 +108,16 @@ public class HandleDevInput {
             if (data.length > 2) {
                 switch (data[1]) {
                     case "search": {
+                        if (data[2].equals("off")) {
+                            WurmEspMod.search = "defaultnosearch";
+                            WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.NONE;
+                            WurmEspMod.hud.consoleOutput("Searching off");
+                            break;
+                        }
+                        if (data.length < 4) {
+                            WurmEspMod.hud.consoleOutput("Usage: esp search {h/m/hm/off} <name>");
+                            break;
+                        }
                         if (data[2].equals("h")) {
                             WurmEspMod.search = data[3];
                             WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.HOVER;
@@ -122,71 +136,74 @@ public class HandleDevInput {
                             WurmEspMod.hud.consoleOutput("Searching for " + WurmEspMod.search + " in HoverName and ModelName");
                             break;
                         }
-                        if (data[2].equals("off")) {
-                            WurmEspMod.search = "";
-                            WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.NONE;
-                            WurmEspMod.hud.consoleOutput("Searching off");
-                            break;
-                        }
                         WurmEspMod.hud.consoleOutput("Usage: esp search {h/m/hm/off} <name>");
                         break;
                     }
                     case "planner": {
-                        if (data.length == 3 && data[2].equals("clear")) {
-                            WurmEspMod._tilesHighlightBase.clear();
-                            WurmEspMod.tileshighlight = false;
-                            WurmEspMod.hud.consoleOutput("Planner data cleared.");
-                            break;
+                        try {
+                            if (data.length == 3 && data[2].equals("clear")) {
+                                WurmEspMod._tilesHighlightBase.clear();
+                                WurmEspMod.tileshighlight = false;
+                                WurmEspMod.hud.consoleOutput("Planner data cleared.");
+                                break;
+                            }
+                            if (data.length == 3 && data[2].equals("tile")) {
+                                PlayerPosition pos = WurmEspMod.hud.getWorld().getPlayer().getPos();
+                                int tileX = pos.getTileX();
+                                int tileY = pos.getTileY();
+                                WurmEspMod.tilesHighlightManager.addData(tileX, tileY);
+                                WurmEspMod.tileshighlight = true;
+                                WurmEspMod.hud.consoleOutput("Added planner data. [TileX: " + String.valueOf(tileX) + "][tileY: " + String.valueOf(tileY) + "]");
+                                break;
+                            }
+                            if (data.length == 4 && data[2].equals("square")) {
+                                int radius = Integer.parseInt(data[3]);
+                                WurmEspMod.tilesHighlightManager.addData(radius);
+                                WurmEspMod.tileshighlight = true;
+                                WurmEspMod.hud.consoleOutput("Added planner data. [radius: " + data[3] + "]");
+                                break;
+                            }
+                            if (data.length == 5 && data[2].equals("tile")) {
+                                int tileX = Integer.parseInt(data[3]);
+                                int tileY = Integer.parseInt(data[4]);
+                                WurmEspMod.tilesHighlightManager.addData(tileX, tileY);
+                                WurmEspMod.tileshighlight = true;
+                                WurmEspMod.hud.consoleOutput("Added planner data. [TileX: " + data[3] + "][tileY: " + data[4] + "]");
+                                break;
+                            }
+                            if (data.length == 6 && "nsew".contains(data[2])) {
+                                String direction = data[2];
+                                int tiles = Integer.parseInt(data[3]);
+                                int times = Integer.parseInt(data[4]);
+                                int space = Integer.parseInt(data[5]);
+                                WurmEspMod.tilesHighlightManager.addData(direction, tiles, times, space);
+                                WurmEspMod.tileshighlight = true;
+                                WurmEspMod.hud.consoleOutput("Added planner data. [direction: " + direction + "][tiles: " + data[3] + "][times: " + data[4] + "][space: " + data[5] + "]");
+                                break;
+                            }
+                            if (data.length == 7 && data[2].equals("square")) {
+                                int startX = Integer.parseInt(data[3]);
+                                int startY = Integer.parseInt(data[4]);
+                                int endX = Integer.parseInt(data[5]);
+                                int endY = Integer.parseInt(data[6]);
+                                WurmEspMod.tilesHighlightManager.addData(startX, startY, endX, endY);
+                                WurmEspMod.tileshighlight = true;
+                                WurmEspMod.hud.consoleOutput("Added planner data. [startX: " + data[3] + "][startY: " + data[4] + "][endX: " + data[5] + "][endY: " + data[6] + "]");
+                                break;
+                            }
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner {n/s/e/w} <tiles> <times> <space>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner square <startX> <startY> <endX> <endY>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner square <radius>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner tile <tileX> <tileY>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner clear");
                         }
-                        if (data.length == 3 && data[2].equals("tile")) {
-                            PlayerPosition pos = WurmEspMod.hud.getWorld().getPlayer().getPos();
-                            int tileX = pos.getTileX();
-                            int tileY = pos.getTileY();
-                            WurmEspMod.tilesHighlightManager.addData(tileX, tileY);
-                            WurmEspMod.tileshighlight = true;
-                            WurmEspMod.hud.consoleOutput("Added planner data. [TileX: " + String.valueOf(tileX) + "][tileY: " + String.valueOf(tileY) + "]");
-                            break;
+                        catch (NumberFormatException e) {
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner {n/s/e/w} <tiles> <times> <space>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner square <startX> <startY> <endX> <endY>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner square <radius>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner tile <tileX> <tileY>");
+                            WurmEspMod.hud.consoleOutput("Usage: esp planner clear");
                         }
-                        if (data.length == 4 && data[2].equals("square")) {
-                            int radius = Integer.parseInt(data[3]);
-                            WurmEspMod.tilesHighlightManager.addData(radius);
-                            WurmEspMod.tileshighlight = true;
-                            WurmEspMod.hud.consoleOutput("Added planner data. [radius: " + data[3] + "]");
-                            break;
-                        }
-                        if (data.length == 5 && data[2].equals("tile")) {
-                            int tileX = Integer.parseInt(data[3]);
-                            int tileY = Integer.parseInt(data[4]);
-                            WurmEspMod.tilesHighlightManager.addData(tileX, tileY);
-                            WurmEspMod.tileshighlight = true;
-                            WurmEspMod.hud.consoleOutput("Added planner data. [TileX: " + data[3] + "][tileY: " + data[4] + "]");
-                            break;
-                        }
-                        if (data.length == 6 && "nsew".contains(data[2])) {
-                            String direction = data[2];
-                            int tiles = Integer.parseInt(data[3]);
-                            int times = Integer.parseInt(data[4]);
-                            int space = Integer.parseInt(data[5]);
-                            WurmEspMod.tilesHighlightManager.addData(direction, tiles, times, space);
-                            WurmEspMod.tileshighlight = true;
-                            WurmEspMod.hud.consoleOutput("Added planner data. [direction: " + direction + "][tiles: " + data[3] + "][times: " + data[4] + "][space: " + data[5] + "]");
-                            break;
-                        }
-                        if (data.length == 7 && data[2].equals("square")) {
-                            int startX = Integer.parseInt(data[3]);
-                            int startY = Integer.parseInt(data[4]);
-                            int endX = Integer.parseInt(data[5]);
-                            int endY = Integer.parseInt(data[6]);
-                            WurmEspMod.tilesHighlightManager.addData(startX, startY, endX, endY);
-                            WurmEspMod.tileshighlight = true;
-                            WurmEspMod.hud.consoleOutput("Added planner data. [startX: " + data[3] + "][startY: " + data[4] + "][endX: " + data[5] + "][endY: " + data[6] + "]");
-                            break;
-                        }
-                        WurmEspMod.hud.consoleOutput("Usage: esp planner {n/s/e/w} <tiles> <times> <space>");
-                        WurmEspMod.hud.consoleOutput("Usage: esp planner square <startX> <startY> <endX> <endY>");
-                        WurmEspMod.hud.consoleOutput("Usage: esp planner square <radius>");
-                        WurmEspMod.hud.consoleOutput("Usage: esp planner tile <tileX> <tileY>");
-                        WurmEspMod.hud.consoleOutput("Usage: esp planner clear");
                         break;
                     }
                     default: {

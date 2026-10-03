@@ -93,7 +93,7 @@ extends WWindow {
                 WurmEspMod.tilescloseby = checkbox.checked;
             }
         });
-        tilesCheckBox.checked = WurmEspMod.tilesclosebynotrideable;
+        tilesCheckBox.checked = WurmEspMod.tilescloseby;
         EspWCheckBox tilesWalkableCheckBox = new EspWCheckBox("Rideable Tiles", new CheckBoxListener(){
 
             @Override
@@ -101,7 +101,7 @@ extends WWindow {
                 WurmEspMod.tilesclosebynotrideable = checkbox.checked;
             }
         });
-        tilesWalkableCheckBox.checked = WurmEspMod.tilescloseby;
+        tilesWalkableCheckBox.checked = WurmEspMod.tilesclosebynotrideable;
         EspWCheckBox deedCheckBox = new EspWCheckBox("Deed", new CheckBoxListener(){
 
             @Override

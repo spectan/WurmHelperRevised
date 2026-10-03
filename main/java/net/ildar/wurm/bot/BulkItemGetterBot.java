@@ -96,7 +96,6 @@ public class BulkItemGetterBot extends Bot
                 
                 currentMoveQuantity = moveQuantity;
                 closeBMLWindow = true;
-                // Utils.consolePrint("moving `%s` => `%s`", ItemSpec.getCanonicalName(spec.source), ItemSpec.getCanonicalName(spec.target));
                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(spec.target.getId(), new long[]{spec.source.getId()});
                 
                 int sleeps = 0;
@@ -108,7 +107,6 @@ public class BulkItemGetterBot extends Bot
                     currentMoveQuantity = -1;
                 }
             }
-            // Utils.consolePrint("main loop sleep for %dms", timeout);
             sleep(timeout);
         }
     }

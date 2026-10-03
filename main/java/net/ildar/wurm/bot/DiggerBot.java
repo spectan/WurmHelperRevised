@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @BotInfo(name = "Digger", description =
         "Does the dirty job",
@@ -23,19 +24,19 @@ public class DiggerBot extends Bot{
     private final int STEPS = 5;
 
     private long stepDuration;
-    private int clicks;
-    private WorkMode workMode;
-    private int diggingHeightLimit;
-    private boolean levellingDone;
-    private boolean toolRepairing = true;
-    private DiggingTileInfo diggingTileInfo;
+    private volatile int clicks;
+    private volatile WorkMode workMode;
+    private volatile int diggingHeightLimit;
+    private volatile boolean levellingDone;
+    private volatile boolean toolRepairing = true;
+    private volatile DiggingTileInfo diggingTileInfo;
     private AreaAssistant areaAssistant;
     private SlopeAwareMovement slopeMovement;
-    private InventoryMetaItem shovelItem;
-    private PlayerAction digAction;
+    private volatile InventoryMetaItem shovelItem;
+    private volatile PlayerAction digAction;
     private Set<Pair<Integer, Integer>> invalidCorners;
-    private boolean surfaceMiningMode;
-    private InventoryMetaItem pickaxeItem;
+    private volatile boolean surfaceMiningMode;
+    private volatile InventoryMetaItem pickaxeItem;
 
     private static final Set<Tiles.Tile> DIRT_TILES = new HashSet<>(Arrays.asList(Tiles.Tile.TILE_DIRT, Tiles.Tile.TILE_GRASS, Tiles.Tile.TILE_SAND, Tiles.Tile.TILE_MYCELIUM, Tiles.Tile.TILE_TUNDRA, Tiles.Tile.TILE_STEPPE));
 
@@ -56,7 +57,7 @@ public class DiggerBot extends Bot{
         areaAssistant.setMoveStrategy(slopeMovement::moveForward);
         areaAssistant.setMoveAheadDistance(1);
         areaAssistant.setMoveRightDistance(2);
-        invalidCorners = new HashSet<>();
+        invalidCorners = ConcurrentHashMap.newKeySet();
         digAction = PlayerAction.DIG_TO_PILE;
         workMode = WorkMode.Unknown;
         stepDuration = 1000;
@@ -204,7 +205,7 @@ public class DiggerBot extends Bot{
                                 boolean levelableTile = tileType == Tiles.Tile.TILE_DIRT || tileType == Tiles.Tile.TILE_GRASS;
                                 if (levelableTile && needLevelling(area[i][0], area[i][1])) {
                                     WurmHelper.hud.getWorld().getServerConnection().sendAction(shovelItem.getId(),
-                                            new long[]{Tiles.getTileId(area[i][0], area[i][1], 1)},
+                                            new long[]{Tiles.getTileId(area[i][0], area[i][1], 0)},
                                             PlayerAction.LEVEL);
                                     actionTaken = true;
                                     break;
@@ -517,8 +518,10 @@ public class DiggerBot extends Bot{
             workMode = WorkMode.DiggingTile;
             areaAssistant.setMoveRightDistance(2);
             Utils.feedback("The digging of tile (" + diggingTileInfo.x + "," + diggingTileInfo.y + ") to height " + diggingHeightLimit + " is on");
+        } catch(NumberFormatException e) {
+            Utils.consolePrint("Error on turning the tile digging on: can't parse a number - " + e.getMessage());
         } catch(Exception e) {
-            Utils.consolePrint("Error on turning the tile digging on");
+            Utils.consolePrint("Error on turning the tile digging on: " + e.getMessage());
         }
     }
 

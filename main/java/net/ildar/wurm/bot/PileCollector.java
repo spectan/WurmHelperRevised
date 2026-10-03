@@ -54,6 +54,7 @@ public class PileCollector extends Bot {
     protected void work() throws Exception {
         ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
         Set<Long> pickedUpItems = new HashSet<>();
+        openedPiles.clear();
         while (isActive()) {
             waitOnPause();
             Map<Long, GroundItemCellRenderable> groundItemsMap = Utils.getField(sscc, "groundItems");
@@ -116,7 +117,9 @@ public class PileCollector extends Bot {
                             item.getQuality() >= minQuality
                         ))
                     ;
-                    moveToContainers(splitItems.get(true));
+                    if (moveToContainers(splitItems.get(true)))
+                        for (InventoryMetaItem item : splitItems.get(true))
+                            pickedUpItems.remove(item.getId());
                     
                     if (!isContainerWindow)
                         for (InventoryMetaItem item: splitItems.get(false)) {
@@ -147,12 +150,12 @@ public class PileCollector extends Bot {
         ;
     }
 
-    private void moveToContainers(List<InventoryMetaItem> targetItems) {
+    private boolean moveToContainers(List<InventoryMetaItem> targetItems) {
         if (targetItems != null && targetItems.size() > 0) {
             List<InventoryMetaItem> containers = Utils.getInventoryItems(targetLc, containerName);
             if (containers == null || containers.size() == 0) {
                 Utils.consolePrint("No target containers!");
-                return;
+                return false;
             }
             for(InventoryMetaItem container : containers) {
                 List<InventoryMetaItem> containerContents = container.getChildren();
@@ -169,10 +172,11 @@ public class PileCollector extends Bot {
                 }
                 if (itemsCount < containerCapacity) {
                     WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(container.getId(), Utils.getItemIds(targetItems));
-                    return;
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     private void setTargetName(String []input) {

@@ -17,7 +17,7 @@ import java.util.logging.Logger;
 public class TimeLockMod implements WurmMod, Initable, PreInitable {
     private static final Logger logger = Logger.getLogger("TimeLockMod");
 
-    public static long timeLock = -1;
+    public static volatile long timeLock = -1;
     public static HeadsUpDisplay hud;
 
 

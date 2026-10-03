@@ -37,9 +37,7 @@ extends Hook {
                     WurmEspMod.tilesHighlightManager.refresh();
                     WurmEspMod.tilesHighlightCronoManager.restart(5000L);
                 }
-                Thread tilesHighlightThread = new Thread(() -> WurmEspMod.tilesHighlightManager.queue());
-                tilesHighlightThread.setPriority(10);
-                tilesHighlightThread.start();
+                WurmEspMod.tilesHighlightManager.queue();
             } else {
                 WurmEspMod.tilesHighlightManager.setWorld(world);
             }
@@ -52,9 +50,7 @@ extends Hook {
                     WurmEspMod.tilesCloseByManager.refresh();
                     WurmEspMod.tilesCloseByCronoManager.restart(1000L);
                 }
-                Thread tilesThread = new Thread(() -> WurmEspMod.tilesCloseByManager.queue());
-                tilesThread.setPriority(10);
-                tilesThread.start();
+                WurmEspMod.tilesCloseByManager.queue();
             }
             if (WurmEspMod.tilesclosebynotrideable && world.getPlayer().getPos().getLayer() >= 0) {
                 WurmEspMod.tilesCloseByWalkableManager.setWorldQueue(world, queuePick);
@@ -65,9 +61,7 @@ extends Hook {
                     WurmEspMod.tilesCloseByWalkableManager.refresh();
                     WurmEspMod.tilesCloseByWalkableCronoManager.restart(1000L);
                 }
-                Thread tilesWalkableThread = new Thread(() -> WurmEspMod.tilesCloseByWalkableManager.queue());
-                tilesWalkableThread.setPriority(10);
-                tilesWalkableThread.start();
+                WurmEspMod.tilesCloseByWalkableManager.queue();
             }
             if (WurmEspMod.tilesFlower && world.getPlayer().getPos().getLayer() >= 0) {
                 WurmEspMod.tilesFlowerManager.setWorldQueue(world, queuePick);
@@ -78,9 +72,7 @@ extends Hook {
                     WurmEspMod.tilesFlowerManager.refresh();
                     WurmEspMod.tilesFlowerCronoManager.restart(1000L);
                 }
-                Thread tilesFlowerThread = new Thread(() -> WurmEspMod.tilesFlowerManager.queue());
-                tilesFlowerThread.setPriority(10);
-                tilesFlowerThread.start();
+                WurmEspMod.tilesFlowerManager.queue();
             }
             if (WurmEspMod.xray && world.getPlayer().getPos().getLayer() < 0) {
                 Thread refreshThread;
@@ -104,13 +96,7 @@ extends Hook {
                     }
                     WurmEspMod.xrayCronoManager.restart(WurmEspMod.xrayrefreshrate * 1000);
                 }
-                if (WurmEspMod.xraythread) {
-                    Thread xrayThread = new Thread(() -> WurmEspMod.xrayManager.queue());
-                    xrayThread.setPriority(10);
-                    xrayThread.start();
-                } else {
-                    WurmEspMod.xrayManager.queue();
-                }
+                WurmEspMod.xrayManager.queue();
             }
             return null;
         });

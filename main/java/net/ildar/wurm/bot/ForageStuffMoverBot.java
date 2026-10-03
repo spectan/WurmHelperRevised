@@ -56,12 +56,16 @@ public class ForageStuffMoverBot extends Bot {
             String status = null;
             if (moveList.size() == 0) {
                 status = "Nothing to move";
-            } else if (targets.size() == 0) {
-                status = "No target containers to move to";
             } else {
-                long[] moveIds = Utils.getItemIds(moveList);
-                // sending the same items to every target would just shuffle them into the last one
-                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(targets.get(0), moveIds);
+                // the console thread may replace the target (clear+add) at any time, capture it safely
+                Long target = targets.stream().findFirst().orElse(null);
+                if (target == null) {
+                    status = "No target containers to move to";
+                } else {
+                    long[] moveIds = Utils.getItemIds(moveList);
+                    // sending the same items to every target would just shuffle them into the last one
+                    WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(target, moveIds);
+                }
             }
             if (status != null && !status.equals(lastStatus))
                 Utils.consolePrint(status);

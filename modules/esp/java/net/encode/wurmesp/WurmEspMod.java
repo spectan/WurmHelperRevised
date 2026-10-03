@@ -41,7 +41,6 @@ Configurable {
     public static Logger logger;
     public static Properties modProperties;
     public static List<Unit> pickableUnits;
-    public static List<Unit> toRemove;
     public static CronoManager xrayCronoManager;
     public static CronoManager tilesFlowerCronoManager;
     public static CronoManager tilesCloseByCronoManager;
@@ -125,7 +124,6 @@ Configurable {
         logger = Logger.getLogger("WurmEspMod");
         modProperties = new Properties();
         pickableUnits = new ArrayList<Unit>();
-        toRemove = new ArrayList<Unit>();
         _caveBuffer = null;
         _terrainBuffer = null;
         _terrainBuffer2 = null;

@@ -57,18 +57,6 @@ public class Unit {
         return this.id;
     }
 
-    public PickableUnit getPickableUnit() {
-        return this.pickableUnit;
-    }
-
-    public float[] getColor() {
-        return this.color;
-    }
-
-    public float[] getConditionedColor() {
-        return this.conditionedcolor;
-    }
-
     public String getHoverName() {
         return this.hoverName;
     }
@@ -120,10 +108,7 @@ public class Unit {
 
     public boolean isSpecial() {
         for (String item : specialITEMS) {
-            if (this.getHoverName().contains(item)) {
-                return true;
-            }
-            if (!this.getModelName().contains(WurmEspMod.search)) continue;
+            if (!this.getHoverName().contains(item)) continue;
             return true;
         }
         return false;

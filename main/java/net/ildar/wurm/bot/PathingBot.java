@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -116,7 +117,14 @@ public class PathingBot extends Bot
 	{
 		return args -> {
 			if(!requireRunning()) return;
-			pool.execute(() -> fn.handle(args));
+			try
+			{
+				pool.execute(() -> fn.handle(args));
+			}
+			catch(RejectedExecutionException err)
+			{
+				Utils.consolePrint("Bot is shutting down, command ignored");
+			}
 		};
 	}
 	
@@ -370,9 +378,11 @@ public class PathingBot extends Bot
 		CreatureCellRenderable target = murderTarget = null;
 		outer: while(!exiting && murdering)
 		{
+			if(!waitOnPauseFJ()) break;
 			long targetId = -1;
 			while(murdering && target != null && (targetId = Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId"))) > 0)
 			{
+				if(!waitOnPauseFJ()) break outer;
 				if(targetId != target.getId())
 				{
 					hud.sendAction(PlayerAction.TARGET, target.getId());
@@ -592,6 +602,7 @@ public class PathingBot extends Bot
 		final AtomicBoolean done = new AtomicBoolean(false);
 		outer: while(!exiting && task.running)
 		{
+			if(!waitOnPauseFJ()) break;
 			if(done.get())
 			{
 				if(target.val != null)
@@ -787,7 +798,7 @@ public class PathingBot extends Bot
 			try { ForkJoinPool.managedBlock(new SleepBlocker((long)(1000 * tickDelta))); }
 			catch(InterruptedException err) { return WalkStatus.interrupted; }
 		}
-		return WalkStatus.complete;
+		return exiting ? WalkStatus.interrupted : WalkStatus.complete;
 	}
 	
 	// finds and then moves along an unobstructed path from current tile to given tile
@@ -1173,10 +1184,10 @@ public class PathingBot extends Bot
 						new long[]{item.getId()},
 						buryAll ? PlayerAction.BURY_ALL : PlayerAction.BURY
 					);
-				}
 
-				if(++actions >= maxActions)
-					break;
+					if(++actions >= maxActions)
+						break;
+				}
 			}
 
 			corpseTimes
@@ -1602,7 +1613,10 @@ class CollisionCache
 	
 	void setFlags(int tileX, int tileY, int newFlags)
 	{
-		final Vec2i pos = posInPVS(tileX, tileY);
+		// the structures map can hold fences/walls outside the PVS; skip those
+		final Vec2i pos;
+		try { pos = posInPVS(tileX, tileY); }
+		catch(IllegalArgumentException e) { return; }
 		final int index = pos.y * pvsDiameter + pos.x;
 		byte flags = cache[index];
 		flags |= newFlags;

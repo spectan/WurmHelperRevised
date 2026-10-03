@@ -95,7 +95,6 @@ public class GainTracker implements SkillListener {
                             gain / e.getValue().size()
                     );
                 })
-                .sorted(Comparator.comparing(o -> (o.lastTick - o.firstTick) / o.gainValue))
                 .collect(Collectors.toList());
     }
 }

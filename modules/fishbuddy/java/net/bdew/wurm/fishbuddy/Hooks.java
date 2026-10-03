@@ -75,7 +75,11 @@ public class Hooks {
         if (playerId == -1) {
             if (hooked) {
                 window.setText(2, "Status: Fish biting!");
-                window.setText(3, "Fish: " + FishingEnums.FishType.fromInt(fishType).name().toLowerCase());
+                try {
+                    window.setText(3, "Fish: " + FishingEnums.FishType.fromInt(fishType).name().toLowerCase());
+                } catch (RuntimeException e) {
+                    error(e);
+                }
                 FishingSystem fishing = Hooks.hud.getWorld().getWorldRenderer().getFishing();
                 try {
                     ReflectionUtil.callPrivateMethod(fishing, fishingStrikeRod, true);
@@ -89,10 +93,6 @@ public class Hooks {
         }
     }
 
-    public static void setFishCasted(long playerId, byte floatType, float posX, float posY) {
-
-    }
-
     public static void setFishHooked(long playerId) {
         if (window.isActive() && playerId == -1) window.setText(2, "Status: Fish hooked, pray to RNGesus!");
     }
@@ -100,14 +100,6 @@ public class Hooks {
     public static void cancelFishing(long playerId) {
         if (window.isActive() && playerId == -1 && lastSentAction + ACTION_DELAY < System.currentTimeMillis())
             restartFishing();
-    }
-
-    public static void showFishStrike() {
-
-    }
-
-    public static void showSpearStrike(long playerId, float posX, float posY) {
-
     }
 
     public static void textMessage(String title, float r, float g, float b, String message, byte onScreenType) {

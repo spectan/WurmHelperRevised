@@ -19,7 +19,7 @@ import net.ildar.wurm.annotations.BotInfo;
 @BotInfo(name = "Multi Item Mover", abbreviation = "mim", description = "Moves many sets of items to their own containers")
 public class MultiItemMoverBot extends Bot
 {
-    boolean toplevelOnly = true;
+    volatile boolean toplevelOnly = true;
     final List<ItemSet> itemSets = new CopyOnWriteArrayList<>();
     int selectedSet = 0;
     
@@ -292,7 +292,12 @@ public class MultiItemMoverBot extends Bot
             
             long dest = target;
             if(isRootTarget)
-                dest = targetRoot.getId();
+            {
+                InventoryMetaItem root = Utils.getRootItem(targetComponent);
+                if(root == null)
+                    return;
+                dest = root.getId();
+            }
             
             long[] ids = Utils.getItemIds(items);
             WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(dest, ids);
