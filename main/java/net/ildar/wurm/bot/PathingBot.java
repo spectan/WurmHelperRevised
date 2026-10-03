@@ -433,6 +433,7 @@ public class PathingBot extends Bot
 				!creature.isItem() &&
 				creature.getKingdomId() == 0 &&
 				!creature.isControlled() &&
+				creature.getLayer() == world.getPlayerLayer() &&
 				!creature.getHoverName().startsWith("preserved") &&
 				murderBlacklist.stream().noneMatch(kw ->
 					creature.getHoverName().toLowerCase().contains(kw) ||
@@ -606,6 +607,7 @@ public class PathingBot extends Bot
 					!creature.isItem() &&
 					creature.getKingdomId() == 0 &&
 					!creature.isControlled() &&
+					creature.getLayer() == world.getPlayerLayer() &&
 					!creature.getHoverName().startsWith("preserved") &&
 					task.filter.test(creature) &&
 					!petItemRe.matcher(data.getHoverText()).find()
