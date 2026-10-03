@@ -453,13 +453,32 @@ public class PathingBot extends Bot
 			murderTarget = target;
 			illegalStrikes.set(0);
 
+			// the server rejects TARGET beyond its targeting range ("too far away"),
+			// so walk to the creature first and only target it once we are close
+			for(int attempts = 0; attempts < 10 && murdering && !exiting && Utils.sqdistFromPlayer(target) > 4 * 4; attempts++)
+			{
+				final CreatureCellRenderable _target = target;
+				final Supplier<Vec2i> targetPos = () -> new Vec2i(
+					(int)(_target.getXPos() / 4f),
+					(int)(_target.getYPos() / 4f)
+				);
+				if(walkPathToCreature(targetPos) == WalkStatus.noPath)
+				{
+					ignoredCreatures.add(target.getId());
+					target = murderTarget = null;
+					continue outer;
+				}
+			}
+			if(exiting || !murdering) break;
+			// even if we are not adjacent after 10 attempts, still try targeting:
+			// the targeting range is larger than melee range
+
 			hud.sendAction(PlayerAction.TARGET, target.getId());
 			Utils.consolePrint("Murdering `%s`", target.getHoverName());
 
-			// wait for the server to confirm the target, re-sending the action like the
-			// original loop did; a creature the client still lists but the server doesn't
-			// know (despawned/died/another layer) never confirms, and without the retry
-			// limit the bot would try it forever, standing still
+			// wait for the server to confirm the target; a creature the client still
+			// lists but the server doesn't know (despawned/died/another layer) never
+			// confirms even up close, and is ignored after the retries
 			final CreatureCellRenderable unconfirmed = target;
 			boolean confirmed = false;
 			for(int i = 0; i < 10; i++)
