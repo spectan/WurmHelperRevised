@@ -90,7 +90,11 @@ public final class ModuleManager {
             new Module("toolbelt", "Max Toolbelt", "Unlocks all toolbelt slots",
                     "net.bdew.wurm.toolbelt.ToolbeltMod", "toolbelt"),
             new Module("tooltips", "Better Tooltips", "Extra information in tooltips",
-                    "net.bdew.wurm.tooltip.TooltipMod", "tooltips")
+                    "net.bdew.wurm.tooltip.TooltipMod", "tooltips"),
+            new Module("thirdperson", "Third Person", "Third person camera with zoom and a side offset (console: tp)",
+                    "dev.thource.wurmunlimited.clientmods.thirdperson.ThirdPerson", "thirdperson", "thources-third-person-mod"),
+            new Module("rendertweaks", "Render Tweaks", "Hide grass and trees, change the weather (console: toggleGrass, toggleTrees, weather)",
+                    "org.tmarchuk.wurmunlimited.client.rendertweaks.ClientRenderTweaksMod", "rendertweaks", "ClientRenderTweaks")
     );
 
     public List<Module> getModules() {

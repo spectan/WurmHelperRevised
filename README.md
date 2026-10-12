@@ -43,7 +43,7 @@ the console closed. Set `PrefillConsoleInput=false` if you don't want commands t
 
 WurmHelper includes these client mods, so they don't need to be installed separately:
 UI Scale, Archeology Grouping, Improved Compass, WurmEspRevisited, EZBulk, Fish Buddy, FreecamMod,
-Improved Improve, Live HUD Map, Skill Gain Tracker, Time Lock, Max Toolbelt and Better Tooltips.
+Improved Improve, Live HUD Map, Skill Gain Tracker, Time Lock, Max Toolbelt, Better Tooltips, Third Person and Render Tweaks.
 See [modules/README.md](modules/README.md) for their authors, licenses and console commands.
 
   * **Remove the separate copies** of these mods from your `mods` folder (their `.properties` file and folder).

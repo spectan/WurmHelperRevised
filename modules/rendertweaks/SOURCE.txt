@@ -1,0 +1,3 @@
+Upstream: https://github.com/TysonCodes/WurmRenderTweaks
+Commit: efd13a1c34c9ddfc1dd7b291d11cb097e5a2030b
+License: MIT
