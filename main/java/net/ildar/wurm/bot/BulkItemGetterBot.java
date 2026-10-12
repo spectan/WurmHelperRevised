@@ -25,6 +25,9 @@ public class BulkItemGetterBot extends Bot
 
     public static volatile boolean closeBMLWindow;
     public static volatile int currentMoveQuantity = -1;
+    /** Held for the whole of a bulk transfer (the quantity is passed to the question window through the two
+     *  fields above, so two bots must never use them at once). */
+    public static final Object bulkLock = new Object();
     // modified from the console thread while the bot thread iterates it
     final List<ItemSpec> specs = new CopyOnWriteArrayList<>();
     volatile int selectedSpec = 0;
@@ -94,17 +97,20 @@ public class BulkItemGetterBot extends Bot
                         moveQuantity = sourceQuantity;
                 }
                 
-                currentMoveQuantity = moveQuantity;
-                closeBMLWindow = true;
-                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(spec.target.getId(), new long[]{spec.source.getId()});
-                
-                int sleeps = 0;
-                while(closeBMLWindow && sleeps++ < 50) sleep(100);
-                if(closeBMLWindow)
+                synchronized(bulkLock)
                 {
-                    Utils.consolePrint("Timed out after 5 seconds waiting for bulk item transfer question");
-                    closeBMLWindow = false;
-                    currentMoveQuantity = -1;
+                    currentMoveQuantity = moveQuantity;
+                    closeBMLWindow = true;
+                    WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(spec.target.getId(), new long[]{spec.source.getId()});
+
+                    int sleeps = 0;
+                    while(closeBMLWindow && sleeps++ < 50) sleep(100);
+                    if(closeBMLWindow)
+                    {
+                        Utils.consolePrint("Timed out after 5 seconds waiting for bulk item transfer question");
+                        closeBMLWindow = false;
+                        currentMoveQuantity = -1;
+                    }
                 }
             }
             sleep(timeout);

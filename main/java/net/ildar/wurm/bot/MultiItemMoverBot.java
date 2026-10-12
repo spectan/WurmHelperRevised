@@ -1,7 +1,13 @@
 package net.ildar.wurm.bot;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,6 +43,11 @@ public class MultiItemMoverBot extends Bot
         registerInputHandler(Inputs.str, input -> setTarget(true));
         registerInputHandler(Inputs.a, this::addItem);
         registerInputHandler(Inputs.clear, input -> clearItems());
+        registerInputHandler(Inputs.ss, input -> setSource());
+        registerInputHandler(Inputs.nt, this::setNested);
+        registerInputHandler(Inputs.nh, this::setNestedHosts);
+        registerInputHandler(Inputs.pc, this::setPerContainer);
+        registerInputHandler(Inputs.nc, input -> clearNested());
     }
 
     @Override
@@ -51,7 +62,16 @@ public class MultiItemMoverBot extends Bot
             List<InventoryMetaItem> inventoryItems;
             for(ItemSet set: itemSets)
             {
-                if(!set.haveTarget() || set.itemNames.size() == 0)
+                if(set.itemNames.size() == 0)
+                    continue;
+
+                if(set.isNested())
+                {
+                    serveNested(set);
+                    continue;
+                }
+
+                if(!set.haveTarget())
                     continue;
                 
                 // refresh as items may have been matched by earlier sets
@@ -204,8 +224,291 @@ public class MultiItemMoverBot extends Bot
         Utils.feedback("Cleared items for set %d", selectedSet);
     }
     
+    void setSource()
+    {
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        itemSets.get(selectedSet).setSource();
+    }
+
+    void setNested(String[] args)
+    {
+        String inner = joinArgs(args);
+        if(inner == null)
+        {
+            printInputKeyUsageString(Inputs.nt);
+            return;
+        }
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        ItemSet set = itemSets.get(selectedSet);
+        set.nestedName = inner.trim().toLowerCase(Locale.ROOT);
+        set.isRootTarget = false;
+        set.target = -1;
+        set.sentAt.clear();
+        Utils.feedback(
+            "Set %d fills every \"%s\" inside every open %s window%s",
+            selectedSet,
+            set.nestedName,
+            String.join(" or ", set.hosts),
+            set.sourceComponent == null ? " - now set the source (key " + Inputs.ss.name() + ")" : ""
+        );
+    }
+
+    void setNestedHosts(String[] args)
+    {
+        List<String> names = parseNameList(args);
+        if(names.isEmpty())
+        {
+            printInputKeyUsageString(Inputs.nh);
+            return;
+        }
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        List<String> lower = new ArrayList<>();
+        for(String n: names)
+            lower.add(n.toLowerCase(Locale.ROOT));
+        itemSets.get(selectedSet).hosts = lower;
+        Utils.feedback("Set %d looks inside open windows of: %s", selectedSet, String.join(", ", lower));
+    }
+
+    void setPerContainer(String[] args)
+    {
+        Integer count = parseIntArg(args, Inputs.pc, 1, 1000);
+        if(count == null)
+            return;
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        itemSets.get(selectedSet).perContainer = count;
+        Utils.feedback("Set %d puts %d of each item into every container", selectedSet, count);
+    }
+
+    void clearNested()
+    {
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        itemSets.get(selectedSet).clearNested();
+        Utils.feedback("Set %d is a plain set again", selectedSet);
+    }
+
+    /** The game's item as the planner sees it. */
+    static NestedFill.Node wrap(final InventoryMetaItem item)
+    {
+        return new NestedFill.Node()
+        {
+            @Override public long id() { return item.getId(); }
+            @Override public String baseName() { return item.getBaseName(); }
+            @Override public String displayName() { return item.getDisplayName(); }
+            @Override public List<NestedFill.Node> children()
+            {
+                List<InventoryMetaItem> kids = item.getChildren();
+                if(kids == null)
+                    return Collections.emptyList();
+                try
+                {
+                    List<NestedFill.Node> out = new ArrayList<>(kids.size());
+                    for(InventoryMetaItem kid: new ArrayList<>(kids))
+                        out.add(wrap(kid));
+                    return out;
+                }
+                catch(ConcurrentModificationException err)
+                {
+                    return Collections.emptyList();   // the list changed under us: the next pass sees it
+                }
+            }
+        };
+    }
+
+    /**
+     * A nested set: take the set's items from its source window and put N of each into every container named
+     * like the set's inner name, inside every open oven / forge window.
+     */
+    void serveNested(ItemSet set) throws Exception
+    {
+        InventoryMetaItem srcRoot = set.sourceComponent == null ? null : Utils.getRootItem(set.sourceComponent);
+        if(srcRoot == null)
+        {
+            set.note(set.sourceComponent == null
+                ? "No source window set (hover the container window and use key " + Inputs.ss.name() + ")"
+                : "The source window was closed - open it again and set it with key " + Inputs.ss.name());
+            return;
+        }
+
+        // every open container window except the source: the ovens / forges are among them
+        List<NestedFill.Node> roots = new ArrayList<>();
+        List<WurmComponent> components = WurmHelper.getInstance().components;
+        if(components != null)
+            for(WurmComponent component: new ArrayList<>(components))
+            {
+                if(!(component instanceof ItemListWindow))
+                    continue;
+                InventoryListComponent list;
+                try
+                {
+                    list = Utils.getField(component, "component");
+                }
+                catch(Exception err)
+                {
+                    continue;
+                }
+                InventoryMetaItem root = list == null ? null : Utils.getRootItem(list);
+                if(root != null && root.getId() != srcRoot.getId())
+                    roots.add(wrap(root));
+            }
+
+        List<NestedFill.Node> containers = NestedFill.findContainers(roots, set.hosts, set.nestedName);
+        if(containers.isEmpty())
+        {
+            set.note(String.format(
+                "No \"%s\" found in any open %s window (open the %s and open the bags in it)",
+                set.nestedName, String.join(" or ", set.hosts), String.join(" or ", set.hosts)
+            ));
+            return;
+        }
+
+        // what the source can give, per item name (the same case-insensitive name match the planner uses)
+        List<InventoryMetaItem> sourceItems = Utils.getSelectedItems(set.sourceComponent, true, true);
+        List<String> names = new ArrayList<>(set.itemNames);
+        Map<String, List<NestedFill.Node>> sources = new HashMap<>();
+        for(String name: names)
+        {
+            String word = name.toLowerCase(Locale.ROOT);
+            List<NestedFill.Node> found = new ArrayList<>();
+            if(sourceItems != null)
+                for(InventoryMetaItem item: sourceItems)
+                    if(item.getId() != srcRoot.getId() && item.getRarity() == 0
+                        && item.getBaseName().toLowerCase(Locale.ROOT).contains(word))
+                        found.add(wrap(item));
+            sources.put(name, found);
+        }
+
+        List<NestedFill.Move> moves = NestedFill.plan(containers, names, set.perContainer, sources, set::recentlySent);
+        if(moves.isEmpty())
+        {
+            set.note(containers.size() + " container(s) hold what they should");
+            return;
+        }
+        set.note("Filling " + containers.size() + " container(s): " + moves.size() + " transfer(s) this pass");
+
+        int unanswered = 0;
+        for(NestedFill.Move move: moves)
+        {
+            if(!isActive())
+                return;
+            waitOnPause();
+
+            set.markSent(move.dest, move.itemName);
+            if(move.bulk)
+            {
+                if(!sendBulk(move.dest, move.sourceId, move.quantity))
+                    unanswered++;
+            }
+            else
+            {
+                long[] ids = new long[move.ids.size()];
+                for(int i = 0; i < ids.length; i++)
+                    ids[i] = move.ids.get(i);
+                WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(move.dest, ids);
+            }
+        }
+        if(unanswered > 0)
+            Utils.consolePrint("%d bulk transfer(s) got no quantity question (a full container, or an item too heavy?)", unanswered);
+    }
+
+    /** One bulk entry -> N into dest, through the quantity question; false when the question never came. */
+    private boolean sendBulk(long dest, long sourceId, int quantity) throws InterruptedException
+    {
+        synchronized(BulkItemGetterBot.bulkLock)
+        {
+            BulkItemGetterBot.currentMoveQuantity = quantity;
+            BulkItemGetterBot.closeBMLWindow = true;
+            WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(dest, new long[]{sourceId});
+
+            int sleeps = 0;
+            while(BulkItemGetterBot.closeBMLWindow && sleeps++ < 50)
+                sleep(100);
+            if(BulkItemGetterBot.closeBMLWindow)
+            {
+                BulkItemGetterBot.closeBMLWindow = false;
+                BulkItemGetterBot.currentMoveQuantity = -1;
+                return false;
+            }
+            return true;
+        }
+    }
+
     static class ItemSet
     {
+        /** How long a container is left alone after something was sent to it (its contents update late). */
+        static final long SENT_HOLD_MS = 8000;
+
+        /** Nested mode: the inner container's name (null = a plain set), the host windows' words, the amount. */
+        volatile String nestedName;
+        volatile List<String> hosts = Arrays.asList("oven", "forge");
+        volatile int perContainer = 1;
+        volatile InventoryListComponent sourceComponent;
+        final Map<String, Long> sentAt = new java.util.concurrent.ConcurrentHashMap<>();
+        private volatile String lastNote;
+
+        boolean isNested()
+        {
+            return nestedName != null;
+        }
+
+        void clearNested()
+        {
+            nestedName = null;
+            sourceComponent = null;
+            sentAt.clear();
+            lastNote = null;
+        }
+
+        void setSource()
+        {
+            WurmComponent window = Utils.getTargetComponent(c -> c instanceof ItemListWindow);
+            InventoryListComponent list = Utils.getInventoryForComponent(window);
+            if(list == null)
+                return;
+            sourceComponent = list;
+            InventoryMetaItem root = Utils.getRootItem(list);
+            Utils.feedback("New source is \"%s\"", root == null ? "?" : root.getBaseName());
+        }
+
+        boolean recentlySent(long dest, String name)
+        {
+            Long at = sentAt.get(dest + "|" + name);
+            return at != null && System.currentTimeMillis() - at < SENT_HOLD_MS;
+        }
+
+        void markSent(long dest, String name)
+        {
+            sentAt.put(dest + "|" + name, System.currentTimeMillis());
+        }
+
+        /** Said once per change: the bot passes every few seconds and would repeat itself. */
+        void note(String text)
+        {
+            if(text.equals(lastNote))
+                return;
+            lastNote = text;
+            Utils.consolePrint("%s", text);
+        }
+
         final Set<String> itemNames = ConcurrentHashMap.newKeySet();
         boolean isRootTarget;
         volatile long target;
@@ -220,6 +523,7 @@ public class MultiItemMoverBot extends Bot
         
         void setTarget(boolean isRoot)
         {
+            clearNested();
             isRootTarget = isRoot;
             target = -1;
             targetName = null;
@@ -276,6 +580,15 @@ public class MultiItemMoverBot extends Bot
         
         String describeTarget()
         {
+            if(isNested())
+            {
+                InventoryMetaItem src = sourceComponent == null ? null : Utils.getRootItem(sourceComponent);
+                return String.format(
+                    "%d of each into every \"%s\" in open %s windows, from %s",
+                    perContainer, nestedName, String.join(" or ", hosts),
+                    src != null ? "\"" + src.getBaseName() + "\"" : "no source set"
+                );
+            }
             if(isRootTarget)
             {
                 InventoryMetaItem root = targetRoot;
@@ -336,6 +649,13 @@ public class MultiItemMoverBot extends Bot
         str("Target Container Root", "Set target container for chosen set", ""),
         a("Add Item", "Add item names to chosen set. Separate several names with commas", "<item name>"),
         clear("Clear Items", "Clear list of items in chosen set", ""),
+
+        ss("Set Source", "Set the container window under the mouse as the source of chosen set (nested mode: e.g. a food storage bin)", ""),
+        nt("Nested Target", "Fill every container with this name (at any depth) inside every open oven/forge window, " +
+            "taking the set's items from the source. For example: nt frying pan", "<container name>"),
+        nh("Nested Hosts", "Words in the names of the windows that count as hosts. Default: oven, forge", "<names>"),
+        pc("Per Container", "How many of each item go into every container (those holding fewer get topped up). Default 1", "<count>"),
+        nc("Clear Nested", "Make the chosen set a plain set again (forgets the source and the nested target)", ""),
         ;
 
         private final KeyInfo keyInfo;

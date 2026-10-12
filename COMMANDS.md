@@ -382,6 +382,11 @@ is turned on. See the README for the general usage.
 | `isd` | Delete Set | Delete current item set |
 | `isl` | List Sets | Show item sets |
 | `isn` | New Set | Create new item set |
+| `nc` | Clear Nested | Make the chosen set a plain set again (forgets the source and the nested target) |
+| `nh <names>` | Nested Hosts | Words in the names of the windows that count as hosts. Default: oven, forge |
+| `nt <container name>` | Nested Target | Fill every container with this name (at any depth) inside every open oven/forge window, taking the set's items from the source. For example: nt frying pan |
+| `pc <count>` | Per Container | How many of each item go into every container (those holding fewer get topped up). Default 1 |
+| `ss` | Set Source | Set the container window under the mouse as the source of chosen set (nested mode: e.g. a food storage bin) |
 | `st` | Set Target | Set target item for chosen set |
 | `str` | Target Container Root | Set target container for chosen set |
 
