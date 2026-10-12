@@ -33,7 +33,7 @@ is turned on. See the README for the general usage.
 | [Flower Planter](#flower-planter) | `fp` | Skills up player's gardening skill by planting and picking flowers in surrounding area |
 | [Forage Stuff Mover](#forage-stuff-mover) | `fsm` | Moves foragable and botanizable items from your inventory to the target inventories. Optionally you can toggle the moving of rocks or rare items on and off. |
 | [Forager](#forager) | `fg` | Can forage, botanize, collect grass and flowers in an area surrounding player. Bot can be configured to process rectangular area of any size. Picked items, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. Containers only in root directory of player's inventory will be taken into account. Bot can be configured to drop picked items on the floor.  |
-| [Forester](#forester) | `fr` | A forester bot. Can pick and plant sprouts, cut trees/bushes and gather the harvest in 3x3 area around player. Bot can be configured to process rectangular area of any size. Sprouts, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. Containers only in root directory of player's inventory will be taken into account. New item names can be added(harvested fruits for example) to be moved to containers too. Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory.  |
+| [Forester](#forester) | `fr` | A forester bot. Can pick and plant sprouts, cut trees/bushes and gather the harvest in 3x3 area around player. Bot can be configured to process rectangular area of any size. Sprouts, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. Containers only in root directory of player's inventory will be taken into account. New item names can be added(harvested fruits for example) to be moved to containers too. Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. Overaged trees are pruned by default (can be toggled off) unless deforestation is on, then they are cut down.  |
 | [Ground Item Getter](#ground-item-getter) | `gig` | Collects items from the ground around player. |
 | [Healing](#healing) | `h` | Heals the player's wounds with cotton found in inventory |
 | [Improver](#improver) | `i` | Improves selected items in provided inventories. Tools searched from player's inventory. Items like water or stone searched before each improve, actual instruments searched one time before improve of the first item that must be improved with this tool. Tool for improving is determined by improve icon that you see on the right side of item row in inventory. For example improve icons for stone chisel and carving knife are equal, and sometimes bot can choose wrong tool. Use "ci" key to change the chosen instrument. |
@@ -260,7 +260,7 @@ is turned on. See the README for the general usage.
 
 ## Forester
 
-`bot fr` - A forester bot. Can pick and plant sprouts, cut trees/bushes and gather the harvest in 3x3 area around player. Bot can be configured to process rectangular area of any size. Sprouts, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. Containers only in root directory of player's inventory will be taken into account. New item names can be added(harvested fruits for example) to be moved to containers too. Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. 
+`bot fr` - A forester bot. Can pick and plant sprouts, cut trees/bushes and gather the harvest in 3x3 area around player. Bot can be configured to process rectangular area of any size. Sprouts, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. Containers only in root directory of player's inventory will be taken into account. New item names can be added(harvested fruits for example) to be moved to containers too. Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. Overaged trees are pruned by default (can be toggled off) unless deforestation is on, then they are cut down. 
 
 | Key | Name | Description |
 |---|---|---|
@@ -279,6 +279,7 @@ is turned on. See the README for the general usage.
 | `h` | Harvest Mode | Toggle the harvesting |
 | `na <clicks>` | Clicks | Set the number of actions bot will do each time |
 | `p` | Planting | Toggle the planting |
+| `po` | Prune Overaged | Toggle the pruning of overaged trees (on by default). Ignored while deforestation is on |
 | `s <threshold>` | Stamina | Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold |
 | `scn <container name>` | Container Name | Set the name of the containers to put sprouts/harvest in (may contain spaces) |
 
@@ -381,6 +382,11 @@ is turned on. See the README for the general usage.
 | `isd` | Delete Set | Delete current item set |
 | `isl` | List Sets | Show item sets |
 | `isn` | New Set | Create new item set |
+| `nc` | Clear Nested | Make the chosen set a plain set again (forgets the source and the nested target) |
+| `nh <names>` | Nested Hosts | Words in the names of the windows that count as hosts. Default: oven, forge |
+| `nt <container name>` | Nested Target | Fill every container with this name (at any depth) inside every open oven/forge window, taking the set's items from the source. For example: nt frying pan |
+| `pc <count>` | Per Container | How many of each item go into every container (those holding fewer get topped up). Default 1 |
+| `ss` | Set Source | Set the container window under the mouse as the source of chosen set (nested mode: e.g. a food storage bin) |
 | `st` | Set Target | Set target item for chosen set |
 | `str` | Target Container Root | Set target container for chosen set |
 
@@ -390,9 +396,20 @@ is turned on. See the README for the general usage.
 
 | Key | Name | Description |
 |---|---|---|
+| `an` | Avoid Named | Toggle avoiding named creatures while murdering (on by default). Any creature with a hover text (tamed, bred or otherwise named animals) is left alone |
+| `ap` | Avoid Passives | Toggle murdering only hostile creatures, leaving passive animals alone |
+| `b` | Butchering | Toggle butchering of corpses on the ground while murdering |
+| `bu` | Burying | Toggle burying of corpses on the ground while murdering |
+| `bua` | Bury All | Toggle burying corpses with the "Bury all" action (default) vs the normal bury action |
+| `bub <keyword>[, <keyword>...]` | Add Corpse Blacklist | Add keywords (comma separated) to the corpse blacklist. Corpses with names containing them are not buried. "rift" is in the blacklist by default |
+| `bubc` | Clear Corpse Blacklist | Clear the corpse blacklist |
+| `bud <milliseconds>` | Bury Delay | Set the delay before burying corpses (to allow other bots time to move items). Default is 2500 |
 | `follow [<player name>]` | Follow | Follow the player whose name starts with the given text. Without a name it stops following; with a name while following it switches to that player. Needs the bot running |
 | `groom` | Grooming | Toggle finding and grooming nearby creatures. Needs the bot running |
+| `mb <keyword>[, <keyword>...]` | Add Murder Blacklist | Add keywords (comma separated) to the murder blacklist, matched against the creature's name and hover text. Creatures matching them are never attacked, so named animals (a bred horse's name) can be excluded |
+| `mbc` | Clear Murder Blacklist | Clear the murder blacklist |
 | `murder` | Murder | Toggle finding and murdering nearby creatures. Needs the bot running |
+| `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped) |
 | `shear` | Shear | Toggle finding and shearing nearby sheep. Needs the bot running |
 | `speed <km/h>` | Speed | Set speed at which bot will move, in km/h |
 | `walkto [<x> <y>]` | Walk To | Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running |

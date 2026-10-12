@@ -1,8 +1,8 @@
 package net.encode.wurmesp;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,8 +40,12 @@ Configurable {
     public static HeadsUpDisplay hud;
     public static Logger logger;
     public static Properties modProperties;
-    public static List<Unit> pickableUnits;
-    public static List<Unit> toRemove;
+    /** Every creature and ground item the client has shown, by id. Filled and emptied by the
+     *  renderable hooks (game threads) while the renderer iterates it, so it is concurrent;
+     *  what is outlined is decided every frame ({@link #shouldRender}), not when a unit appears. */
+    private static final ConcurrentHashMap<Long, Unit> trackedUnits = new ConcurrentHashMap<Long, Unit>();
+    /** Bumped when the config or the search changes: units read their names again. */
+    private static volatile int generation;
     public static CronoManager xrayCronoManager;
     public static CronoManager tilesFlowerCronoManager;
     public static CronoManager tilesCloseByCronoManager;
@@ -116,6 +120,45 @@ Configurable {
         new CmdShowDeedPlan();
     }
 
+    public static int generation() {
+        return generation;
+    }
+
+    /** The config, the lists or the search changed: every unit works out what it is again. */
+    public static void invalidate() {
+        generation++;
+    }
+
+    public static void track(Unit unit) {
+        trackedUnits.put(unit.getId(), unit);
+    }
+
+    public static void untrack(long id) {
+        trackedUnits.remove(id);
+    }
+
+    public static Collection<Unit> trackedUnits() {
+        return trackedUnits.values();
+    }
+
+    public static void clearTracked() {
+        trackedUnits.clear();
+    }
+
+    /** Whether the unit is outlined now, by the toggles and search as they are now. */
+    public static boolean shouldRender(Unit unit) {
+        if (!unit.isRelevant()) {
+            return false;
+        }
+        return players && unit.isPlayer()
+                || uniques && unit.isUnique()
+                || conditioned && unit.isConditioned()
+                || animals && unit.isMob() && !unit.isAggroMob()
+                || mobs && unit.isAggroMob()
+                || specials && unit.isSpecial()
+                || items && unit.isSpotted();
+    }
+
     public void configure(Properties properties) {
         ConfigUtils.DoConfig(properties);
         logger.log(Level.INFO, "[WurmEspMod] Config loaded");
@@ -124,8 +167,6 @@ Configurable {
     static {
         logger = Logger.getLogger("WurmEspMod");
         modProperties = new Properties();
-        pickableUnits = new ArrayList<Unit>();
-        toRemove = new ArrayList<Unit>();
         _caveBuffer = null;
         _terrainBuffer = null;
         _terrainBuffer2 = null;

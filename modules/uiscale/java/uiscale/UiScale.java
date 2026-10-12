@@ -85,10 +85,6 @@ public final class UiScale {
         realW = realH = virtW = virtH = 0;
     }
 
-    static float getScale() {
-        return scale;
-    }
-
     private static void setReal(int w, int h) {
         if (w == realW && h == realH && virtW > 0) {
             return;

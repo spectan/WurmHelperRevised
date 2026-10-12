@@ -23,6 +23,7 @@ import java.util.Map;
         abbreviation = "ar")
 public class ArcherBot extends Bot {
     private volatile boolean stringBreaks;
+    private volatile boolean restringPending;
 
     private InventoryMetaItem bow;
 
@@ -71,15 +72,19 @@ public class ArcherBot extends Bot {
         while (isActive()) {
             waitOnPause();
             if (canDoWork(staminaThreshold) && creationWindow.getActionInUse() == 0) {
-                if (stringBreaks) {
+                boolean restrung = false;
+                if (stringBreaks && !restringPending) {
                         InventoryMetaItem bowstring = Utils.getInventoryItem("bow string");
                         if (bowstring != null) {
                             WurmHelper.hud.getWorld().getServerConnection().sendAction(bowstring.getId(),
                                     new long[]{bow.getId()}, new PlayerAction("",(short) 132, PlayerAction.ANYTHING));//change bowstring
+                            restringPending = true;
+                            restrung = true;
                         }
                 }
-                for (int i = 0; i < maxActions; i++)
-                    WurmHelper.hud.getWorld().getServerConnection().sendAction(bow.getId(), new long[]{mobId}, (!isArcheryTarget ? PlayerAction.SHOOT : new PlayerAction("",(short) 134, PlayerAction.ANYTHING)));
+                if (!restrung)
+                    for (int i = 0; i < maxActions; i++)
+                        WurmHelper.hud.getWorld().getServerConnection().sendAction(bow.getId(), new long[]{mobId}, (!isArcheryTarget ? PlayerAction.SHOOT : new PlayerAction("",(short) 134, PlayerAction.ANYTHING)));
 
                 ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
                 Map<Long, CreatureCellRenderable> creatures = Utils.getField(sscc, "creatures");
@@ -95,6 +100,7 @@ public class ArcherBot extends Bot {
                 if (!mobAlive && !isArcheryTarget){
                     Utils.consolePrint("Mob dead or too far away!");
                     Utils.showOnScreenMessage("Deactivating archerbot!");
+                    Utils.setField(this, "stopRequested", true);
                     deactivate();
                 }
             }
@@ -103,7 +109,10 @@ public class ArcherBot extends Bot {
     }
 
     private void registerEventProcessors() {
-        registerEventProcessor(message -> message.contains("You string the "), () -> stringBreaks = false);
+        registerEventProcessor(message -> message.contains("You string the "), () -> {
+            stringBreaks = false;
+            restringPending = false;
+        });
         registerEventProcessor(message -> message.contains("The string breaks!"), () -> stringBreaks = true);
         registerMessageProcessor(":Combat", message -> message.contains("The string breaks!"), () -> stringBreaks = true);
     }
@@ -111,6 +120,7 @@ public class ArcherBot extends Bot {
     private void stringTheBow() {
         Utils.feedback(getClass().getSimpleName() + " will try to string the bow" + (isAlive() ? "" : " when it starts"));
         stringBreaks = true;
+        restringPending = false;
     }
 
     private enum InputKey implements Bot.InputKey {

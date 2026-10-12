@@ -23,7 +23,9 @@ import java.util.logging.Logger;
  * <p>
  * A module can be switched off with "module.&lt;id&gt;=false" in WurmHelper.properties. Its own settings
  * are read from mods/WurmHelper/&lt;id&gt;.properties. A module that is still installed as a separate mod
- * (its mods/&lt;name&gt;.properties exists) is skipped, so its hooks are not applied twice.
+ * (its mods/&lt;name&gt;.properties exists and the jar(s) named by its "classpath" entry are present in
+ * mods/) is skipped, so its hooks are not applied twice. A leftover .properties whose jar was deleted
+ * does not count as installed.
  */
 public final class ModuleManager {
     private static final Logger logger = Logger.getLogger("WurmHelper");
@@ -88,7 +90,11 @@ public final class ModuleManager {
             new Module("toolbelt", "Max Toolbelt", "Unlocks all toolbelt slots",
                     "net.bdew.wurm.toolbelt.ToolbeltMod", "toolbelt"),
             new Module("tooltips", "Better Tooltips", "Extra information in tooltips",
-                    "net.bdew.wurm.tooltip.TooltipMod", "tooltips")
+                    "net.bdew.wurm.tooltip.TooltipMod", "tooltips"),
+            new Module("thirdperson", "Third Person", "Third person camera with zoom and a side offset (console: tp)",
+                    "dev.thource.wurmunlimited.clientmods.thirdperson.ThirdPerson", "thirdperson", "thources-third-person-mod"),
+            new Module("rendertweaks", "Render Tweaks", "Hide grass and trees, change the weather (console: toggleGrass, toggleTrees, weather)",
+                    "org.tmarchuk.wurmunlimited.client.rendertweaks.ClientRenderTweaksMod", "rendertweaks", "ClientRenderTweaks")
     );
 
     public List<Module> getModules() {
@@ -171,7 +177,32 @@ public final class ModuleManager {
 
     private static String findStandaloneInstall(Module module) {
         for (String name : module.standaloneNames) {
-            if (new File(MODS_DIR, name + ".properties").isFile())
+            File propFile = new File(MODS_DIR, name + ".properties");
+            if (!propFile.isFile())
+                continue;
+            // the mod loader loads a mod from its .properties, which names the jar(s) in "classpath";
+            // a leftover .properties whose jar was deleted loads nothing
+            Properties properties = new Properties();
+            try (InputStream in = new FileInputStream(propFile)) {
+                properties.load(in);
+            } catch (IOException e) {
+                logger.log(Level.WARNING, "[WurmHelper] Cannot read " + propFile + ", ignoring it", e);
+                continue;
+            }
+            String classpath = properties.getProperty("classpath");
+            if (classpath == null || classpath.trim().isEmpty()) {
+                logger.fine("[WurmHelper] " + propFile + " names no classpath, treating the mod as not installed");
+                continue;
+            }
+            boolean jarMissing = false;
+            for (String jar : classpath.split(",")) {
+                jar = jar.trim();
+                if (!jar.isEmpty() && !new File(MODS_DIR, jar).isFile()) {
+                    logger.fine("[WurmHelper] " + propFile + " references mods/" + jar + " which is missing, treating the mod as not installed");
+                    jarMissing = true;
+                }
+            }
+            if (!jarMissing)
                 return name;
         }
         return null;

@@ -27,14 +27,14 @@ import java.util.Set;
         "Cuts trees",
         abbreviation = "tc")
 public class TreeCutterBot extends Bot{
-    private int maxActions;
+    private volatile int maxActions;
 
-    private TreeAge minTreeAge;
-    private String treeType;
-    private boolean bushCutting;
-    private boolean sproutingTreeCutting;
+    private volatile TreeAge minTreeAge;
+    private volatile String treeType;
+    private volatile boolean bushCutting;
+    private volatile boolean sproutingTreeCutting;
 
-    private long toolId;
+    private volatile long toolId;
     private InventoryMetaItem selectedTool;
     private volatile long lastActionFinishedTime;
     private static final int[] SPROUTING_AGE_IDS = {7,9,11,13};

@@ -105,6 +105,7 @@ public class ArcheoBot extends Bot {
 
 		Set<Vec2i> tilesInvestigated = new HashSet<>();
 		List<Vec2i> tilesToBeInvestigated = new ArrayList<>();
+		Map<Vec2i, Integer> tileAttempts = new HashMap<>();
 
 		List<InventoryMetaItem> unidentified = new ArrayList<>();
 		
@@ -158,6 +159,17 @@ public class ArcheoBot extends Bot {
 						if(investigatingDone) {
 							tilesToBeInvestigated.remove(tilesToBeInvestigated.size() - 1);
 							tilesInvestigated.add(tile);
+							tileAttempts.remove(tile);
+						} else {
+							int attempts = tileAttempts.getOrDefault(tile, 0) + 1;
+							if(attempts >= 3) {
+								Utils.consolePrint("Skipping tile %d,%d after %d unacknowledged investigations", tile.x, tile.y, attempts);
+								tilesToBeInvestigated.remove(tilesToBeInvestigated.size() - 1);
+								tilesInvestigated.add(tile);
+								tileAttempts.remove(tile);
+							} else {
+								tileAttempts.put(tile, attempts);
+							}
 						}
 					}
 				}
@@ -239,12 +251,16 @@ public class ArcheoBot extends Bot {
 						continue;
 					
 					InventoryMetaItem head = items.get(0);
+					final int budget = actions;
 					long[] fragments = items
 						.stream()
 						.skip(1)
+						.limit(budget)
 						.map(InventoryMetaItem::getId)
 						.mapToLong(v -> v)
 						.toArray();
+					if(fragments.length == 0)
+						continue;
 					actions -= fragments.length;
 					WurmHelper.hud.getWorld().getServerConnection().sendAction(
 						head.getId(),

@@ -986,9 +986,11 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void execCmds(String[] cmds) throws RemoteException
     {
-        WurmConsole console = world().getClient().getConsole();
-        for(int index = 0; index < cmds.length; index++)
-            console.handleInput(cmds[index], false);
+        execute(() -> {
+            WurmConsole console = world().getClient().getConsole();
+            for(int index = 0; index < cmds.length; index++)
+                console.handleInput(cmds[index], false);
+        });
     }
     
     @Override

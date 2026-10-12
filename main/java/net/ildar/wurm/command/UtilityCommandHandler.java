@@ -85,23 +85,37 @@ public class UtilityCommandHandler {
                     printUsage("mts");
                     return;
                 }
-                float coefficient = 1;
-                if (args.length == 3) {
+                // the item name is all leading arguments; the last argument is the favor level,
+                // or the last two are the favor level and the coefficient
+                int nameEnd = args.length - 1;
+                if (args.length >= 3) {
                     try {
-                        coefficient = Float.parseFloat(args[2]);
+                        Float.parseFloat(args[args.length - 2]);
+                        nameEnd = args.length - 2;
                     } catch (NumberFormatException e) {
-                        Utils.consolePrint("Wrong coefficient value. Should be float");
-                        return;
+                        // the second-to-last argument is part of the item name
                     }
                 }
-                float favorLevel;
-                try {
-                    favorLevel = Float.parseFloat(args[1]);
-                } catch (NumberFormatException e) {
-                    Utils.consolePrint("Invalid float level number. Should be float");
+                if (nameEnd < 1) {
+                    printUsage("mts");
                     return;
                 }
-                moveToSacrifice(args[0], favorLevel, coefficient);
+                float favorLevel;
+                float coefficient = 1;
+                try {
+                    favorLevel = Float.parseFloat(args[nameEnd]);
+                    if (nameEnd == args.length - 2)
+                        coefficient = Float.parseFloat(args[args.length - 1]);
+                } catch (NumberFormatException e) {
+                    Utils.consolePrint("Invalid number. Favor level and coefficient should be floats");
+                    printUsage("mts");
+                    return;
+                }
+                StringBuilder itemName = new StringBuilder(args[0]);
+                for (int i = 1; i < nameEnd; i++) {
+                    itemName.append(" ").append(args[i]);
+                }
+                moveToSacrifice(itemName.toString(), favorLevel, coefficient);
             }
         });
 

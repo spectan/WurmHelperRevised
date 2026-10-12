@@ -1,26 +1,16 @@
 package com.wurmonline.client.renderer.gui;
 
 import com.wurmonline.client.renderer.Matrix;
-import com.wurmonline.client.renderer.PickData;
 import com.wurmonline.client.renderer.backend.Primitive;
 import com.wurmonline.client.renderer.backend.Queue;
 import com.wurmonline.client.renderer.backend.VertexBuffer;
 import java.nio.FloatBuffer;
 
 final class EspWCheckBox
-extends FlexComponent
-implements ConfirmListener {
+extends FlexComponent {
     private String label;
     boolean checked = false;
     boolean enabled = true;
-    private boolean needsConfirmOnTick = false;
-    private String confirmMessageOnTick;
-    private String confirmQuestionOnTick;
-    private boolean needsConfirmUnTick = false;
-    private String confirmMessageUnTick;
-    private String confirmQuestionUnTick;
-    private ConfirmWindow confirmWindow = null;
-    private String hoverString;
     private float customR = 1.0f;
     private float customG = 1.0f;
     private float customB = 1.0f;
@@ -72,13 +62,7 @@ implements ConfirmListener {
 
     protected void leftPressed(int xMouse, int yMouse, int clickCount) {
         if (this.enabled && xMouse <= this.x + 16 && xMouse >= this.x && yMouse >= this.y && yMouse <= this.y + this.height) {
-            if (this.needsConfirmOnTick && !this.checked) {
-                this.confirmWindow = new ConfirmWindow((ConfirmListener)this, this.getConfirmMessageOnTick(), this.getConfirmQuestionOnTick());
-            } else if (this.needsConfirmUnTick && this.checked) {
-                this.confirmWindow = new ConfirmWindow((ConfirmListener)this, this.getConfirmMessageUnTick(), this.getConfirmQuestionUnTick());
-            } else {
-                this.checked = !this.checked;
-            }
+            this.checked = !this.checked;
             this.checkboxListener.checkboxClicked(this);
         }
     }
@@ -88,72 +72,6 @@ implements ConfirmListener {
             return 1;
         }
         return super.getMouseCursor(x, y);
-    }
-
-    public void pick(PickData pickData, int xMouse, int yMouse) {
-        if (this.hoverString != null) {
-            pickData.addText(this.hoverString);
-        }
-    }
-
-    void setCustomColor(float r, float g, float b) {
-        this.customR = r;
-        this.customG = g;
-        this.customB = b;
-    }
-
-    public void setHoverString(String description) {
-        this.hoverString = description;
-    }
-
-    final void setConfirmOnTickMessage(String message) {
-        this.confirmMessageOnTick = message;
-    }
-
-    final void setConfirmOnTickQuestion(String question) {
-        this.confirmQuestionOnTick = question;
-        this.needsConfirmOnTick = true;
-    }
-
-    final void setConfirm(String messageOnTick, String questionOnTick, String messageUnTick, String questionUnTick) {
-        this.confirmMessageOnTick = messageOnTick;
-        this.confirmQuestionOnTick = questionOnTick;
-        this.confirmMessageUnTick = messageUnTick;
-        this.confirmQuestionUnTick = questionUnTick;
-        this.needsConfirmOnTick = questionOnTick.length() > 0;
-        this.needsConfirmUnTick = questionUnTick.length() > 0;
-    }
-
-    public String getConfirmMessageOnTick() {
-        return this.confirmMessageOnTick;
-    }
-
-    public String getConfirmQuestionOnTick() {
-        return this.confirmQuestionOnTick;
-    }
-
-    public String getConfirmMessageUnTick() {
-        return this.confirmMessageUnTick;
-    }
-
-    public String getConfirmQuestionUnTick() {
-        return this.confirmQuestionUnTick;
-    }
-
-    public void closeConfirmWindow() {
-        if (this.confirmWindow != null) {
-            this.confirmWindow.close();
-            this.confirmWindow = null;
-        }
-    }
-
-    public void confirmed() {
-        this.closeConfirmWindow();
-        this.checked = !this.checked;
-    }
-
-    public void cancelled() {
-        this.closeConfirmWindow();
     }
 
     static {

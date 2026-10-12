@@ -9,6 +9,7 @@ import com.wurmonline.client.game.World;
 import com.wurmonline.client.renderer.PickRenderer;
 import com.wurmonline.client.renderer.backend.Queue;
 
+import net.encode.wurmesp.Unit;
 import net.encode.wurmesp.WurmEspMod;
 
 public class RenderPickedItem
@@ -21,13 +22,15 @@ extends Hook {
             World world = (World)ReflectionUtil.getPrivateField((Object)proxy, (Field)ReflectionUtil.getField(cls, (String)"world"));
             WurmEspMod._pickRenderer = (PickRenderer)ReflectionUtil.getPrivateField((Object)proxy, (Field)ReflectionUtil.getField(cls, (String)"pickRenderer"));
             Queue queuePick = (Queue)ReflectionUtil.getPrivateField((Object)proxy, (Field)ReflectionUtil.getField(cls, (String)"queuePick"));
-            WurmEspMod.pickableUnits.stream().filter(unit -> WurmEspMod.players && unit.isPlayer() || WurmEspMod.uniques && unit.isUnique() || WurmEspMod.conditioned && unit.isConditioned() || WurmEspMod.animals && (unit.isMob() && !unit.isAggroMob()) || WurmEspMod.mobs && unit.isAggroMob() || WurmEspMod.specials && unit.isSpecial() || WurmEspMod.items && unit.isSpotted()).forEachOrdered(unit -> {
-                if (unit.isConditioned() && WurmEspMod.conditioned || unit.isConditioned() && WurmEspMod.conditionedcolorsallways || unit.isChampion() && WurmEspMod.championmcoloralways) {
-                    unit.renderUnit(queuePick, true);
-                } else {
-                    unit.renderUnit(queuePick, false);
+            for (Unit unit : WurmEspMod.trackedUnits()) {
+                if (!WurmEspMod.shouldRender(unit)) {
+                    continue;
                 }
-            });
+                boolean showConditioned = unit.isConditioned() && WurmEspMod.conditioned
+                        || unit.isConditioned() && WurmEspMod.conditionedcolorsallways
+                        || unit.isChampion() && WurmEspMod.championmcoloralways;
+                unit.renderUnit(queuePick, showConditioned);
+            }
             if (WurmEspMod.tileshighlight) {
                 WurmEspMod.tilesHighlightManager.setWorldQueue(world, queuePick);
                 if (WurmEspMod.tilesHighlightManager.first) {
@@ -37,9 +40,7 @@ extends Hook {
                     WurmEspMod.tilesHighlightManager.refresh();
                     WurmEspMod.tilesHighlightCronoManager.restart(5000L);
                 }
-                Thread tilesHighlightThread = new Thread(() -> WurmEspMod.tilesHighlightManager.queue());
-                tilesHighlightThread.setPriority(10);
-                tilesHighlightThread.start();
+                WurmEspMod.tilesHighlightManager.queue();
             } else {
                 WurmEspMod.tilesHighlightManager.setWorld(world);
             }
@@ -52,9 +53,7 @@ extends Hook {
                     WurmEspMod.tilesCloseByManager.refresh();
                     WurmEspMod.tilesCloseByCronoManager.restart(1000L);
                 }
-                Thread tilesThread = new Thread(() -> WurmEspMod.tilesCloseByManager.queue());
-                tilesThread.setPriority(10);
-                tilesThread.start();
+                WurmEspMod.tilesCloseByManager.queue();
             }
             if (WurmEspMod.tilesclosebynotrideable && world.getPlayer().getPos().getLayer() >= 0) {
                 WurmEspMod.tilesCloseByWalkableManager.setWorldQueue(world, queuePick);
@@ -65,9 +64,7 @@ extends Hook {
                     WurmEspMod.tilesCloseByWalkableManager.refresh();
                     WurmEspMod.tilesCloseByWalkableCronoManager.restart(1000L);
                 }
-                Thread tilesWalkableThread = new Thread(() -> WurmEspMod.tilesCloseByWalkableManager.queue());
-                tilesWalkableThread.setPriority(10);
-                tilesWalkableThread.start();
+                WurmEspMod.tilesCloseByWalkableManager.queue();
             }
             if (WurmEspMod.tilesFlower && world.getPlayer().getPos().getLayer() >= 0) {
                 WurmEspMod.tilesFlowerManager.setWorldQueue(world, queuePick);
@@ -78,9 +75,7 @@ extends Hook {
                     WurmEspMod.tilesFlowerManager.refresh();
                     WurmEspMod.tilesFlowerCronoManager.restart(1000L);
                 }
-                Thread tilesFlowerThread = new Thread(() -> WurmEspMod.tilesFlowerManager.queue());
-                tilesFlowerThread.setPriority(10);
-                tilesFlowerThread.start();
+                WurmEspMod.tilesFlowerManager.queue();
             }
             if (WurmEspMod.xray && world.getPlayer().getPos().getLayer() < 0) {
                 Thread refreshThread;
@@ -104,13 +99,7 @@ extends Hook {
                     }
                     WurmEspMod.xrayCronoManager.restart(WurmEspMod.xrayrefreshrate * 1000);
                 }
-                if (WurmEspMod.xraythread) {
-                    Thread xrayThread = new Thread(() -> WurmEspMod.xrayManager.queue());
-                    xrayThread.setPriority(10);
-                    xrayThread.start();
-                } else {
-                    WurmEspMod.xrayManager.queue();
-                }
+                WurmEspMod.xrayManager.queue();
             }
             return null;
         });

@@ -162,7 +162,7 @@ public class LiveMapWindow extends WWindow {
 	
 	public void pick(final PickData pickData, final int xMouse, final int yMouse) {
 		if (this.liveMapView.contains(xMouse, yMouse)) {
-			this.liveMap.pick(pickData, 1.0f * (xMouse - this.liveMapView.x) / this.liveMapView.width, 1.0f * (yMouse - this.liveMapView.y) / this.liveMapView.width);
+			this.liveMap.pick(pickData, 1.0f * (xMouse - this.liveMapView.x) / this.liveMapView.width, 1.0f * (yMouse - this.liveMapView.y) / this.liveMapView.height);
 		}
 	}
 	

@@ -74,27 +74,27 @@ public class FreecamMod implements WurmClientMod, Initable
 					}
 					else
 					{
-						if ( pData[1].contains( "X" ) )
+						if ( pData[1].toUpperCase().contains( "X" ) )
 						{
 							mLockedX = true;
 							mLogger.log( Level.INFO, "CAM LOCKED X AXIS: " + mCameraX );	
 						}
-						if ( pData[1].contains( "Y" ) )
+						if ( pData[1].toUpperCase().contains( "Y" ) )
 						{
 							mLockedY = true;
 							mLogger.log( Level.INFO, "CAM LOCKED Y AXIS: " + mCameraY );
 						}
-						if ( pData[1].contains( "Z" ) )
+						if ( pData[1].toUpperCase().contains( "Z" ) )
 						{
 							mLockedZ = true;
 							mLogger.log( Level.INFO, "CAM LOCKED Z AXIS: " + mCameraZ );
 						}
-						if ( pData[1].contains( "H" ) )
+						if ( pData[1].toUpperCase().contains( "H" ) )
 						{
 							mLockedRotX = true;
 							mLogger.log( Level.INFO, "CAM LOCKED H AXIS: " + mCameraRotX );
 						}
-						if ( pData[1].contains( "V" ) )
+						if ( pData[1].toUpperCase().contains( "V" ) )
 						{
 							mLockedRotY = true;
 							mLogger.log( Level.INFO, "CAM LOCKED V AXIS: " + mCameraRotY );
@@ -118,27 +118,27 @@ public class FreecamMod implements WurmClientMod, Initable
 					}
 					else
 					{
-						if ( pData[1].contains( "X" ) )
+						if ( pData[1].toUpperCase().contains( "X" ) )
 						{
 							mLockedX = false;
 							mLogger.log( Level.INFO, "CAM UNLOCKED X AXIS: " + mCameraX );
 						}
-						if ( pData[1].contains( "Y" ) )
+						if ( pData[1].toUpperCase().contains( "Y" ) )
 						{
 							mLockedY = false;
 							mLogger.log( Level.INFO, "CAM UNLOCKED Y AXIS: " + mCameraY );
 						}
-						if ( pData[1].contains( "Z" ) )
+						if ( pData[1].toUpperCase().contains( "Z" ) )
 						{
 							mLockedZ = false;
 							mLogger.log( Level.INFO, "CAM UNLOCKED Z AXIS: " + mCameraZ );
 						}
-						if ( pData[1].contains( "H" ) )
+						if ( pData[1].toUpperCase().contains( "H" ) )
 						{
 							mLockedRotX = false;
 							mLogger.log( Level.INFO, "CAM UNLOCKED H AXIS: " + mCameraRotX );
 						}
-						if ( pData[1].contains( "V" ) )
+						if ( pData[1].toUpperCase().contains( "V" ) )
 						{
 							mLockedRotY = false;
 							mLogger.log( Level.INFO, "CAM UNLOCKED V AXIS: " + mCameraRotY );
@@ -156,33 +156,43 @@ public class FreecamMod implements WurmClientMod, Initable
 			{
 				if ( pData.length == 3 ) 
 				{
-					if ( pData[1].contains( "X" ) )
+					final float pValue;
+					try
 					{
-						mCameraX = Float.parseFloat( pData[2] );
+						pValue = Float.parseFloat( pData[2] );
+					}
+					catch ( NumberFormatException e )
+					{
+						mLogger.log( Level.INFO, "usage: setcam <axes> <value> - axes: X Y Z H V, value: a number (e.g. setcam XZ 100.5)" );
+						return true;
+					}
+					if ( pData[1].toUpperCase().contains( "X" ) )
+					{
+						mCameraX = pValue;
 						mLockedX = true;
 						mLogger.log( Level.INFO, "CAM LOCKED X AXIS AND SET TO: " + mCameraX );
 					}
-					if ( pData[1].contains( "Y" ) )
+					if ( pData[1].toUpperCase().contains( "Y" ) )
 					{
-						mCameraY = Float.parseFloat( pData[2] );
+						mCameraY = pValue;
 						mLockedY = true;
 						mLogger.log( Level.INFO, "CAM LOCKED Y AXIS AND SET TO: " + mCameraY );
 					}
-					if ( pData[1].contains( "Z" ) )
+					if ( pData[1].toUpperCase().contains( "Z" ) )
 					{
-						mCameraZ = Float.parseFloat( pData[2] );
+						mCameraZ = pValue;
 						mLockedZ = true;
 						mLogger.log( Level.INFO, "CAM LOCKED Z AXIS AND SET TO: " + mCameraZ );
 					}
-					if ( pData[1].contains( "H" ) )
+					if ( pData[1].toUpperCase().contains( "H" ) )
 					{
-						mCameraRotX = Float.parseFloat( pData[2] );
+						mCameraRotX = pValue;
 						mLockedRotX = true;
 						mLogger.log( Level.INFO, "CAM LOCKED H AXIS AND SET TO: " + mCameraRotX );
 					}
-					if ( pData[1].contains( "V" ) )
+					if ( pData[1].toUpperCase().contains( "V" ) )
 					{
-						mCameraRotY = Float.parseFloat( pData[2] );
+						mCameraRotY = pValue;
 						mLockedRotY = true;
 						mLogger.log( Level.INFO, "CAM LOCKED V AXIS AND SET TO: " + mCameraRotY );
 					}							
@@ -204,31 +214,31 @@ public class FreecamMod implements WurmClientMod, Initable
 			{
 				if ( ( pData.length == 2 ) && ( mQSAvailable ) ) 
 				{
-					if ( pData[1].contains( "X" ) )
+					if ( pData[1].toUpperCase().contains( "X" ) )
 					{
 						mCameraX = mQSCameraX;
 						mLockedX = true;
 						mLogger.log( Level.INFO, "CAM QUICKLOAD AND LOCKED X AXIS AND SET TO: " + mCameraX );
 					}
-					if ( pData[1].contains( "Y" ) )
+					if ( pData[1].toUpperCase().contains( "Y" ) )
 					{
 						mCameraY = mQSCameraY;
 						mLockedY = true;
 						mLogger.log( Level.INFO, "CAM QUICKLOAD AND LOCKED Y AXIS AND SET TO: " + mCameraY );
 					}
-					if ( pData[1].contains( "Z" ) )
+					if ( pData[1].toUpperCase().contains( "Z" ) )
 					{
 						mCameraZ = mQSCameraZ;
 						mLockedZ = true;
 						mLogger.log( Level.INFO, "CAM QUICKLOAD AND LOCKED Z AXIS AND SET TO: " + mCameraZ );
 					}
-					if ( pData[1].contains( "H" ) )
+					if ( pData[1].toUpperCase().contains( "H" ) )
 					{
 						mCameraRotX = mQSCameraRotX;
 						mLockedRotX = true;
 						mLogger.log( Level.INFO, "CAM QUICKLOAD AND LOCKED H AXIS AND SET TO: " + mCameraRotX );
 					}
-					if ( pData[1].contains( "V" ) )
+					if ( pData[1].toUpperCase().contains( "V" ) )
 					{
 						mCameraRotY = mQSCameraRotY;
 						mLockedRotY = true;
@@ -239,12 +249,6 @@ public class FreecamMod implements WurmClientMod, Initable
 			}		
 		}
 		return false;
-	}
-	
-	public static boolean isCamLocked()
-	{
-		boolean lReturn = mLockedX || mLockedY || mLockedZ || mLockedRotX || mLockedRotY;
-		return lReturn;
 	}
 	
 	public static void setCam( float pX, float pY, float pZ, float pRX, float pRY )
@@ -299,7 +303,7 @@ public class FreecamMod implements WurmClientMod, Initable
 		} 
 		catch ( Throwable e ) 
 		{
-			mLogger.log( Level.SEVERE, "Error FreecamMod", e.getMessage() );
+			mLogger.log( Level.SEVERE, "Error FreecamMod", e );
 		}
 	}
 }

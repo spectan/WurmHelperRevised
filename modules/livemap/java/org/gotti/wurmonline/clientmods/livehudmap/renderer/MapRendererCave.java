@@ -94,7 +94,7 @@ public class MapRendererCave extends AbstractCaveRenderer {
 		final int ox = px + (int)(xMouse * width) - width / 2;
 		final int oy = py + (int)(yMouse * height) - height / 2;
 		final Tile tile = getEffectiveTileType(ox, oy);
-		if (tile != Tile.TILE_CAVE_WALL && !isTunnel(tile)) {
+		if (tile != null && tile != Tile.TILE_CAVE_WALL && !isTunnel(tile)) {
 			pickData.addText(tile.getName().replace(" wall", "").replace(" vein", ""));
 		}
 	}

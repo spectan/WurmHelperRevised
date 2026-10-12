@@ -16,6 +16,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 @BotInfo(name = "Forester", description =
@@ -24,31 +26,33 @@ import java.util.stream.Collectors;
         "Sprouts, to prevent the inventory overflow, will be put to the containers. The name of containers can be configured. " +
         "Containers only in root directory of player's inventory will be taken into account. " +
         "New item names can be added(harvested fruits for example) to be moved to containers too. " +
-        "Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. ",
+        "Steppe and moss tiles will be cultivated if planting is enabled and player have shovel in his inventory. " +
+        "Overaged trees are pruned by default (can be toggled off) unless deforestation is on, then they are cut down. ",
         abbreviation = "fr")
 public class ForesterBot extends Bot {
     private static final String DEFAULT_CONTAINER_NAME = "backpack";
-    private int maxActions;
+    private volatile int maxActions;
     private AreaAssistant areaAssistant = new AreaAssistant(this);
 
-    private long hatchetId;
+    private volatile long hatchetId;
     // modified from both the bot thread and chat callbacks; compound operations synchronize on the list
     private final List<Pair<Integer, Integer>> queuedTiles = Collections.synchronizedList(new ArrayList<>());
 
     private volatile long lastActionFinishedTime;
 
-    private String containerName = DEFAULT_CONTAINER_NAME;
-    private List<String> itemNamesToMove= new ArrayList<>();
-    
-    private Set<String> treeWhitelist = new HashSet<>();
-    private Set<String> treeBlacklist = new HashSet<>();
-    private Set<String> sproutBlacklist = new HashSet<>();
-    
-    private boolean cutAllSprouts;
-    private boolean harvesting;
-    private boolean planting;
-    private boolean shriveledTreesChopping;
-    private boolean deforesting;
+    private volatile String containerName = DEFAULT_CONTAINER_NAME;
+    private final List<String> itemNamesToMove = new CopyOnWriteArrayList<>();
+
+    private final Set<String> treeWhitelist = ConcurrentHashMap.newKeySet();
+    private final Set<String> treeBlacklist = ConcurrentHashMap.newKeySet();
+    private final Set<String> sproutBlacklist = ConcurrentHashMap.newKeySet();
+
+    private volatile boolean cutAllSprouts;
+    private volatile boolean harvesting;
+    private volatile boolean planting;
+    private volatile boolean shriveledTreesChopping;
+    private volatile boolean deforesting;
+    private volatile boolean overagedTreePruning = true;
     private volatile int toHarvest;
 
     public ForesterBot() {
@@ -56,6 +60,7 @@ public class ForesterBot extends Bot {
         registerInputHandler(ForesterBot.InputKey.ca, input -> toggleAllTreesCutting());
         registerInputHandler(ForesterBot.InputKey.cs, input -> toggleShriveledTreesChopping());
         registerInputHandler(ForesterBot.InputKey.df, input -> toggleDeforestation());
+        registerInputHandler(ForesterBot.InputKey.po, input -> toggleOveragedTreePruning());
         registerInputHandler(ForesterBot.InputKey.h, input -> toggleHarvesting());
         registerInputHandler(ForesterBot.InputKey.p, input -> togglePlanting());
         registerInputHandler(ForesterBot.InputKey.scn, this::setContainerName);
@@ -80,6 +85,7 @@ public class ForesterBot extends Bot {
         lines.add("Cut sprouts from all trees: " + onOff(cutAllSprouts) + (cutAllSprouts ? "" : " (very old only)"));
         lines.add("Cut shriveled trees: " + onOff(shriveledTreesChopping));
         lines.add("Deforestation: " + onOff(deforesting));
+        lines.add("Prune overaged trees: " + onOff(overagedTreePruning));
         lines.add("Container name: " + containerName);
         lines.add("Extra items to move: " + (itemNamesToMove.isEmpty() ? "none" : String.join(", ", itemNamesToMove)));
         lines.add("Tree whitelist: " + (treeWhitelist.isEmpty() ? "none (all trees)" : String.join(", ", treeWhitelist)));
@@ -147,16 +153,19 @@ public class ForesterBot extends Bot {
                             increaseHarvests(fage);
                             lastActionFinishedTime = System.currentTimeMillis();
                         } else if (fage.getAgeName().contains("overaged")) {
-                            if (!deforesting)
-                                world.getServerConnection().sendAction(sickleId,
-                                        new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
-                                        PlayerAction.PRUNE);
-                            else
+                            if (deforesting) {
                                 world.getServerConnection().sendAction(hatchetId,
                                         new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
                                         PlayerAction.CUT_DOWN);
-                            queuedTiles.add(coordsPair);
-                            lastActionFinishedTime = System.currentTimeMillis();
+                                queuedTiles.add(coordsPair);
+                                lastActionFinishedTime = System.currentTimeMillis();
+                            } else if (overagedTreePruning) {
+                                world.getServerConnection().sendAction(sickleId,
+                                        new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
+                                        PlayerAction.PRUNE);
+                                queuedTiles.add(coordsPair);
+                                lastActionFinishedTime = System.currentTimeMillis();
+                            }
                         } else if (fage.getAgeName().contains("sprouting") && shouldPickSprout(treeTypeName) && (cutAllSprouts || fage.getAgeName().contains("very old"))) {
                             world.getServerConnection().sendAction(sickleId,
                                     new long[]{Tiles.getTileId(checkedtiles[tileIndex][0], checkedtiles[tileIndex][1], 0)},
@@ -369,6 +378,11 @@ public class ForesterBot extends Bot {
         }
     }
 
+    private void toggleOveragedTreePruning() {
+        overagedTreePruning = !overagedTreePruning;
+        Utils.feedback("Pruning of overaged trees is " + onOff(overagedTreePruning));
+    }
+
     private void toggleDeforestation() {
         deforesting = !deforesting;
         if (deforesting) {
@@ -496,6 +510,7 @@ public class ForesterBot extends Bot {
         ca("Cut All Sprouts", "Toggle the cutting of sprouts from all trees", ""),
         cs("Cut Shriveled", "Toggle the cutting of shriveled trees", ""),
         df("Deforestation", "Toggle the cutting of all trees (deforestation)", ""),
+        po("Prune Overaged", "Toggle the pruning of overaged trees (on by default). Ignored while deforestation is on", ""),
         h("Harvest Mode", "Toggle the harvesting", ""),
         p("Planting", "Toggle the planting", ""),
         scn("Container Name", "Set the name of the containers to put sprouts/harvest in (may contain spaces)", "<container name>"),

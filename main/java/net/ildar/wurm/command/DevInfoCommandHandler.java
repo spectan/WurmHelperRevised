@@ -80,6 +80,10 @@ public class DevInfoCommandHandler {
         int checkedtiles[][] = Utils.getAreaCoordinates();
         for (int[] checkedtile : checkedtiles) {
             Tiles.Tile tileType = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(checkedtile[0], checkedtile[1]);
+            if (tileType == null) {
+                Utils.consolePrint("Tile (" + checkedtile[0] + ", " + checkedtile[1] + ") is not loaded");
+                continue;
+            }
             Utils.consolePrint("Tile (" + checkedtile[0] + ", " + checkedtile[1] + ") " + tileType.tilename);
         }
     }
@@ -111,6 +115,13 @@ public class DevInfoCommandHandler {
             Utils.consolePrint("    Layer: %s", creature.getLayer());
             Utils.consolePrint("    Model: %s", creature.getModelName());
             Utils.consolePrint("    Health: %s", creature.getPercentHealth());
+            try {
+                Object data = Utils.getField(creature, "creature");
+                Utils.consolePrint("    Data name: `%s`", Utils.getField(data, "name"));
+                Utils.consolePrint("    Data hoverText: `%s`", Utils.getField(data, "hoverText"));
+            } catch (Exception e) {
+                Utils.consolePrint("    Data fields unreadable: %s", e);
+            }
         } catch (Exception err) {
             Utils.consolePrint(
                 "Got %s when trying to print creature info: %s",

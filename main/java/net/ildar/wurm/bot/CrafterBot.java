@@ -19,22 +19,22 @@ import java.util.stream.Collectors;
         "New crafting operations are not starting until an action queue becomes empty. This behaviour can be disabled. ",
         abbreviation = "c")
 public class CrafterBot extends Bot {
-    private boolean repairInstrument = true;
-    private String targetName;
-    private String sourceName;
+    private volatile boolean repairInstrument = true;
+    private volatile String targetName;
+    private volatile String sourceName;
     private Comparator<InventoryMetaItem> weightComparator = Comparator.comparingDouble(InventoryMetaItem::getWeight);
-    private int targetX;
-    private int targetY;
-    private int sourceX;
-    private int sourceY;
-    private boolean noSort = true;
-    private boolean combineTargets;
-    private boolean combineSources;
-    private long combineTimeout;
-    private boolean craftUnfinishedItemMode;
-    private boolean withoutActionsInUse;
+    private volatile int targetX;
+    private volatile int targetY;
+    private volatile int sourceX;
+    private volatile int sourceY;
+    private volatile boolean noSort = true;
+    private volatile boolean combineTargets;
+    private volatile boolean combineSources;
+    private volatile long combineTimeout;
+    private volatile boolean craftUnfinishedItemMode;
+    private volatile boolean withoutActionsInUse;
     private volatile long lastClick;
-    private boolean singleSourceItemMode;
+    private volatile boolean singleSourceItemMode;
 
     public CrafterBot() {
         registerInputHandler(CrafterBot.InputKey.r, input -> toggleRepairInstrument());
@@ -266,6 +266,8 @@ public class CrafterBot extends Bot {
             requestCreationList.setAccessible(true);
             requestCreationList.invoke(creationWindow);
             Utils.feedback("The source slot was set to \"" + sourceItem.getDisplayName() + "\" (id " + id + ")");
+        } catch (NumberFormatException e) {
+            Utils.consolePrint("Can't parse the item id \"" + input[0] + "\": not a number");
         } catch (Exception e) {
             Utils.consolePrint("Can't set new source item with provided id");
         }

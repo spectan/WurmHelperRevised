@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
         abbreviation = "gig")
 public class GroundItemGetterBot extends Bot {
     private final Set <String> itemNames = ConcurrentHashMap.newKeySet();
+    private final Set<Long> pendingItemIds = ConcurrentHashMap.newKeySet();
     private volatile float distance = 4;
 
     public GroundItemGetterBot() {
@@ -42,14 +43,23 @@ public class GroundItemGetterBot extends Bot {
                 float y = WurmHelper.hud.getWorld().getPlayerPosY();
                 if (groundItems.size() > 0)
                     try {
-                        for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItems.entrySet()) {
+                        Map<Long, GroundItemCellRenderable> groundItemsSnapshot = new HashMap<>(groundItems);
+                        pendingItemIds.retainAll(groundItemsSnapshot.keySet());
+                        int maxActions = Utils.getMaxActionNumber();
+                        int sentActions = 0;
+                        for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItemsSnapshot.entrySet()) {
+                            if (sentActions >= maxActions)
+                                break;
                             GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");
                             float itemX = groundItemData.getX();
                             float itemY = groundItemData.getY();
                             if (Math.pow(itemX - x, 2) + Math.pow(itemY - y, 2) <= distance * distance)
                                 for (String item : itemNames)
                                     if (groundItemData.getName().contains(item)) {
-                                        WurmHelper.hud.sendAction(PlayerAction.TAKE, groundItemData.getId());
+                                        if (pendingItemIds.add(groundItemData.getId())) {
+                                            WurmHelper.hud.sendAction(PlayerAction.TAKE, groundItemData.getId());
+                                            sentActions++;
+                                        }
                                         break;
                                     }
                         }

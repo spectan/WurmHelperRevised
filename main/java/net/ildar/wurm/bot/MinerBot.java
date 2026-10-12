@@ -21,26 +21,26 @@ import java.util.stream.Collectors;
         abbreviation = "m")
 public class MinerBot extends Bot {
     private SmeltingOptions smeltingOptions = new SmeltingOptions();
-    private MiningMode miningMode = MiningMode.Unknown;
-    private InventoryMetaItem pickaxe;
+    private volatile MiningMode miningMode = MiningMode.Unknown;
+    private volatile InventoryMetaItem pickaxe;
     private static final String[] VALID_TOOLS = {"pickaxe"};
-    private long fixedTileId;
+    private volatile long fixedTileId;
     private int[] lastTile;
     private Set<Pair<Integer, Integer>> errorTiles = new HashSet<>();
     private long lastMining;
-    private int clicks = 2;
-    private boolean shardsCombining;
-    private String shards = "rock shard";
-    private String  fuel = "kindling";
-    private long fuellingTimeout = 300000;
+    private volatile int clicks = 2;
+    private volatile boolean shardsCombining;
+    private volatile String shards = "rock shard";
+    private volatile String  fuel = "kindling";
+    private volatile long fuellingTimeout = 300000;
     private long lastFuelling;
-    private boolean moving;
+    private volatile boolean moving;
     private int movingForwardBias;
     private boolean smelting = false;
-    private boolean verbose = false;
-    private boolean noOre;
+    private volatile boolean verbose = false;
+    private volatile boolean noOre;
     private Random random = new Random();
-    private Direction direction = Direction.FORWARD;
+    private volatile Direction direction = Direction.FORWARD;
 
     public MinerBot() {
         registerStaminaThresholdHandler(MinerBot.InputKey.s);
@@ -111,6 +111,7 @@ public class MinerBot extends Bot {
             return;
         }
         lastMining = System.currentTimeMillis();
+        errorTiles.clear();
         if (moving)
             Utils.stabilizePlayer();
         Utils.consolePrint(this.getClass().getSimpleName()
@@ -515,16 +516,19 @@ public class MinerBot extends Bot {
 
     private void setFrontTileMiningMode() {
         miningMode = MiningMode.FrontTile;
+        errorTiles.clear();
         Utils.feedback(getClass().getSimpleName() + " will mine the tile in front of you");
     }
 
     private void setAreaMiningMode() {
         miningMode = MiningMode.Area;
+        errorTiles.clear();
         Utils.feedback(getClass().getSimpleName() + " will mine the 3x3 area around you");
     }
 
     private void setSelectedTileMiningMode() {
         miningMode = MiningMode.SelectedTile;
+        errorTiles.clear();
         Utils.feedback(getClass().getSimpleName() + " will mine the selected tile");
     }
 
@@ -558,6 +562,7 @@ public class MinerBot extends Bot {
         if (tile != null) {
             fixedTileId = tile.getId();
             miningMode = MiningMode.FixedTile;
+            errorTiles.clear();
             Utils.feedback(getClass().getSimpleName() + " will mine the selected tile and remember it");
         } else
             Utils.consolePrint("No tile selected!");
@@ -585,7 +590,8 @@ public class MinerBot extends Bot {
     }
 
     private void tileError() {
-        if (lastTile != null)
+        // lastTile is only tracked in Area and FrontTile modes
+        if (lastTile != null && (miningMode == MiningMode.Area || miningMode == MiningMode.FrontTile))
             errorTiles.add(new Pair<>(lastTile[0], lastTile[1]));
     }
 

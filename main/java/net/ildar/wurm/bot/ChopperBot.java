@@ -66,7 +66,7 @@ public class ChopperBot extends Bot {
                 float x = WurmHelper.hud.getWorld().getPlayerPosX();
                 float y = WurmHelper.hud.getWorld().getPlayerPosY();
                 boolean didSomething = false;
-                if (groundItems.size() > 0) {
+                if (groundItems != null && groundItems.size() > 0) {
                     try {
                         for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItems.entrySet()) {
                             GroundItemData groundItemData = Utils.getField(entry.getValue(), "item");

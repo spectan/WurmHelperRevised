@@ -304,7 +304,10 @@ public class AssistantBot extends Bot {
                                 new long[]{chestId}, new PlayerAction("",(short) 101, PlayerAction.ANYTHING));
                         sleep(500);
                     }
-                    if (!successfullStartOfLockpicking && !noLock) continue;
+                    if (!successfullStartOfLockpicking && !noLock) {
+                        lastLockpicking = System.currentTimeMillis();
+                        continue;
+                    }
                     counter = 0;
                     while (lockpicking && lockpickingResult == -1 && counter++ < 100 && !noLock) {
                         if (verbose) Utils.consolePrint("lockpickingResult counter=" + counter);
@@ -466,10 +469,9 @@ public class AssistantBot extends Bot {
                                 new long[]{item.getId()},
                                 buryAll ? PlayerAction.BURY_ALL : PlayerAction.BURY
                             );
+                            if (++actions >= maxActions)
+                                break;
                         }
-                        
-                        if (++actions >= maxActions)
-                            break;
                     }
                     
                     corpseTimes
@@ -539,74 +541,84 @@ public class AssistantBot extends Bot {
                     }
                 }
 
-                // read once: the console thread may clear it at any time
-                final InventoryListComponent heatingInventory = lumpHeatingInventory;
-                final boolean combining = lumpCombining;
-                final List<InventoryMetaItem> lumps =
-                    heatingInventory != null || combining ?
-                        Utils.getInventoryItems("lump") :
-                        Collections.emptyList()
-                ;
-                if(heatingInventory != null) {
-                    InventoryListComponent playerInv = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
-                    InventoryMetaItem playerInvRoot = Utils.getRootItem(playerInv);
-                    final long playerInvId = playerInvRoot.getId();
-                    final long smelterId = Utils.getRootItem(heatingInventory).getId();
-                    
-                    lumpTypesInInventory.clear();
-                    for(InventoryMetaItem item: lumps) {
-                        if(item.getTemperature() != 5) {
-                            serverConnection.sendMoveSomeItems(smelterId, new long[]{item.getId()});
-                            lumpDropTimes.put(item.getId(), System.currentTimeMillis());
+                try {
+                    // read once: the console thread may clear it at any time
+                    final InventoryListComponent heatingInventory = lumpHeatingInventory;
+                    final boolean combining = lumpCombining;
+                    final List<InventoryMetaItem> lumps =
+                        heatingInventory != null || combining ?
+                            Utils.getInventoryItems("lump") :
+                            Collections.emptyList()
+                    ;
+                    if(heatingInventory != null) {
+                        InventoryListComponent playerInv = WurmHelper.hud.getInventoryWindow().getInventoryListComponent();
+                        InventoryMetaItem playerInvRoot = Utils.getRootItem(playerInv);
+                        InventoryMetaItem smelterRoot = Utils.getRootItem(heatingInventory);
+                        if(playerInvRoot != null && smelterRoot != null) {
+                            final long playerInvId = playerInvRoot.getId();
+                            final long smelterId = smelterRoot.getId();
+
+                            lumpTypesInInventory.clear();
+                            for(InventoryMetaItem item: lumps) {
+                                if(item.getTemperature() != 5) {
+                                    serverConnection.sendMoveSomeItems(smelterId, new long[]{item.getId()});
+                                    lumpDropTimes.put(item.getId(), System.currentTimeMillis());
+                                } else {
+                                    lumpTypesInInventory.add(Utils.normalizeBaseName(item));
+                                }
+                            }
+
+                            final long now = System.currentTimeMillis();
+                            // entries older than the 60s cooldown no longer matter
+                            lumpDropTimes.values().removeIf(dropTime -> now - dropTime >= 60_000);
+                            long[] hotLumps = Utils.getItemIds(Utils.getInventoryItems(
+                                heatingInventory,
+                                item -> {
+                                    final String name = Utils.normalizeBaseName(item);
+                                    boolean shouldTake =
+                                        name.contains("lump") &&
+                                        (lumpCombining || !lumpTypesInInventory.contains(name)) &&
+                                        now - lumpDropTimes.getOrDefault(item.getId(), 0l) >= 60_000 &&
+                                        item.getTemperature() == 5
+                                    ;
+                                    if(shouldTake)
+                                        lumpTypesInInventory.add(name);
+                                    return shouldTake;
+                                }
+                            ));
+                            if(hotLumps.length > 0)
+                                serverConnection.sendMoveSomeItems(playerInvId, hotLumps);
                         } else {
-                            lumpTypesInInventory.add(Utils.normalizeBaseName(item));
+                            Utils.consolePrint("Couldn't find the player or smelter inventory root item, skipping lump heating");
                         }
                     }
 
-                    final long now = System.currentTimeMillis();
-                    // entries older than the 60s cooldown no longer matter
-                    lumpDropTimes.values().removeIf(dropTime -> now - dropTime >= 60_000);
-                    long[] hotLumps = Utils.getItemIds(Utils.getInventoryItems(
-                        heatingInventory,
-                        item -> {
-                            final String name = Utils.normalizeBaseName(item);
-                            boolean shouldTake =
-                                name.contains("lump") &&
-                                (lumpCombining || !lumpTypesInInventory.contains(name)) &&
-                                now - lumpDropTimes.getOrDefault(item.getId(), 0l) >= 60_000 &&
-                                item.getTemperature() == 5
-                            ;
-                            if(shouldTake)
-                                lumpTypesInInventory.add(name);
-                            return shouldTake;
+                    if(combining) {
+                        lumpsToCombine.values().forEach(a -> a.clear());
+                        for(InventoryMetaItem lump: lumps) {
+                            if(lump.getTemperature() != 5)
+                                continue;
+
+                            String lumpName = Utils.normalizeBaseName(lump);
+                            ArrayList<Long> list = lumpsToCombine.get(lumpName);
+                            if(list == null)
+                                lumpsToCombine.put(lumpName, list = new ArrayList<>());
+                            list.add(lump.getId());
                         }
-                    ));
-                    if(hotLumps.length > 0)
-                        serverConnection.sendMoveSomeItems(playerInvId, hotLumps);
-                }
 
-                if(combining) {
-                    lumpsToCombine.values().forEach(a -> a.clear());
-                    for(InventoryMetaItem lump: lumps) {
-                        if(lump.getTemperature() != 5)
-                            continue;
+                        lumpsToCombine.values().forEach(group -> {
+                            if(group.size() < 2)
+                                return;
 
-                        String lumpName = Utils.normalizeBaseName(lump);
-                        ArrayList<Long> list = lumpsToCombine.get(lumpName);
-                        if(list == null)
-                            lumpsToCombine.put(lumpName, list = new ArrayList<>());
-                        list.add(lump.getId());
+                            // utter Java moment
+                            // wtb slices, and generics that aren't lies to children
+                            long[] lumpIds = group.stream().mapToLong(Long::longValue).toArray();
+                            serverConnection.sendAction(lumpIds[0], lumpIds, PlayerAction.COMBINE);
+                        });
                     }
-
-                    lumpsToCombine.values().forEach(group -> {
-                        if(group.size() < 2)
-                            return;
-
-                        // utter Java moment
-                        // wtb slices, and generics that aren't lies to children
-                        long[] lumpIds = group.stream().mapToLong(Long::longValue).toArray();
-                        serverConnection.sendAction(lumpIds[0], lumpIds, PlayerAction.COMBINE);
-                    });
+                } catch (Exception e) {
+                    Utils.consolePrint(this.getClass().getSimpleName() + " has encountered an error - " + e.getMessage());
+                    Utils.consolePrint(e.toString());
                 }
             }
             sleep(timeout);
@@ -898,6 +910,7 @@ public class AssistantBot extends Bot {
                 return;
             }
             statuetteId = statuette.getId();
+            wovCasting = false;
             casting = true;
             Utils.feedback("Spellcasts are on! The spell " + spellToCast.displayName() + " will be cast");
         } catch (Exception e) {

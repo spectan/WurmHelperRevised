@@ -15,8 +15,7 @@ import java.util.List;
         "Skills up player's gardening skill by planting and picking flowers in surrounding area",
         abbreviation = "fp")
 public class FlowerPlanterBot extends Bot {
-    private long sickleId;
-    private long shovelId;
+    private boolean noBouquets;
 
     public FlowerPlanterBot() {
         registerStaminaThresholdHandler(FlowerPlanterBot.InputKey.s);
@@ -35,20 +34,18 @@ public class FlowerPlanterBot extends Bot {
         int maxActions = Utils.getMaxActionNumber();
         InventoryMetaItem sickle = Utils.locateToolItem("sickle");
         InventoryMetaItem shovel = Utils.locateToolItem("shovel");
-        if (sickle != null)
-            sickleId = sickle.getId();
-        if (shovel != null)
-            shovelId = shovel.getId();
-        if (sickleId == 0) {
+        if (sickle == null) {
             Utils.consolePrint("You don't have a sickle! " + this.getClass().getSimpleName() + " won't start");
             deactivate();
             return;
         }
-        if (shovelId == 0) {
+        if (shovel == null) {
             Utils.consolePrint("You don't have a shovel! " + this.getClass().getSimpleName() + " won't start");
             deactivate();
             return;
         }
+        long sickleId = sickle.getId();
+        long shovelId = shovel.getId();
 
         BotState state = BotState.PLANT;
         while (isActive()) {
@@ -62,6 +59,9 @@ public class FlowerPlanterBot extends Bot {
                         long[] flowerIds = new long[maxActions];
                         int flowersFound = 0;
                         List<InventoryMetaItem> bouquets = Utils.getInventoryItems("bouquet of");
+                        if (bouquets.isEmpty() && !noBouquets)
+                            Utils.consolePrint("The player doesn't have any bouquets to plant");
+                        noBouquets = bouquets.isEmpty();
                         for (InventoryMetaItem item : bouquets) {
                             flowerIds[flowersFound++] = item.getId();
                             if (flowersFound >= maxActions)
@@ -92,6 +92,10 @@ public class FlowerPlanterBot extends Bot {
                         state = BotState.CULTIVATE;
                         break;
                     case CULTIVATE:
+                        if (noBouquets) {
+                            state = BotState.PLANT;
+                            break;
+                        }
                         for(int i = 0; i < 9 && sentactions < maxActions; i++) {
                             Tiles.Tile type = WurmHelper.hud.getWorld().getNearTerrainBuffer().getTileType(checkedtiles[i][0], checkedtiles[i][1]);
                             byte data = WurmHelper.hud.getWorld().getNearTerrainBuffer().getData(checkedtiles[i][0], checkedtiles[i][1]);

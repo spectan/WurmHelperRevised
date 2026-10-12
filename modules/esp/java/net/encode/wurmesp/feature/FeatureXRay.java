@@ -83,43 +83,6 @@ extends Feature {
 			int[] indexdata = new int[] { 0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7 };
             RenderUtils.renderPrimitiveLines(8, vertexdata, indexdata, this.queuePick, color);
         });
-    	/*
-        if (!this.world.isOwnBodyAdded()) {
-            return;
-        }
-        WurmEspMod._terrain.clear();
-        WurmEspMod._caveBuffer = this.world.getCaveBuffer();
-        PlayerPosition pos = this.world.getPlayer().getPos();
-        int px = pos.getTileX();
-        int py = pos.getTileY();
-        int size = WurmEspMod.xraydiameter;
-        int sx = px - size / 2;
-        int sy = py - size / 2;
-        WorldRender worldRenderer = (WorldRender)ReUtils.getField(this.world, "worldRenderer");
-        CaveRender caveRenderer = (CaveRender)ReUtils.getField(worldRenderer, "caveRenderer");
-        for (int x = 0; x < size; ++x) {
-            for (int y = size - 1; y >= 0; --y) {
-                try {
-                    int tileX = x + sx;
-                    int tileY = y + sy;
-                    for (int side = 0; side < 7; ++side) {
-                        IntBuffer intBuffer = IntBuffer.allocate(3);
-                        intBuffer.put(tileX);
-                        intBuffer.put(tileY);
-                        intBuffer.put(side);
-                        Class<HitNamesData> cls = HitNamesData.class;
-                        Constructor<HitNamesData> constructor = cls.getDeclaredConstructor(IntBuffer.class, Integer.TYPE);
-                        constructor.setAccessible(true);
-                        HitNamesData hitNames = (HitNamesData)constructor.newInstance(intBuffer, 3);
-                        caveRenderer.getPickedWall(hitNames).renderPicked(this.queuePick, RenderState.RENDERSTATE_DEFAULT, com.wurmonline.client.renderer.Color.GREEN);
-                    }
-                    continue;
-                }
-                catch (IllegalAccessException | IllegalArgumentException | InstantiationException | NoSuchMethodException | SecurityException | InvocationTargetException ex) {
-                    Logger.getLogger(FeatureXRay.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        }*/
     }
 }
 
