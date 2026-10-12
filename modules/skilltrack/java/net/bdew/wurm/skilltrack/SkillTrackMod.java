@@ -2,6 +2,7 @@ package net.bdew.wurm.skilltrack;
 
 import com.wurmonline.client.game.SkillLogicSet;
 import com.wurmonline.client.renderer.gui.GainTrackerWindow;
+import com.wurmonline.client.renderer.gui.HeadsUpDisplay;
 import com.wurmonline.client.renderer.gui.MainMenu;
 import com.wurmonline.client.renderer.gui.WurmComponent;
 import com.wurmonline.client.settings.SavePosManager;
@@ -50,6 +51,7 @@ public class SkillTrackMod implements WurmClientMod, Initable, PreInitable {
                 components.add(trackerWindow);
                 mainMenu.registerComponent("Gain Tracker", trackerWindow);
                 savePosManager.registerAndRefresh(trackerWindow, "gaintracker");
+                trackerWindow.hideOnStart((HeadsUpDisplay) proxy);
                 ModConsole.addConsoleListener(trackerWindow);
 
                 logInfo("Window registered");

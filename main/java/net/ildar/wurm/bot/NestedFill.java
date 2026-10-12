@@ -28,6 +28,11 @@ final class NestedFill {
         String displayName();
 
         List<Node> children();
+
+        /** A rare (or better) item: the movers leave those alone. */
+        default boolean rare() {
+            return false;
+        }
     }
 
     /** One transfer: N of an item from the source into one container. */
@@ -37,7 +42,7 @@ final class NestedFill {
         /** A bulk entry (its count is in its name): moved with the quantity question. */
         final boolean bulk;
         final int quantity;
-        /** The bulk entry (bulk moves only). */
+        /** The bulk entry (bulk moves only); for a collect move, the container taken from. */
         final long sourceId;
         /** The single items to move together (non-bulk moves only). */
         final List<Long> ids;
@@ -171,6 +176,38 @@ final class NestedFill {
                 }
                 if (!singles.isEmpty()) {
                     moves.add(new Move(c.id(), name, false, singles.size(), -1, singles));
+                }
+            }
+        }
+        return moves;
+    }
+
+    /**
+     * The moves that take the named items out of every container into {@code destId} (your inventory or a target
+     * container): one move per container and item name, rare items left alone. {@code skip} leaves out a
+     * (container id, item name) that was just collected from and has not updated yet.
+     */
+    static List<Move> planCollect(List<Node> containers, List<String> itemNames, long destId,
+                                  BiPredicate<Long, String> skip) {
+        List<Move> moves = new ArrayList<>();
+        for (Node c : containers) {
+            List<Node> kids = c.children();
+            if (kids == null) {
+                continue;
+            }
+            for (String name : itemNames) {
+                if (skip.test(c.id(), name)) {
+                    continue;
+                }
+                String word = name.toLowerCase(Locale.ROOT);
+                List<Long> ids = new ArrayList<>();
+                for (Node k : kids) {
+                    if (nameHas(k, word) && !k.rare()) {
+                        ids.add(k.id());
+                    }
+                }
+                if (!ids.isEmpty()) {
+                    moves.add(new Move(destId, name, false, ids.size(), c.id(), ids));
                 }
             }
         }

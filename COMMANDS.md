@@ -376,7 +376,9 @@ is turned on. See the README for the general usage.
 | Key | Name | Description |
 |---|---|---|
 | `a <item name>` | Add Item | Add item names to chosen set. Separate several names with commas |
+| `cd` | Collect Destination | Where collected items go: hover a container window to use it, or your inventory window to go back to the inventory (the default) |
 | `clear` | Clear Items | Clear list of items in chosen set |
+| `co` | Collect | Switch the chosen nested set between filling the containers and collecting: collecting takes the set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd |
 | `fl` | First Level Only | Toggle moving of only top-level items |
 | `isc <index>` | Select Set | Choose item set to operate on |
 | `isd` | Delete Set | Delete current item set |

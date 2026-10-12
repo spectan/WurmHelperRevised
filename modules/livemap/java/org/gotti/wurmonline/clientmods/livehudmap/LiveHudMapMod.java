@@ -92,6 +92,7 @@ public class LiveHudMapMod implements WurmClientMod, Initable, PreInitable, Conf
 
 			SavePosManager savePosManager = ReflectionUtil.getPrivateField(hud, ReflectionUtil.getField(hud.getClass(), "savePosManager"));
 			savePosManager.registerAndRefresh(liveMapWindow, "livemapwindow");
+			liveMapWindow.hideOnStart(hud);
 		}
 		catch (IllegalArgumentException | IllegalAccessException | ClassCastException | NoSuchFieldException e) {
 			throw new RuntimeException(e);
