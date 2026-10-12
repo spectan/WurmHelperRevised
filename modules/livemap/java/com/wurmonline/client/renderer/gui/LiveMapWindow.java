@@ -30,7 +30,7 @@ public class LiveMapWindow extends WWindow {
 	private LiveMapView liveMapView;
 
 	public LiveMapWindow(World world) {
-		super("Live map", true);
+		super("Live map", false);   // closed at every start; the menu opens it
 		setTitle("Live map");
 		mainPanel = new WurmBorderPanel("Live map");
 
@@ -154,6 +154,11 @@ public class LiveMapWindow extends WWindow {
 	public void closePressed()
 	{
 		hud.toggleComponent(this);
+	}
+
+	/** Closed until the menu opens it (the mod adds it to the HUD to set it up). */
+	public void hideOnStart(HeadsUpDisplay headsUp) {
+		headsUp.hideComponent(this);
 	}
 
 	public void toggle() {

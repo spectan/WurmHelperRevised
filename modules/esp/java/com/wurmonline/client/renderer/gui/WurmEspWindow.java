@@ -1,13 +1,14 @@
 package com.wurmonline.client.renderer.gui;
 
 import net.encode.wurmesp.WurmEspMod;
+import net.encode.wurmesp.util.ConfigUtils;
 
 public class WurmEspWindow
 extends WWindow {
     private WurmBorderPanel mainPanel;
 
     public WurmEspWindow() {
-        super("Esp", true);
+        super("Esp", false);   // closed at every start; the menu opens it
         this.setTitle("Esp");
         this.resizable = true;
         this.closeable = true;
@@ -19,6 +20,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.players = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         playersCheckBox.checked = WurmEspMod.players;
@@ -27,6 +29,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.mobs = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         mobsCheckBox.checked = WurmEspMod.mobs;
@@ -35,6 +38,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.animals = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         animalsCheckBox.checked = WurmEspMod.animals;
@@ -43,6 +47,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.specials = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         specialsCheckBox.checked = WurmEspMod.specials;
@@ -51,6 +56,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.items = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         itemsCheckBox.checked = WurmEspMod.items;
@@ -59,6 +65,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.tilesFlower = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         tilesSearchCheckBox.checked = WurmEspMod.tilesFlower;
@@ -67,6 +74,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.uniques = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         uniquesCheckBox.checked = WurmEspMod.uniques;
@@ -75,6 +83,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.conditioned = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         championsCheckBox.checked = WurmEspMod.conditioned;
@@ -83,6 +92,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.xray = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         xrayCheckBox.checked = WurmEspMod.xray;
@@ -91,6 +101,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.tilescloseby = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         tilesCheckBox.checked = WurmEspMod.tilescloseby;
@@ -99,6 +110,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.tilesclosebynotrideable = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         tilesWalkableCheckBox.checked = WurmEspMod.tilesclosebynotrideable;
@@ -107,6 +119,7 @@ extends WWindow {
             @Override
             public void checkboxClicked(EspWCheckBox checkbox) {
                 WurmEspMod.deedsize = checkbox.checked;
+                ConfigUtils.saveProperties("esp");
             }
         });
         deedCheckBox.checked = WurmEspMod.deedsize;
@@ -128,6 +141,11 @@ extends WWindow {
 
     public void closePressed() {
         hud.toggleComponent((WurmComponent)this);
+    }
+
+    /** Closed until the menu opens it (the mod adds it to the HUD to set it up). */
+    public void hideOnStart(HeadsUpDisplay headsUp) {
+        headsUp.hideComponent((WurmComponent)this);
     }
 
     public void toggle() {

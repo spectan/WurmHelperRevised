@@ -93,6 +93,11 @@ public class GainTrackerWindow extends WWindow implements ConsoleListener {
         return false;
     }
 
+    /** Closed until the menu opens it (the mod adds it to the HUD to set it up). */
+    public void hideOnStart(HeadsUpDisplay headsUp) {
+        headsUp.hideComponent(this);
+    }
+
     @Override
     void closePressed() {
         hud.hideComponent(this);

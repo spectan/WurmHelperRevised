@@ -51,6 +51,8 @@ public class ConfigUtils {
         WurmEspMod.uniques = Boolean.valueOf(properties.getProperty("uniques", Boolean.toString(WurmEspMod.uniques)));
         WurmEspMod.conditioned = Boolean.valueOf(properties.getProperty("conditioned", Boolean.toString(WurmEspMod.conditioned)));
         WurmEspMod.tilescloseby = Boolean.valueOf(properties.getProperty("tilescloseby", Boolean.toString(WurmEspMod.tilescloseby)));
+        WurmEspMod.tilesclosebynotrideable = Boolean.valueOf(properties.getProperty("tilesclosebynotrideable", Boolean.toString(WurmEspMod.tilesclosebynotrideable)));
+        WurmEspMod.tilesFlower = Boolean.valueOf(properties.getProperty("tilesflower", Boolean.toString(WurmEspMod.tilesFlower)));
         WurmEspMod.deedsize = Boolean.valueOf(properties.getProperty("deedsize", Boolean.toString(WurmEspMod.deedsize)));
         WurmEspMod.xray = Boolean.valueOf(properties.getProperty("xray", Boolean.toString(WurmEspMod.xray)));
         WurmEspMod.xraythread = Boolean.valueOf(properties.getProperty("xraythread", Boolean.toString(WurmEspMod.xraythread)));
@@ -177,7 +179,8 @@ public class ConfigUtils {
         WurmEspMod.invalidate();
     }
 
-    public static void saveProperties(String name) {
+    /** Every setting as the file holds it (what {@link #saveProperties} writes and DoConfig reads back). */
+    public static Properties toProperties() {
         Properties p = new Properties();
         p.setProperty("players", Boolean.toString(WurmEspMod.players));
         p.setProperty("mobs", Boolean.toString(WurmEspMod.mobs));
@@ -187,6 +190,8 @@ public class ConfigUtils {
         p.setProperty("uniques", Boolean.toString(WurmEspMod.uniques));
         p.setProperty("conditioned", Boolean.toString(WurmEspMod.conditioned));
         p.setProperty("tilescloseby", Boolean.toString(WurmEspMod.tilescloseby));
+        p.setProperty("tilesclosebynotrideable", Boolean.toString(WurmEspMod.tilesclosebynotrideable));
+        p.setProperty("tilesflower", Boolean.toString(WurmEspMod.tilesFlower));
         p.setProperty("deedsize", Boolean.toString(WurmEspMod.deedsize));
         p.setProperty("xray", Boolean.toString(WurmEspMod.xray));
         p.setProperty("xraythread", Boolean.toString(WurmEspMod.xraythread));
@@ -241,11 +246,16 @@ public class ConfigUtils {
         p.setProperty("spottedITEMS", String.join(";", Unit.spottedITEMS));
         p.setProperty("conditionedMOBS", String.join(";", Unit.conditionedMOBS));
         p.setProperty("tilesFlowerSearch", String.join(";", WurmEspMod.tilesFlowerSearch));
+        return p;
+    }
+
+    public static void saveProperties(String name) {
+        Properties p = toProperties();
         Path path = Paths.get("mods", "WurmHelper").resolve(name + ".properties");
         try {
             Files.createDirectories(path.getParent());
             try (OutputStream out = Files.newOutputStream(path)) {
-                p.store(out, "WurmEsp settings; rewritten when a setting is changed with the esp console command");
+                p.store(out, "WurmEsp settings; rewritten when a setting is changed in the ESP window or with the esp console command");
             }
         }
         catch (IOException e) {

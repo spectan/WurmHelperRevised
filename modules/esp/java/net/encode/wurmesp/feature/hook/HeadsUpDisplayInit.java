@@ -37,6 +37,7 @@ extends Hook {
             components.add(wurmEspWindow);
             SavePosManager savePosManager = (SavePosManager)ReflectionUtil.getPrivateField((Object)WurmEspMod.hud, (Field)ReflectionUtil.getField(WurmEspMod.hud.getClass(), (String)"savePosManager"));
             savePosManager.registerAndRefresh((WindowSerializer)wurmEspWindow, "wurmespwindow");
+            wurmEspWindow.hideOnStart(WurmEspMod.hud);
         }
         catch (ClassCastException | IllegalAccessException | IllegalArgumentException | NoSuchFieldException e) {
             throw new RuntimeException(e);
