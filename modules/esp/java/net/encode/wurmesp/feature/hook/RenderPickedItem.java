@@ -9,6 +9,7 @@ import com.wurmonline.client.game.World;
 import com.wurmonline.client.renderer.PickRenderer;
 import com.wurmonline.client.renderer.backend.Queue;
 
+import net.encode.wurmesp.Unit;
 import net.encode.wurmesp.WurmEspMod;
 
 public class RenderPickedItem
@@ -21,13 +22,15 @@ extends Hook {
             World world = (World)ReflectionUtil.getPrivateField((Object)proxy, (Field)ReflectionUtil.getField(cls, (String)"world"));
             WurmEspMod._pickRenderer = (PickRenderer)ReflectionUtil.getPrivateField((Object)proxy, (Field)ReflectionUtil.getField(cls, (String)"pickRenderer"));
             Queue queuePick = (Queue)ReflectionUtil.getPrivateField((Object)proxy, (Field)ReflectionUtil.getField(cls, (String)"queuePick"));
-            WurmEspMod.pickableUnits.stream().filter(unit -> WurmEspMod.players && unit.isPlayer() || WurmEspMod.uniques && unit.isUnique() || WurmEspMod.conditioned && unit.isConditioned() || WurmEspMod.animals && (unit.isMob() && !unit.isAggroMob()) || WurmEspMod.mobs && unit.isAggroMob() || WurmEspMod.specials && unit.isSpecial() || WurmEspMod.items && unit.isSpotted()).forEachOrdered(unit -> {
-                if (unit.isConditioned() && WurmEspMod.conditioned || unit.isConditioned() && WurmEspMod.conditionedcolorsallways || unit.isChampion() && WurmEspMod.championmcoloralways) {
-                    unit.renderUnit(queuePick, true);
-                } else {
-                    unit.renderUnit(queuePick, false);
+            for (Unit unit : WurmEspMod.trackedUnits()) {
+                if (!WurmEspMod.shouldRender(unit)) {
+                    continue;
                 }
-            });
+                boolean showConditioned = unit.isConditioned() && WurmEspMod.conditioned
+                        || unit.isConditioned() && WurmEspMod.conditionedcolorsallways
+                        || unit.isChampion() && WurmEspMod.championmcoloralways;
+                unit.renderUnit(queuePick, showConditioned);
+            }
             if (WurmEspMod.tileshighlight) {
                 WurmEspMod.tilesHighlightManager.setWorldQueue(world, queuePick);
                 if (WurmEspMod.tilesHighlightManager.first) {

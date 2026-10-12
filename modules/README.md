@@ -32,6 +32,7 @@ The release zip carries all of these files under `WurmHelper/licenses/`.
 ## Changes made when merging
 
 - `esp`: reads `mods/WurmHelper/esp.properties` instead of `mods/wurmesp.properties` (both at startup and on `esp reload`). Changing a setting with the `esp` console command saves the file, so settings persist across sessions.
+- `esp` (update fixes): every creature and ground item is tracked (a concurrent map by id, no longer an unsynchronized list) and what is outlined is decided each frame, so `esp search`, the toggles and `esp reload` also reach things that were already there. A unit reads its hover name and colours as they are now (a creature that turns raging or champion changes colour; reloaded colours apply at once). `esp search h` no longer also matches model names (and `m` hover names). The hooks catch their own errors so a problem in ESP cannot break the client's own `initialize`, and only creatures (not boats and other mobile models) are tracked.
 - `ezbulk`: reads `mods/WurmHelper/ezbulk.properties` instead of `mods/ezbulk.properties`.
 - `uiscale`: its log and remembered `uifade` setting go to `mods/WurmHelper/` (the folder of the jar it is in) instead of `mods/uiscale/`.
 - Test code (`uiscaletest`, LiveHudMap's unit tests) and build files are not included.

@@ -174,6 +174,7 @@ public class ConfigUtils {
         Unit.conditionedMOBS = splitList(properties.getProperty("conditionedMOBS"),
                 "alert;angry;champion;diseased;fierce;greenish;hardened;lurking;raging;scared;slow;sly");
         WurmEspMod.tilesFlowerSearch = splitList(properties.getProperty("tilesFlowerSearch"), "flowers");
+        WurmEspMod.invalidate();
     }
 
     public static void saveProperties(String name) {

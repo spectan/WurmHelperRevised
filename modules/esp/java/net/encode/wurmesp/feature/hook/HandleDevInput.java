@@ -111,6 +111,7 @@ public class HandleDevInput {
                         if (data[2].equals("off")) {
                             WurmEspMod.search = "defaultnosearch";
                             WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.NONE;
+                            WurmEspMod.invalidate();
                             WurmEspMod.hud.consoleOutput("Searching off");
                             break;
                         }
@@ -121,18 +122,21 @@ public class HandleDevInput {
                         if (data[2].equals("h")) {
                             WurmEspMod.search = data[3];
                             WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.HOVER;
+                            WurmEspMod.invalidate();
                             WurmEspMod.hud.consoleOutput("Searching for " + WurmEspMod.search + " in HoverName");
                             break;
                         }
                         if (data[2].equals("m")) {
                             WurmEspMod.search = data[3];
                             WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.MODEL;
+                            WurmEspMod.invalidate();
                             WurmEspMod.hud.consoleOutput("Searching for " + WurmEspMod.search + " in ModelName");
                             break;
                         }
                         if (data[2].equals("hm")) {
                             WurmEspMod.search = data[3];
                             WurmEspMod.searchType = WurmEspMod.SEARCHTYPE.BOTH;
+                            WurmEspMod.invalidate();
                             WurmEspMod.hud.consoleOutput("Searching for " + WurmEspMod.search + " in HoverName and ModelName");
                             break;
                         }
