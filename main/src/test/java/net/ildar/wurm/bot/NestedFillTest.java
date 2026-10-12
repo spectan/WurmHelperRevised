@@ -19,6 +19,7 @@ public class NestedFillTest {
         final String name;
         final String display;
         final List<NestedFill.Node> kids = new ArrayList<>();
+        boolean rare;
 
         N(long id, String name, String display) {
             this.id = id;
@@ -35,6 +36,7 @@ public class NestedFillTest {
         @Override public String baseName() { return name; }
         @Override public String displayName() { return display; }
         @Override public List<NestedFill.Node> children() { return kids; }
+        @Override public boolean rare() { return rare; }
     }
 
     private static long next = 1000;
@@ -199,5 +201,55 @@ public class NestedFillTest {
                 Collections.<String, List<NestedFill.Node>>emptyMap(), (d, n) -> false);
 
         assertTrue(moves.isEmpty());
+    }
+
+    // ---- collecting the end result back ----
+
+    @Test
+    public void collectsTheNamedItemsOutOfEveryContainerOneMoveEach() {
+        N m1 = item("meal"), m2 = item("meal"), c1 = item("corn");
+        N a = pan(m1, c1), b = pan(m2), empty = pan(item("corn"));
+
+        List<NestedFill.Move> moves = NestedFill.planCollect(Arrays.<NestedFill.Node>asList(a, b, empty),
+                Collections.singletonList("meal"), 77L, (id, name) -> false);
+
+        assertEquals(2, moves.size());
+        assertEquals(77L, moves.get(0).dest);
+        assertEquals(Collections.singletonList(m1.id), moves.get(0).ids);
+        assertEquals(Collections.singletonList(m2.id), moves.get(1).ids);
+        assertEquals("the corn stays where it is", false, moves.get(0).ids.contains(c1.id));
+    }
+
+    @Test
+    public void collectTakesSeveralOfAKindAndSeveralKinds() {
+        N m1 = item("meal"), m2 = item("meal"), s1 = item("stew");
+        N a = pan(m1, m2, s1);
+
+        List<NestedFill.Move> moves = NestedFill.planCollect(Collections.<NestedFill.Node>singletonList(a),
+                Arrays.asList("meal", "stew"), 5L, (id, name) -> false);
+
+        assertEquals(2, moves.size());
+        assertEquals(Arrays.asList(m1.id, m2.id), moves.get(0).ids);
+        assertEquals(Collections.singletonList(s1.id), moves.get(1).ids);
+    }
+
+    @Test
+    public void collectLeavesRareItemsAndRecentlyCollectedContainers() {
+        N plain = item("meal"), rareMeal = item("meal");
+        rareMeal.rare = true;
+        N a = pan(plain, rareMeal);
+        N b = pan(item("meal"));
+
+        List<NestedFill.Move> moves = NestedFill.planCollect(Arrays.<NestedFill.Node>asList(a, b),
+                Collections.singletonList("meal"), 5L, (id, name) -> id == b.id);
+
+        assertEquals(1, moves.size());
+        assertEquals(Collections.singletonList(plain.id), moves.get(0).ids);
+    }
+
+    @Test
+    public void collectWithNothingToTakeIsNoMoves() {
+        assertTrue(NestedFill.planCollect(Collections.<NestedFill.Node>singletonList(pan(item("corn"))),
+                Collections.singletonList("meal"), 5L, (id, name) -> false).isEmpty());
     }
 }

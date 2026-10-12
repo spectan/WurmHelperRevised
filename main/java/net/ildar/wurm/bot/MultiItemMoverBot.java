@@ -48,6 +48,8 @@ public class MultiItemMoverBot extends Bot
         registerInputHandler(Inputs.nh, this::setNestedHosts);
         registerInputHandler(Inputs.pc, this::setPerContainer);
         registerInputHandler(Inputs.nc, input -> clearNested());
+        registerInputHandler(Inputs.co, input -> toggleCollect());
+        registerInputHandler(Inputs.cd, input -> setCollectDestination());
     }
 
     @Override
@@ -306,6 +308,39 @@ public class MultiItemMoverBot extends Bot
         Utils.feedback("Set %d is a plain set again", selectedSet);
     }
 
+    void toggleCollect()
+    {
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        ItemSet set = itemSets.get(selectedSet);
+        if(set.nestedName == null)
+        {
+            Utils.consolePrint("Set the containers first with key %s (e.g. nt frying pan)", Inputs.nt.name());
+            return;
+        }
+        set.collect = !set.collect;
+        set.sentAt.clear();
+        Utils.feedback(
+            set.collect
+                ? "Set %d now takes its items OUT of every \"%s\" and moves them to %s"
+                : "Set %d fills the containers again",
+            selectedSet, set.nestedName, set.describeCollectDestination()
+        );
+    }
+
+    void setCollectDestination()
+    {
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        itemSets.get(selectedSet).setCollectDestination();
+    }
+
     /** The game's item as the planner sees it. */
     static NestedFill.Node wrap(final InventoryMetaItem item)
     {
@@ -314,6 +349,7 @@ public class MultiItemMoverBot extends Bot
             @Override public long id() { return item.getId(); }
             @Override public String baseName() { return item.getBaseName(); }
             @Override public String displayName() { return item.getDisplayName(); }
+            @Override public boolean rare() { return item.getRarity() != 0; }
             @Override public List<NestedFill.Node> children()
             {
                 List<InventoryMetaItem> kids = item.getChildren();
@@ -340,6 +376,12 @@ public class MultiItemMoverBot extends Bot
      */
     void serveNested(ItemSet set) throws Exception
     {
+        if(set.collect)
+        {
+            serveCollect(set);
+            return;
+        }
+
         InventoryMetaItem srcRoot = set.sourceComponent == null ? null : Utils.getRootItem(set.sourceComponent);
         if(srcRoot == null)
         {
@@ -349,27 +391,7 @@ public class MultiItemMoverBot extends Bot
             return;
         }
 
-        // every open container window except the source: the ovens / forges are among them
-        List<NestedFill.Node> roots = new ArrayList<>();
-        List<WurmComponent> components = WurmHelper.getInstance().components;
-        if(components != null)
-            for(WurmComponent component: new ArrayList<>(components))
-            {
-                if(!(component instanceof ItemListWindow))
-                    continue;
-                InventoryListComponent list;
-                try
-                {
-                    list = Utils.getField(component, "component");
-                }
-                catch(Exception err)
-                {
-                    continue;
-                }
-                InventoryMetaItem root = list == null ? null : Utils.getRootItem(list);
-                if(root != null && root.getId() != srcRoot.getId())
-                    roots.add(wrap(root));
-            }
+        List<NestedFill.Node> roots = openContainerRoots(srcRoot.getId());
 
         List<NestedFill.Node> containers = NestedFill.findContainers(roots, set.hosts, set.nestedName);
         if(containers.isEmpty())
@@ -430,6 +452,93 @@ public class MultiItemMoverBot extends Bot
             Utils.consolePrint("%d bulk transfer(s) got no quantity question (a full container, or an item too heavy?)", unanswered);
     }
 
+    /** The root of every open container window except the one with this id: the ovens / forges are among them. */
+    private List<NestedFill.Node> openContainerRoots(long exceptRootId)
+    {
+        List<NestedFill.Node> roots = new ArrayList<>();
+        List<WurmComponent> components = WurmHelper.getInstance().components;
+        if(components != null)
+            for(WurmComponent component: new ArrayList<>(components))
+            {
+                if(!(component instanceof ItemListWindow))
+                    continue;
+                InventoryListComponent list;
+                try
+                {
+                    list = Utils.getField(component, "component");
+                }
+                catch(Exception err)
+                {
+                    continue;
+                }
+                InventoryMetaItem root = list == null ? null : Utils.getRootItem(list);
+                if(root != null && root.getId() != exceptRootId)
+                    roots.add(wrap(root));
+            }
+        return roots;
+    }
+
+    /**
+     * A collecting set: take the set's items out of every container named like the set's inner name, inside every
+     * open oven / forge window, and move them to your inventory or the container window picked with key cd.
+     */
+    void serveCollect(ItemSet set) throws Exception
+    {
+        long destId;
+        long destRootId = -1;
+        if(set.collectComponent == null)
+        {
+            InventoryMetaItem inventory = Utils.getRootItem(WurmHelper.hud.getInventoryWindow().getInventoryListComponent());
+            if(inventory == null)
+            {
+                set.note("Could not read your inventory");
+                return;
+            }
+            destId = inventory.getId();
+        }
+        else
+        {
+            InventoryMetaItem root = Utils.getRootItem(set.collectComponent);
+            if(root == null)
+            {
+                set.note("The destination window was closed - open it again and set it with key " + Inputs.cd.name());
+                return;
+            }
+            destId = destRootId = root.getId();
+        }
+
+        List<NestedFill.Node> containers = NestedFill.findContainers(openContainerRoots(destRootId), set.hosts, set.nestedName);
+        if(containers.isEmpty())
+        {
+            set.note(String.format(
+                "No \"%s\" found in any open %s window (open the %s and open the bags in it)",
+                set.nestedName, String.join(" or ", set.hosts), String.join(" or ", set.hosts)
+            ));
+            return;
+        }
+
+        List<NestedFill.Move> moves = NestedFill.planCollect(containers, new ArrayList<>(set.itemNames), destId, set::recentlySent);
+        if(moves.isEmpty())
+        {
+            set.note("Nothing to collect in " + containers.size() + " container(s)");
+            return;
+        }
+        set.note("Collecting from " + containers.size() + " container(s): " + moves.size() + " transfer(s) this pass");
+
+        for(NestedFill.Move move: moves)
+        {
+            if(!isActive())
+                return;
+            waitOnPause();
+
+            set.markSent(move.sourceId, move.itemName);
+            long[] ids = new long[move.ids.size()];
+            for(int i = 0; i < ids.length; i++)
+                ids[i] = move.ids.get(i);
+            WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(move.dest, ids);
+        }
+    }
+
     /** One bulk entry -> N into dest, through the quantity question; false when the question never came. */
     private boolean sendBulk(long dest, long sourceId, int quantity) throws InterruptedException
     {
@@ -462,6 +571,10 @@ public class MultiItemMoverBot extends Bot
         volatile List<String> hosts = Arrays.asList("oven", "forge");
         volatile int perContainer = 1;
         volatile InventoryListComponent sourceComponent;
+        /** Collect mode: take the items out of the containers instead of filling them. */
+        volatile boolean collect;
+        /** Where collected items go (null = your inventory). */
+        volatile InventoryListComponent collectComponent;
         final Map<String, Long> sentAt = new java.util.concurrent.ConcurrentHashMap<>();
         private volatile String lastNote;
 
@@ -474,6 +587,8 @@ public class MultiItemMoverBot extends Bot
         {
             nestedName = null;
             sourceComponent = null;
+            collect = false;
+            collectComponent = null;
             sentAt.clear();
             lastNote = null;
         }
@@ -487,6 +602,36 @@ public class MultiItemMoverBot extends Bot
             sourceComponent = list;
             InventoryMetaItem root = Utils.getRootItem(list);
             Utils.feedback("New source is \"%s\"", root == null ? "?" : root.getBaseName());
+        }
+
+        void setCollectDestination()
+        {
+            WurmComponent window = Utils.getTargetComponent(c -> c instanceof ItemListWindow || c instanceof InventoryWindow);
+            if(window == null)
+            {
+                Utils.consolePrint("Hover a container window (or your inventory window) and press the key again");
+                return;
+            }
+            if(window instanceof InventoryWindow)
+            {
+                collectComponent = null;
+                Utils.feedback("Collected items go to your inventory");
+                return;
+            }
+            InventoryListComponent list = Utils.getInventoryForComponent(window);
+            if(list == null)
+                return;
+            collectComponent = list;
+            Utils.feedback("Collected items go to %s", describeCollectDestination());
+        }
+
+        String describeCollectDestination()
+        {
+            InventoryListComponent list = collectComponent;
+            if(list == null)
+                return "your inventory";
+            InventoryMetaItem root = Utils.getRootItem(list);
+            return root == null ? "a closed window" : "\"" + root.getBaseName() + "\"";
         }
 
         boolean recentlySent(long dest, String name)
@@ -580,6 +725,13 @@ public class MultiItemMoverBot extends Bot
         
         String describeTarget()
         {
+            if(isNested() && collect)
+            {
+                return String.format(
+                    "takes %s out of every \"%s\" in open %s windows, into %s",
+                    String.join(", ", itemNames), nestedName, String.join(" or ", hosts), describeCollectDestination()
+                );
+            }
             if(isNested())
             {
                 InventoryMetaItem src = sourceComponent == null ? null : Utils.getRootItem(sourceComponent);
@@ -655,6 +807,10 @@ public class MultiItemMoverBot extends Bot
             "taking the set's items from the source. For example: nt frying pan", "<container name>"),
         nh("Nested Hosts", "Words in the names of the windows that count as hosts. Default: oven, forge", "<names>"),
         pc("Per Container", "How many of each item go into every container (those holding fewer get topped up). Default 1", "<count>"),
+        co("Collect", "Switch the chosen nested set between filling the containers and collecting: collecting takes the " +
+            "set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd", ""),
+        cd("Collect Destination", "Where collected items go: hover a container window to use it, or your inventory window to go back " +
+            "to the inventory (the default)", ""),
         nc("Clear Nested", "Make the chosen set a plain set again (forgets the source and the nested target)", ""),
         ;
 
