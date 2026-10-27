@@ -221,6 +221,11 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
                 prefix = "";
         }
         pickData.addText(String.format("%s%d, %d", prefix, x, y));
+        // surface tiles only: the height of the corner at (x, y), measured from the water level (0)
+        if (section >= 0 && hud != null && hud.getWorld() != null && hud.getWorld().getNearTerrainBuffer() != null) {
+            float h = hud.getWorld().getNearTerrainBuffer().getHeight(x, y);
+            pickData.addText(String.format("Corner height: %+.1f (%+d slopes) above water", h, Math.round(h * 10)));
+        }
     }
 
     @Override
