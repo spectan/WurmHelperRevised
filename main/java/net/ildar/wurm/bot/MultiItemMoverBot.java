@@ -396,10 +396,14 @@ public class MultiItemMoverBot extends Bot
      */
     void serveNested(ItemSet set) throws Exception
     {
+        // with its own collect items a set collects and fills in the same pass; otherwise collecting replaces filling
+        final boolean both = set.collect && !set.collectNames.isEmpty();
         if(set.collect)
         {
             serveCollect(set);
-            return;
+            // nothing to fill with (no items, or no source): this set only collects
+            if(!both || set.itemNames.isEmpty() || set.sourceComponent == null)
+                return;
         }
 
         InventoryMetaItem srcRoot = set.sourceComponent == null ? null : Utils.getRootItem(set.sourceComponent);
@@ -439,12 +443,18 @@ public class MultiItemMoverBot extends Bot
             sources.put(name, found);
         }
 
-        List<NestedFill.Move> moves = NestedFill.plan(containers, names, set.perContainer, sources, set::recentlySent);
+        // a container still holding the collected item is left alone until that has been taken out
+        final List<String> collectNames = both ? set.collectList() : Collections.<String>emptyList();
+        List<NestedFill.Move> moves = NestedFill.plan(containers, names, set.perContainer, sources, set::recentlySent,
+            c -> both && NestedFill.holdsAny(c, collectNames));
         if(moves.isEmpty())
         {
             set.note(containers.size() + " container(s) hold what they should");
             return;
         }
+        Map<Long, NestedFill.Node> containerById = new HashMap<>();
+        for(NestedFill.Node c: containers)
+            containerById.put(c.id(), c);
         set.note("Filling " + containers.size() + " container(s): " + moves.size() + " transfer(s) this pass");
 
         int unanswered = 0;
@@ -454,15 +464,28 @@ public class MultiItemMoverBot extends Bot
                 return;
             waitOnPause();
 
+            // the plan is a few seconds old by now (bulk transfers wait for their question): look at the
+            // container again, and send only what it still needs
+            int quantity = move.quantity;
+            NestedFill.Node container = containerById.get(move.dest);
+            if(container != null)
+            {
+                if(both && NestedFill.holdsAny(container, collectNames))
+                    continue;
+                quantity = Math.min(quantity, set.perContainer - NestedFill.count(container, move.itemName));
+                if(quantity <= 0)
+                    continue;
+            }
+
             set.markSent(move.dest, move.itemName);
             if(move.bulk)
             {
-                if(!sendBulk(move.dest, move.sourceId, move.quantity))
+                if(!sendBulk(move.dest, move.sourceId, quantity))
                     unanswered++;
             }
             else
             {
-                long[] ids = new long[move.ids.size()];
+                long[] ids = new long[Math.min(quantity, move.ids.size())];
                 for(int i = 0; i < ids.length; i++)
                     ids[i] = move.ids.get(i);
                 WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(move.dest, ids);
@@ -537,6 +560,9 @@ public class MultiItemMoverBot extends Bot
             return;
         }
 
+        Map<Long, NestedFill.Node> containerById = new HashMap<>();
+        for(NestedFill.Node c: containers)
+            containerById.put(c.id(), c);
         List<NestedFill.Move> moves = NestedFill.planCollect(containers, set.collectList(), destId, set::recentlySent);
         if(moves.isEmpty())
         {
@@ -551,10 +577,16 @@ public class MultiItemMoverBot extends Bot
                 return;
             waitOnPause();
 
+            // only what is still in the container: it may have been emptied since the plan was made
+            NestedFill.Node container = containerById.get(move.sourceId);
+            List<Long> present = container == null ? move.ids : NestedFill.stillInside(container, move.ids);
+            if(present.isEmpty())
+                continue;
+
             set.markSent(move.sourceId, move.itemName);
-            long[] ids = new long[move.ids.size()];
+            long[] ids = new long[present.size()];
             for(int i = 0; i < ids.length; i++)
-                ids[i] = move.ids.get(i);
+                ids[i] = present.get(i);
             WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(move.dest, ids);
         }
     }
@@ -844,7 +876,8 @@ public class MultiItemMoverBot extends Bot
         nh("Nested Hosts", "Words in the names of the windows that count as hosts. Default: oven, forge", "<names>"),
         pc("Per Container", "How many of each item go into every container (those holding fewer get topped up). Default 1", "<count>"),
         co("Collect", "Switch the chosen nested set between filling the containers and collecting: collecting takes the " +
-            "set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd", ""),
+            "set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd. " +
+            "With collect items set (ci) the set fills and collects at the same time, and does not fill a container that still holds them", ""),
         ci("Collect Items", "Names of the items collect mode takes out of the containers, separated by commas (e.g. pizza), when " +
             "they differ from the set's own items. Without names, collecting takes the set's own items again", "[<item names>]"),
         cd("Collect Destination", "Where collected items go: hover a container window to use it, or your inventory window to go back " +

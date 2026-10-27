@@ -248,6 +248,37 @@ public class NestedFillTest {
     }
 
     @Test
+    public void aBlockedContainerIsNotFilled() {
+        N holdsPizza = pan(item("pizza"));
+        N empty = pan();
+        N meat = item("meat");
+        Map<String, List<NestedFill.Node>> sources = new HashMap<>();
+        sources.put("meat", Arrays.<NestedFill.Node>asList(meat, item("meat")));
+
+        List<NestedFill.Move> moves = NestedFill.plan(Arrays.<NestedFill.Node>asList(holdsPizza, empty),
+                Collections.singletonList("meat"), 1, sources, (id, name) -> false,
+                c -> NestedFill.holdsAny(c, Collections.singletonList("pizza")));
+
+        assertEquals(1, moves.size());
+        assertEquals(empty.id, moves.get(0).dest);
+    }
+
+    @Test
+    public void holdsAnyIsCaseInsensitiveAndFalseForAnEmptyContainer() {
+        assertTrue(NestedFill.holdsAny(pan(item("Pizza slice")), Collections.singletonList("pizza")));
+        assertTrue(!NestedFill.holdsAny(pan(), Collections.singletonList("pizza")));
+        assertTrue(!NestedFill.holdsAny(pan(item("meat")), Collections.singletonList("pizza")));
+    }
+
+    @Test
+    public void stillInsideKeepsOnlyTheItemsThatAreStillThere() {
+        N one = item("meal"), two = item("meal");
+        N a = pan(one);
+
+        assertEquals(Collections.singletonList(one.id), NestedFill.stillInside(a, Arrays.asList(one.id, two.id)));
+    }
+
+    @Test
     public void collectWithNothingToTakeIsNoMoves() {
         assertTrue(NestedFill.planCollect(Collections.<NestedFill.Node>singletonList(pan(item("corn"))),
                 Collections.singletonList("meal"), 5L, (id, name) -> false).isEmpty());

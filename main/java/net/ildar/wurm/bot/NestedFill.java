@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 
 /**
@@ -134,6 +135,42 @@ final class NestedFill {
         return n;
     }
 
+    /** True when the container holds an item named like one of the names. */
+    static boolean holdsAny(Node container, List<String> names) {
+        List<Node> kids = container.children();
+        if (kids == null) {
+            return false;
+        }
+        for (String name : names) {
+            String word = name.toLowerCase(Locale.ROOT);
+            for (Node k : kids) {
+                if (nameHas(k, word)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Of these ids, the ones still inside the container (what a planned collect can still take). */
+    static List<Long> stillInside(Node container, List<Long> ids) {
+        List<Long> out = new ArrayList<>();
+        List<Node> kids = container.children();
+        if (kids == null) {
+            return out;
+        }
+        Set<Long> present = new HashSet<>();
+        for (Node k : kids) {
+            present.add(k.id());
+        }
+        for (Long id : ids) {
+            if (present.contains(id)) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
     /**
      * The moves that bring every container up to {@code perContainer} of each named item, taking from
      * {@code sources} (item name -> the source entries named like it) until they run out. {@code skip} leaves out
@@ -141,10 +178,20 @@ final class NestedFill {
      */
     static List<Move> plan(List<Node> containers, List<String> itemNames, int perContainer,
                            Map<String, List<Node>> sources, BiPredicate<Long, String> skip) {
+        return plan(containers, itemNames, perContainer, sources, skip, c -> false);
+    }
+
+    /** As above, but a container that {@code blocked} accepts is not filled at all. */
+    static List<Move> plan(List<Node> containers, List<String> itemNames, int perContainer,
+                           Map<String, List<Node>> sources, BiPredicate<Long, String> skip,
+                           Predicate<Node> blocked) {
         List<Move> moves = new ArrayList<>();
         Map<Long, Integer> bulkLeft = new HashMap<>();
         Set<Long> used = new HashSet<>();
         for (Node c : containers) {
+            if (blocked.test(c)) {
+                continue;
+            }
             for (String name : itemNames) {
                 if (skip.test(c.id(), name)) {
                     continue;

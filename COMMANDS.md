@@ -366,7 +366,7 @@ is turned on. See the README for the general usage.
 | `cd` | Collect Destination | Where collected items go: hover a container window to use it, or your inventory window to go back to the inventory (the default) |
 | `ci [<item names>]` | Collect Items | Names of the items collect mode takes out of the containers, separated by commas (e.g. pizza), when they differ from the set's own items. Without names, collecting takes the set's own items again |
 | `clear` | Clear Items | Clear list of items in chosen set |
-| `co` | Collect | Switch the chosen nested set between filling the containers and collecting: collecting takes the set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd |
+| `co` | Collect | Switch the chosen nested set between filling the containers and collecting: collecting takes the set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd. With collect items set (ci) the set fills and collects at the same time, and does not fill a container that still holds them |
 | `fl` | First Level Only | Toggle moving of only top-level items |
 | `isc <index>` | Select Set | Choose item set to operate on |
 | `isd` | Delete Set | Delete current item set |
