@@ -1,6 +1,7 @@
 package net.ildar.wurm.bot;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,8 +53,13 @@ public class SellerBot extends Bot
             while(isActive() && (items.size() == 0 || targetToken < 0 || getProgress() > 0))
                 sleep(1000);
             if(!isActive()) break;
-            
+            // the bot may have been paused while it waited above
+            waitOnPause();
+            if(!isActive()) break;
+
             toSell.clear();
+            // an item matching several entries (e.g. "gem" and "ruby") is sold once
+            Set<Long> queuedIds = new HashSet<>();
             for(String itemName: items)
             {
                 List<InventoryMetaItem> matches = Utils.getInventoryItems(itemName);
@@ -61,10 +67,16 @@ public class SellerBot extends Bot
                 matches:
                 for(InventoryMetaItem item: matches)
                 {
+                    String baseName = item.getBaseName().toLowerCase();
+                    String displayName = item.getDisplayName().toLowerCase();
                     for(String blacklistName: blacklist)
-                        if(item.getBaseName().contains(blacklistName))
+                    {
+                        String blocked = blacklistName.toLowerCase();
+                        if(baseName.contains(blocked) || displayName.contains(blocked))
                             continue matches;
-                    toSell.add(item);
+                    }
+                    if(queuedIds.add(item.getId()))
+                        toSell.add(item);
                 }
             }
             

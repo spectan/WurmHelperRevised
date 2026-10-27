@@ -19,6 +19,7 @@ public class GroundItemGetterBot extends Bot {
     private final Set <String> itemNames = ConcurrentHashMap.newKeySet();
     private final Set<Long> pendingItemIds = ConcurrentHashMap.newKeySet();
     private volatile float distance = 4;
+    private long lastPendingReset;
 
     public GroundItemGetterBot() {
         registerInputHandler(GroundItemGetterBot.InputKey.a, this::addNewItemName);
@@ -45,6 +46,11 @@ public class GroundItemGetterBot extends Bot {
                     try {
                         Map<Long, GroundItemCellRenderable> groundItemsSnapshot = new HashMap<>(groundItems);
                         pendingItemIds.retainAll(groundItemsSnapshot.keySet());
+                        // a TAKE that failed (inventory full, too heavy) is tried again after a while
+                        if (System.currentTimeMillis() - lastPendingReset > 15000) {
+                            pendingItemIds.clear();
+                            lastPendingReset = System.currentTimeMillis();
+                        }
                         int maxActions = Utils.getMaxActionNumber();
                         int sentActions = 0;
                         for (Map.Entry<Long, GroundItemCellRenderable> entry : groundItemsSnapshot.entrySet()) {

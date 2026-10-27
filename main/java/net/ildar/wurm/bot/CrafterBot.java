@@ -367,15 +367,15 @@ public class CrafterBot extends Bot {
     }
 
     private void setTargetXY() {
-        targetX = WurmHelper.hud.getWorld().getClient().getXMouse();
-        targetY = WurmHelper.hud.getWorld().getClient().getYMouse();
+        targetX = Utils.getGuiMouseX();
+        targetY = Utils.getGuiMouseY();
         targetName = null;
         Utils.feedback("The target was set to X - " + targetX + " Y - " + targetY + " (" + describeItemsAtPoint(targetX, targetY) + ")");
     }
 
     private void setSourceXY() {
-        sourceX = WurmHelper.hud.getWorld().getClient().getXMouse();
-        sourceY = WurmHelper.hud.getWorld().getClient().getYMouse();
+        sourceX = Utils.getGuiMouseX();
+        sourceY = Utils.getGuiMouseY();
         sourceName = null;
         Utils.feedback("The source was set to X - " + sourceX + " Y - " + sourceY + " (" + describeItemsAtPoint(sourceX, sourceY) + ")");
     }

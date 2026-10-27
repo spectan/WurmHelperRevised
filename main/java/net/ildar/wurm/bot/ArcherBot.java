@@ -24,6 +24,8 @@ import java.util.Map;
 public class ArcherBot extends Bot {
     private volatile boolean stringBreaks;
     private volatile boolean restringPending;
+    private long restringSentAt;
+    private boolean noStringWarned;
 
     private InventoryMetaItem bow;
 
@@ -73,12 +75,24 @@ public class ArcherBot extends Bot {
             waitOnPause();
             if (canDoWork(staminaThreshold) && creationWindow.getActionInUse() == 0) {
                 boolean restrung = false;
+                // the confirmation message may never arrive; try again after a while
+                if (restringPending && System.currentTimeMillis() - restringSentAt > 30000)
+                    restringPending = false;
                 if (stringBreaks && !restringPending) {
                         InventoryMetaItem bowstring = Utils.getInventoryItem("bow string");
                         if (bowstring != null) {
                             WurmHelper.hud.getWorld().getServerConnection().sendAction(bowstring.getId(),
                                     new long[]{bow.getId()}, new PlayerAction("",(short) 132, PlayerAction.ANYTHING));//change bowstring
                             restringPending = true;
+                            restringSentAt = System.currentTimeMillis();
+                            noStringWarned = false;
+                            restrung = true;
+                        } else {
+                            // shooting with a broken string does nothing, so wait for one
+                            if (!noStringWarned) {
+                                Utils.consolePrint("The bow string broke and there is no bow string in the inventory!");
+                                noStringWarned = true;
+                            }
                             restrung = true;
                         }
                 }

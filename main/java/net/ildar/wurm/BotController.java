@@ -10,7 +10,7 @@ public class BotController {
     private List<BotRegistration> botList;
     private List<Bot> activeBots = new ArrayList<>();
     // bots configured while off; started (and moved to activeBots) by "bot X on"
-    private final Map<Class<? extends Bot>, Bot> stagedBots = new HashMap<>();
+    private final Map<Class<? extends Bot>, Bot> stagedBots = new java.util.concurrent.ConcurrentHashMap<>();
     // bots paused by the global "bot pause", so the global resume leaves individually paused bots alone
     private final Set<Bot> globallyPaused = new HashSet<>();
     private boolean gPaused = false;
@@ -167,6 +167,10 @@ public class BotController {
         } else {
             Utils.feedback("Stopped: " + String.join(", ", stopped));
         }
+        // a bot that was left running (RMI) must not stay paused with no record of it
+        for (Bot bot : new ArrayList<>(globallyPaused))
+            if (activeBots.contains(bot))
+                bot.setResumed();
         gPaused = false;
         globallyPaused.clear();
     }

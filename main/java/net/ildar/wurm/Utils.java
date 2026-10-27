@@ -7,6 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -17,6 +18,8 @@ import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
+import uiscale.UiScale;
+
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
@@ -24,6 +27,7 @@ import javax.sound.sampled.LineEvent;
 
 import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 
+import com.wurmonline.client.WurmClientBase;
 import com.wurmonline.client.comm.ServerConnectionListenerClass;
 import com.wurmonline.client.game.PlayerObj;
 import com.wurmonline.client.game.SkillLogicSet;
@@ -120,17 +124,20 @@ public class Utils {
         Field result = classFields.get(field);
         if (result == null) {
             result = ReflectionUtil.getField(cls, field);
+            // made accessible once: the cached Field is shared by every thread, so it must not be toggled per access
+            result.setAccessible(true);
             classFields.put(field, result);
         }
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     public static <Cls, Ret> Ret getField(Cls what, String field) throws IllegalAccessException, NoSuchFieldException {
-        return ReflectionUtil.getPrivateField(what, lookupField(what.getClass(), field));
+        return (Ret) lookupField(what.getClass(), field).get(what);
     }
-    
+
     public static <Cls, Val> void setField(Cls what, String field, Val value) throws IllegalAccessException, NoSuchFieldException {
-        ReflectionUtil.setPrivateField(what, lookupField(what.getClass(), field), value);
+        lookupField(what.getClass(), field).set(what, value);
     }
 
     /**
@@ -412,14 +419,19 @@ public class Utils {
      * part must be present in the display name. This handles parenthetical
      * modifiers like "lump (glowing), iron".
      */
-    private static boolean displayNameMatches(InventoryMetaItem item, String itemName) {
+    public static boolean displayNameMatches(InventoryMetaItem item, String itemName) {
         if (!itemName.contains("'")) return false;
         String stripped = itemName.replaceAll("'", "");
         String displayName = item.getDisplayName();
+        boolean anyPart = false;
         for (String part : stripped.split(",")) {
-            if (!displayName.contains(part.trim())) return false;
+            part = part.trim();
+            // an empty part (from "''" or "a,,b") would match every item
+            if (part.isEmpty()) continue;
+            anyPart = true;
+            if (!displayName.contains(part)) return false;
         }
-        return true;
+        return anyPart;
     }
 
     /**
@@ -495,7 +507,7 @@ public class Utils {
                 Object lineItem = getField(hoveredNode, "item");
                 InventoryMetaItem item = getField(lineItem, "item");
                 boolean isContainer = getField(lineItem, "isContainer");
-                if (childLines.size() == 0 || isContainer)
+                if (item != null && (childLines.size() == 0 || isContainer))
                     itemList.add(item);
             }
         } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException | InvocationTargetException e) {
@@ -561,6 +573,8 @@ public class Utils {
     }
 
     public static InventoryMetaItem getRootItem(InventoryListComponent ilc) {
+        if (ilc == null)
+            return null;
         try {
             Object listRootItem = getField(ilc, "rootItem");
             return getField(listRootItem, "item");
@@ -570,15 +584,82 @@ public class Utils {
         return null;
     }
 
+    /**
+     * Mouse position in the interface's own coordinates. With the UI scale module active the windows live in
+     * scaled coordinates while the client reports raw screen pixels; without it the two are the same.
+     * Use this, not the client's getXMouse, for anything that looks up windows or command targets.
+     */
+    public static int getGuiMouseX() {
+        WurmClientBase client = WurmHelper.hud.getWorld().getClient();
+        try {
+            return UiScale.guiMouseX(client);
+        } catch (Throwable t) {
+            return client.getXMouse();
+        }
+    }
+
+    public static int getGuiMouseY() {
+        WurmClientBase client = WurmHelper.hud.getWorld().getClient();
+        try {
+            return UiScale.guiMouseY(client);
+        } catch (Throwable t) {
+            return client.getYMouse();
+        }
+    }
+
     public static WurmComponent getTargetComponent(Predicate<WurmComponent> filter) {
-        final int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-        final int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+        final int x = Utils.getGuiMouseX();
+        final int y = Utils.getGuiMouseY();
         return getComponentAtPoint(x, y, filter);
     }
     
+    /**
+     * A copy of the HUD's current component list. The list cached in WurmHelper is only refreshed by a few hooks,
+     * so it can miss windows that were opened or raised some other way. Falls back to the cache.
+     */
+    public static List<WurmComponent> getLiveComponents() {
+        if (WurmHelper.hud != null) {
+            for (int attempt = 0; attempt < 3; attempt++) {
+                try {
+                    List<WurmComponent> live = getField(WurmHelper.hud, "components");
+                    if (live != null)
+                        return new ArrayList<>(live);
+                } catch (ConcurrentModificationException e) {
+                    // the render thread changed the list mid-copy, try again
+                } catch (IllegalAccessException | NoSuchFieldException e) {
+                    break;
+                }
+            }
+        }
+        return WurmHelper.getInstance().components;
+    }
+
+    /**
+     * Describe every window under the mouse cursor, topmost first, for failure messages
+     */
+    public static String describeComponentsAtMouse() {
+        try {
+            int x = Utils.getGuiMouseX();
+            int y = Utils.getGuiMouseY();
+            List<WurmComponent> components = getLiveComponents();
+            StringBuilder sb = new StringBuilder("mouse=(" + x + "," + y + "), " +
+                    (components == null ? 0 : components.size()) + " windows, under cursor: ");
+            boolean any = false;
+            if (components != null)
+                for (int i = components.size() - 1; i >= 0; i--)
+                    if (components.get(i).contains(x, y)) {
+                        sb.append(any ? ", " : "").append(components.get(i).getClass().getSimpleName());
+                        any = true;
+                    }
+            return any ? sb.toString() : sb.append("none").toString();
+        } catch (Exception e) {
+            return "can't describe windows - " + e;
+        }
+    }
+
     public static WurmComponent getComponentAtPoint(int x, int y, Predicate<WurmComponent> filter) {
         try {
-            List<WurmComponent> components = WurmHelper.getInstance().components;
+            List<WurmComponent> components = getLiveComponents();
             if (components == null)
                 return null;
             for (int i = components.size() - 1; i >= 0; i--) {
@@ -619,8 +700,8 @@ public class Utils {
     }
     
     public static InventoryListComponent getTargetInventory() {
-        final int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-        final int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+        final int x = Utils.getGuiMouseX();
+        final int y = Utils.getGuiMouseY();
         return getInventoryAtPoint(x, y);
     }
     
@@ -671,6 +752,8 @@ public class Utils {
         try {
             PaperDollSlot equippedWeightItem = getField(paperDollInventory, "equippedWeightItem");
             InventoryMetaItem inventoryItem = getField(paperDollInventory, "inventoryItem");
+            if (equippedWeightItem == null || inventoryItem == null)
+                return 0; // the inventory has not been received yet
             return equippedWeightItem.getWeight() + inventoryItem.getWeight();
         } catch (IllegalAccessException | NoSuchFieldException e) {
             e.printStackTrace();

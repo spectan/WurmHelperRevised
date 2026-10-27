@@ -21,10 +21,16 @@ public class Chat {
 
     public static void  onMessage(String context, Object input, boolean silent) {
         String message;
-        if (input instanceof List) {
-            message = pruneMulticolorString((List<MulticolorLineSegment>) input);
-        } else
-            message = (String)input;
+        try {
+            if (input instanceof List) {
+                message = pruneMulticolorString((List<MulticolorLineSegment>) input);
+            } else
+                message = (String)input;
+        } catch (ClassCastException e) {
+            return;
+        }
+        // never let a malformed message throw back into the client's chat code
+        if (message == null) return;
         String messageWithoutTime = message.length() > 11 ? message.substring(11).trim() : message.trim();
         if (messageWithoutTime.isEmpty()) return;
         for (MessageProcessor mp : messageProcessors) {
@@ -39,12 +45,8 @@ public class Chat {
                 Utils.consolePrint("Chat message processor failed:\n%s", sw.toString());
             }
         }
-        switch (context) {
-            case ":Combat":
-                if (input instanceof List)
-                    modifyCombatMessage((List<MulticolorLineSegment>) input);
-                break;
-        }
+        if (":Combat".equals(context) && input instanceof List)
+            modifyCombatMessage((List<MulticolorLineSegment>) input);
     }
 
     private static String pruneMulticolorString(List<MulticolorLineSegment> multicolorString) {

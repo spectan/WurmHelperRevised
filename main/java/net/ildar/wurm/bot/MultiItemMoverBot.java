@@ -50,6 +50,7 @@ public class MultiItemMoverBot extends Bot
         registerInputHandler(Inputs.nc, input -> clearNested());
         registerInputHandler(Inputs.co, input -> toggleCollect());
         registerInputHandler(Inputs.cd, input -> setCollectDestination());
+        registerInputHandler(Inputs.ci, this::setCollectItems);
     }
 
     @Override
@@ -64,7 +65,8 @@ public class MultiItemMoverBot extends Bot
             List<InventoryMetaItem> inventoryItems;
             for(ItemSet set: itemSets)
             {
-                if(set.itemNames.size() == 0)
+                // a collecting set can have its own list of items to take out
+                if(set.itemNames.size() == 0 && !(set.collect && !set.collectNames.isEmpty()))
                     continue;
 
                 if(set.isNested())
@@ -85,7 +87,7 @@ public class MultiItemMoverBot extends Bot
                     if(item.getRarity() != 0) continue;
                     
                     for(String matchName: set.itemNames)
-                        if(item.getBaseName().contains(matchName))
+                        if(item.getBaseName().toLowerCase().contains(matchName.toLowerCase()))
                         {
                             toMove.add(item);
                             break;
@@ -331,6 +333,24 @@ public class MultiItemMoverBot extends Bot
         );
     }
 
+    void setCollectItems(String[] args)
+    {
+        if(itemSets.size() == 0 || selectedSet == -1)
+        {
+            Utils.consolePrint("Don't have any item sets (or somehow none selected)");
+            return;
+        }
+        ItemSet set = itemSets.get(selectedSet);
+        List<String> names = parseNameList(args);
+        set.collectNames.clear();
+        set.collectNames.addAll(names);
+        set.sentAt.clear();
+        if(names.isEmpty())
+            Utils.feedback("Set %d collects its own items again: %s", selectedSet, String.join(", ", set.itemNames));
+        else
+            Utils.feedback("Set %d collects: %s", selectedSet, String.join(", ", names));
+    }
+
     void setCollectDestination()
     {
         if(itemSets.size() == 0 || selectedSet == -1)
@@ -456,7 +476,7 @@ public class MultiItemMoverBot extends Bot
     private List<NestedFill.Node> openContainerRoots(long exceptRootId)
     {
         List<NestedFill.Node> roots = new ArrayList<>();
-        List<WurmComponent> components = WurmHelper.getInstance().components;
+        List<WurmComponent> components = Utils.getLiveComponents();
         if(components != null)
             for(WurmComponent component: new ArrayList<>(components))
             {
@@ -517,7 +537,7 @@ public class MultiItemMoverBot extends Bot
             return;
         }
 
-        List<NestedFill.Move> moves = NestedFill.planCollect(containers, new ArrayList<>(set.itemNames), destId, set::recentlySent);
+        List<NestedFill.Move> moves = NestedFill.planCollect(containers, set.collectList(), destId, set::recentlySent);
         if(moves.isEmpty())
         {
             set.note("Nothing to collect in " + containers.size() + " container(s)");
@@ -545,6 +565,7 @@ public class MultiItemMoverBot extends Bot
         synchronized(BulkItemGetterBot.bulkLock)
         {
             BulkItemGetterBot.currentMoveQuantity = quantity;
+            BulkItemGetterBot.bulkBusy = false;
             BulkItemGetterBot.closeBMLWindow = true;
             WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(dest, new long[]{sourceId});
 
@@ -554,6 +575,12 @@ public class MultiItemMoverBot extends Bot
             if(BulkItemGetterBot.closeBMLWindow)
             {
                 BulkItemGetterBot.closeBMLWindow = false;
+                BulkItemGetterBot.currentMoveQuantity = -1;
+                return false;
+            }
+            // the flag was also cleared by an "already busy" reply, not by the question being answered
+            if(BulkItemGetterBot.bulkBusy)
+            {
                 BulkItemGetterBot.currentMoveQuantity = -1;
                 return false;
             }
@@ -578,6 +605,12 @@ public class MultiItemMoverBot extends Bot
         final Map<String, Long> sentAt = new java.util.concurrent.ConcurrentHashMap<>();
         private volatile String lastNote;
 
+        /** The names collect mode takes out of the containers. */
+        List<String> collectList()
+        {
+            return new ArrayList<>(collectNames.isEmpty() ? itemNames : collectNames);
+        }
+
         boolean isNested()
         {
             return nestedName != null;
@@ -589,6 +622,7 @@ public class MultiItemMoverBot extends Bot
             sourceComponent = null;
             collect = false;
             collectComponent = null;
+            collectNames.clear();
             sentAt.clear();
             lastNote = null;
         }
@@ -655,6 +689,8 @@ public class MultiItemMoverBot extends Bot
         }
 
         final Set<String> itemNames = ConcurrentHashMap.newKeySet();
+        /** What collect mode takes out; empty = the set's own items. */
+        final Set<String> collectNames = ConcurrentHashMap.newKeySet();
         boolean isRootTarget;
         volatile long target;
         volatile String targetName;
@@ -708,8 +744,8 @@ public class MultiItemMoverBot extends Bot
             }
             else
             {
-                int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-                int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+                int x = Utils.getGuiMouseX();
+                int y = Utils.getGuiMouseY();
                 long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
                 
                 if(targets != null && targets.length > 0)
@@ -729,7 +765,7 @@ public class MultiItemMoverBot extends Bot
             {
                 return String.format(
                     "takes %s out of every \"%s\" in open %s windows, into %s",
-                    String.join(", ", itemNames), nestedName, String.join(" or ", hosts), describeCollectDestination()
+                    String.join(", ", collectList()), nestedName, String.join(" or ", hosts), describeCollectDestination()
                 );
             }
             if(isNested())
@@ -809,6 +845,8 @@ public class MultiItemMoverBot extends Bot
         pc("Per Container", "How many of each item go into every container (those holding fewer get topped up). Default 1", "<count>"),
         co("Collect", "Switch the chosen nested set between filling the containers and collecting: collecting takes the " +
             "set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd", ""),
+        ci("Collect Items", "Names of the items collect mode takes out of the containers, separated by commas (e.g. pizza), when " +
+            "they differ from the set's own items. Without names, collecting takes the set's own items again", "[<item names>]"),
         cd("Collect Destination", "Where collected items go: hover a container window to use it, or your inventory window to go back " +
             "to the inventory (the default)", ""),
         nc("Clear Nested", "Make the chosen set a plain set again (forgets the source and the nested target)", ""),

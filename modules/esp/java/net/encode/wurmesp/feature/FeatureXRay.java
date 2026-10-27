@@ -16,7 +16,8 @@ extends Feature {
         if (!this.world.isOwnBodyAdded()) {
             return;
         }
-        WurmEspMod._terrain.clear();
+        // built off to the side and swapped in whole, so the renderer never sees a half-filled list
+        java.util.List<float[]> built = new java.util.ArrayList<>();
         WurmEspMod._caveBuffer = this.world.getCaveBuffer();
         PlayerPosition pos = this.world.getPlayer().getPos();
         int px = pos.getTileX();
@@ -43,7 +44,7 @@ extends Feature {
                     float y0 = curY + 0.2f;
                     float x1 = nextX - 0.2f;
                     float y1 = nextY - 0.2f;
-                    WurmEspMod._terrain.add(new float[]{x0, y0, x1, y1, colorF[0], colorF[1], colorF[2]});
+                    built.add(new float[]{x0, y0, x1, y1, colorF[0], colorF[1], colorF[2]});
                     continue;
                 }
                 catch (IllegalArgumentException | SecurityException ex) {
@@ -51,6 +52,7 @@ extends Feature {
                 }
             }
         }
+        WurmEspMod._terrain = new java.util.concurrent.CopyOnWriteArrayList<>(built);
     }
 
     @Override
@@ -81,7 +83,7 @@ extends Feature {
 					x0, z0, y1 };
 			
 			int[] indexdata = new int[] { 0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7 };
-            RenderUtils.renderPrimitiveLines(8, vertexdata, indexdata, this.queuePick, color);
+            RenderUtils.renderPrimitiveLines(t, 8, vertexdata, indexdata, this.queuePick, color);
         });
     }
 }

@@ -136,7 +136,7 @@ public class DevInfoCommandHandler {
             Utils.consolePrint("Null item");
             return;
         }
-        Utils.consolePrint("Item - \"" + item.getBaseName() + " with id " + item.getId());
+        Utils.consolePrint("Item - \"" + item.getBaseName() + "\" with id " + item.getId());
         Utils.consolePrint(" QL:" + String.format("%.2f", item.getQuality()) + " DMG:" + String.format("%.2f", item.getDamage()) + " Weight:" + item.getWeight());
         Utils.consolePrint(" Rarity:" + item.getRarity() + " Color:" + String.format("(%d,%d,%d)", (int)(item.getR()*255), (int)(item.getG()*255), (int)(item.getB()*255)));
         List<InventoryMetaItem> children = item.getChildren();

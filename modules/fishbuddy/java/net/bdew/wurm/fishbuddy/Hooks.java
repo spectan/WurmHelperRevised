@@ -20,6 +20,11 @@ public class Hooks {
     private static HeadsUpDisplay hud;
     private static FishBuddyWindow window;
 
+    // the hooks are compiled in before the window exists (and stay if the module fails to start)
+    private static boolean isWindowActive() {
+        return window != null && window.isActive();
+    }
+
     private static long fishTool = -10L;
     private static long fishTarget = -10L;
     private static long lastSentAction = Long.MIN_VALUE;
@@ -44,7 +49,7 @@ public class Hooks {
     }
 
     public static void startFishing(FishingSystem.Mode type, float minRadius, float maxRadius, byte rodType, byte rodMaterial, byte reelType, byte reelMaterial, byte floatType, byte baitType, boolean auto) {
-        if (!window.isActive()) return;
+        if (!isWindowActive()) return;
 
         mode = type;
 
@@ -71,7 +76,7 @@ public class Hooks {
     }
 
     public static void setFishBiting(long playerId, boolean hooked, byte fishType, long fishId) {
-        if (!window.isActive()) return;
+        if (!isWindowActive()) return;
         if (playerId == -1) {
             if (hooked) {
                 window.setText(2, "Status: Fish biting!");
@@ -94,16 +99,16 @@ public class Hooks {
     }
 
     public static void setFishHooked(long playerId) {
-        if (window.isActive() && playerId == -1) window.setText(2, "Status: Fish hooked, pray to RNGesus!");
+        if (isWindowActive() && playerId == -1) window.setText(2, "Status: Fish hooked, pray to RNGesus!");
     }
 
     public static void cancelFishing(long playerId) {
-        if (window.isActive() && playerId == -1 && lastSentAction + ACTION_DELAY < System.currentTimeMillis())
+        if (isWindowActive() && playerId == -1 && lastSentAction + ACTION_DELAY < System.currentTimeMillis())
             restartFishing();
     }
 
     public static void textMessage(String title, float r, float g, float b, String message, byte onScreenType) {
-        if (!window.isActive()) return;
+        if (!isWindowActive()) return;
         if (title.equals(":Event")) {
             if (message.equals("You cast the line and start fishing.")) {
                 window.setText(2, "Waiting for fish...");
@@ -118,9 +123,9 @@ public class Hooks {
     }
 
     public static void sendAction(long source, long[] targets, PlayerAction action) {
-        if (action.getId() == PlayerAction.CMD_FISH && targets.length == 1) {
+        if (window != null && action.getId() == PlayerAction.CMD_FISH && targets.length == 1) {
             if (window.isVisible()) {
-                if (!window.isActive()) return;
+                if (!isWindowActive()) return;
             } else {
                 window.show();
                 window.setActive(true);
@@ -134,7 +139,7 @@ public class Hooks {
     }
 
     public static void updateInventoryItem(long id, float damage) {
-        if (window.isActive() && fishTool == id)
+        if (isWindowActive() && fishTool == id)
             needsRepair = damage > 1f;
     }
 

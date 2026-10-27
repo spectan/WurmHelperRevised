@@ -214,6 +214,8 @@ public class AssistantBot extends Bot {
                         successfullCastStart = false;
                         int counter = 0;
                         while (casting && !successfullCastStart && counter++ < 50 && favor > spellToCast.favorCap) {
+                            // a pause cancels the action, so its answer never comes: stop waiting and start over after the pause
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullCastStart counter=" + counter);
                             serverConnection.sendAction(statuetteId, new long[]{bodyId}, spellToCast.playerAction);
                             favor = player.getSkillSet().getSkillValue("favor");
@@ -221,6 +223,7 @@ public class AssistantBot extends Bot {
                         }
                         counter = 0;
                         while (casting && !successfullCasting && counter++ < 100 && favor > spellToCast.favorCap) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullCasting counter=" + counter);
                             sleep(2000);
                         }
@@ -231,19 +234,24 @@ public class AssistantBot extends Bot {
                         successfullCasting = false;
                         successfullCastStart = false;
                         needWaitWov = false;
+                        boolean interrupted = false;
                         int counter = 0;
                         while (wovCasting && !successfullCastStart && counter++ < 50 && !needWaitWov) {
+                            if (getPaused()) { waitOnPause(); interrupted = true; break; }
                             if (verbose) Utils.consolePrint("successfullCastStart counter=" + counter);
                             serverConnection.sendAction(statuetteId, new long[]{bodyId}, PlayerAction.WISDOM_OF_VYNORA);
                             sleep(500);
                         }
                         counter = 0;
-                        while (wovCasting && !successfullCasting && counter++ < 100 && !needWaitWov) {
+                        while (wovCasting && !successfullCasting && counter++ < 100 && !needWaitWov && !interrupted) {
+                            if (getPaused()) { waitOnPause(); interrupted = true; break; }
                             if (verbose) Utils.consolePrint("successfullCasting counter=" + counter);
                             sleep(2000);
                         }
-                        if (needWaitWov)
-                            lastWOV = lastWOV + 20000;
+                        if (interrupted)
+                            lastWOV = 0; // the cast never finished: cast again after the pause
+                        else if (needWaitWov)
+                            lastWOV = System.currentTimeMillis() - 1810000 + 20000; // try again in 20 seconds
                         else
                             lastWOV = System.currentTimeMillis();
                     }
@@ -255,12 +263,14 @@ public class AssistantBot extends Bot {
                         successfullDrinkingStart = false;
                         int counter = 0;
                         while (drinking && !successfullDrinkingStart && counter++ < 50) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullDrinkingStart counter=" + counter);
                             WurmHelper.hud.sendAction(new PlayerAction("",(short) 183, PlayerAction.ANYTHING), waterId);
                             sleep(500);
                         }
                         counter = 0;
                         while (drinking && !successfullDrinking && counter++ < 100) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullDrinking counter=" + counter);
                             sleep(2000);
                         }
@@ -273,12 +283,14 @@ public class AssistantBot extends Bot {
                         successfullEatingStart = false;
                         int counter = 0;
                         while (eating && !successfullEatingStart && counter++ < 50) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullEatingStart counter=" + counter);
                             WurmHelper.hud.sendAction(new PlayerAction("",(short) 182, PlayerAction.ANYTHING), foodId);
                             sleep(500);
                         }
                         counter = 0;
                         while (eating && !successfullEating && counter++ < 100) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullEating counter=" + counter);
                             sleep(2000);
                         }
@@ -297,8 +309,11 @@ public class AssistantBot extends Bot {
 
                     successfullStartOfLockpicking = false;
                     lockpickingResult = -1;
+                    // an "is not locked" message from before this attempt must not skip the picking
+                    noLock = false;
                     int counter = 0;
                     while (lockpicking && !successfullStartOfLockpicking && counter++ < 50 && !noLock) {
+                        if (getPaused()) { waitOnPause(); break; }
                         if (verbose) Utils.consolePrint("successfullStartOfLockpicking counter=" + counter);
                         serverConnection.sendAction(lockpickId,
                                 new long[]{chestId}, new PlayerAction("",(short) 101, PlayerAction.ANYTHING));
@@ -310,6 +325,7 @@ public class AssistantBot extends Bot {
                     }
                     counter = 0;
                     while (lockpicking && lockpickingResult == -1 && counter++ < 100 && !noLock) {
+                        if (getPaused()) { waitOnPause(); break; }
                         if (verbose) Utils.consolePrint("lockpickingResult counter=" + counter);
                         sleep(2000);
                     }
@@ -327,16 +343,15 @@ public class AssistantBot extends Bot {
                         successfullLocking = false;
                         counter = 0;
                         while (lockpicking && !successfullLocking && counter++ < 50) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullLocking lockingcounter=" + counter);
                             serverConnection.sendAction(padlockId,
                                     new long[]{chestId}, new PlayerAction("",(short) 161, PlayerAction.ANYTHING));
                             sleep(500);
                         }
                     }
-                    if (noLock)
-                        noLock = false;
-                    else
-                        lastLockpicking = System.currentTimeMillis();
+                    noLock = false;
+                    lastLockpicking = System.currentTimeMillis();
                 }
                 if (trashCleaning) {
                     if (Math.abs(lastTrashCleaning - System.currentTimeMillis()) > trashCleaningTimeout) {
@@ -344,6 +359,7 @@ public class AssistantBot extends Bot {
                         successfullStartTrashCleaning = false;
                         int counter = 0;
                         while (trashCleaning && !successfullStartTrashCleaning && counter++ < 30) {
+                            if (getPaused()) { waitOnPause(); break; }
                             if (verbose) Utils.consolePrint("successfullStartTrashCleaning counter=" + counter);
                             WurmHelper.hud.sendAction(new PlayerAction("",(short) 954, PlayerAction.ANYTHING), trashBinId);
                             sleep(1000);
@@ -775,8 +791,8 @@ public class AssistantBot extends Bot {
      * @return the id of the object under the mouse cursor, or 0 when there is none
      */
     private long getTargetUnderMouse() {
-        int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-        int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+        int x = Utils.getGuiMouseX();
+        int y = Utils.getGuiMouseY();
         long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
         if (targets != null && targets.length > 0)
             return targets[0];
@@ -1218,17 +1234,22 @@ public class AssistantBot extends Bot {
             return;
         }
 
-        final int mouseX = WurmHelper.hud.getWorld().getClient().getXMouse();
-        final int mouseY = WurmHelper.hud.getWorld().getClient().getYMouse();
+        final int mouseX = Utils.getGuiMouseX();
+        final int mouseY = Utils.getGuiMouseY();
         InventoryListComponent inventory = Utils.getInventoryAtPoint(mouseX, mouseY);
         if(inventory == null) {
             Utils.consolePrint("Couldn't find any inventory under cursor");
         } else {
+            InventoryMetaItem rootItem = Utils.getRootItem(inventory);
+            if(rootItem == null) {
+                Utils.consolePrint("The inventory under cursor has no root item");
+                return;
+            }
             lumpHeatingInventory = inventory;
             Utils.feedback(
                 "%s will use %s to keep lumps heated",
                 AssistantBot.class.getSimpleName(),
-                Utils.getRootItem(inventory).getDisplayName()
+                rootItem.getDisplayName()
             );
         }
     }
@@ -1257,7 +1278,8 @@ public class AssistantBot extends Bot {
             ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
             Map<Long, GroundItemCellRenderable> groundItemsMap = Utils.getField(sscc, "groundItems");
             
-            for(GroundItemCellRenderable item: groundItemsMap.values()) {
+            // a snapshot: the client thread changes the map while we look
+            for(GroundItemCellRenderable item: new ArrayList<>(groundItemsMap.values())) {
                 GroundItemData data;
                 try {
                     data = Utils.getField(item, "item");

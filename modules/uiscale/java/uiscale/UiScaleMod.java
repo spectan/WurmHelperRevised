@@ -123,7 +123,9 @@ public class UiScaleMod implements WurmClientMod, Configurable, Initable {
             if (f >= min && f <= max) {
                 return f;
             }
-            Patcher.warn("uiscale: " + key + "=" + s.trim() + " is outside " + min + " to " + max + ", using " + def);
+            float clamped = Math.max(min, Math.min(max, f));
+            Patcher.warn("uiscale: " + key + "=" + s.trim() + " is outside " + min + " to " + max + ", using " + clamped);
+            return clamped;
         } catch (NumberFormatException e) {
             Patcher.warn("uiscale: " + key + "=" + s.trim() + " is not a number, using " + def);
         }

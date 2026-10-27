@@ -25,7 +25,7 @@ public class UtilityCommandHandler {
                 if (args != null && args.length == 1) {
                     try {
                         Thread.sleep(Long.parseLong(args[0]));
-                    } catch (NumberFormatException e) {
+                    } catch (IllegalArgumentException e) {
                         Utils.consolePrint("Bad value");
                     } catch (InterruptedException e) {
                         Utils.consolePrint("Interrupted");
@@ -53,8 +53,8 @@ public class UtilityCommandHandler {
                 "Copy the id of hovered object to the clipboard") {
             @Override
             public void handle(String[] args) {
-                int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-                int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+                int x = Utils.getGuiMouseX();
+                int y = Utils.getGuiMouseY();
                 long[] ids = WurmHelper.hud.getCommandTargetsFrom(x, y);
                 Long targetId = null;
                 if (ids != null && ids.length > 0) {
@@ -149,8 +149,8 @@ public class UtilityCommandHandler {
                     Utils.consolePrint("A player don't have " + action.toolName);
                     return;
                 }
-                int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-                int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+                int x = Utils.getGuiMouseX();
+                int y = Utils.getGuiMouseY();
                 long[] ids = WurmHelper.hud.getCommandTargetsFrom(x, y);
                 if (ids != null && ids.length > 0)
                     WurmHelper.hud.getWorld().getServerConnection().sendAction(toolItem.getId(), new long[]{ids[0]}, action.playerAction);
@@ -158,6 +158,8 @@ public class UtilityCommandHandler {
                     PickableUnit pickableUnit = WurmHelper.hud.getWorld().getCurrentHoveredObject();
                     if (pickableUnit != null)
                         WurmHelper.hud.getWorld().getServerConnection().sendAction(toolItem.getId(), new long[]{pickableUnit.getId()}, action.playerAction);
+                    else
+                        Utils.consolePrint("Hover the mouse over a target first");
                 }
             }
         });
@@ -209,7 +211,7 @@ public class UtilityCommandHandler {
             Utils.consolePrint("No items to move");
             return;
         }
-        List<WurmComponent> components = WurmHelper.getInstance().components;
+        List<WurmComponent> components = Utils.getLiveComponents();
         if (components == null) {
             Utils.consolePrint("Components list is empty!");
             return;
@@ -224,10 +226,8 @@ public class UtilityCommandHandler {
                     return;
                 }
                 InventoryMetaItem rootItem = Utils.getRootItem(altarIlc);
-                if (rootItem == null) {
-                    Utils.consolePrint("Internal error on moving items");
-                    return;
-                }
+                if (rootItem == null) // a window that is closing
+                    continue;
                 if (!rootItem.getBaseName().contains("altar of")) continue;
                 if (rootItem.getChildren() != null && rootItem.getChildren().size() > 0) {
                     Utils.showOnScreenMessage("An altar is not empty!");

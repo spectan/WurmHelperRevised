@@ -12,7 +12,12 @@ public class MovementCommandHandler {
             public void handle(String[] args) {
                 if (args != null && args.length == 1) {
                     try {
-                        Utils.movePlayer(Float.parseFloat(args[0]));
+                        float distance = Float.parseFloat(args[0]);
+                        if (Float.isNaN(distance) || Float.isInfinite(distance)) {
+                            printUsage("move");
+                            return;
+                        }
+                        Utils.movePlayer(distance);
                     } catch (NumberFormatException e) {
                         printUsage("move");
                     }

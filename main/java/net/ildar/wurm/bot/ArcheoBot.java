@@ -29,6 +29,7 @@ import net.ildar.wurm.annotations.BotInfo;
 	abbreviation = "ac"
 )
 public class ArcheoBot extends Bot {
+	private final java.util.Set<Long> unknownFragments = new java.util.HashSet<>();
 	static final int identifyChisel = 1201;
 	static final int identifyBrush = 882;
 
@@ -81,15 +82,24 @@ public class ArcheoBot extends Bot {
 
 	@Override
 	public void work() throws Exception {
-		try {
-			trowelId = Utils.locateToolItem("trowel").getId();
-			shovelId = Utils.locateToolItem("shovel").getId();
-			chiselId = Utils.locateToolItem("chisel").getId();
-			brushId = Utils.locateToolItem("metal brush").getId();
-		} catch(NullPointerException err) {
-			Utils.consolePrint("Missing required archaeology tools");
+		final String[] toolNames = {"trowel", "shovel", "chisel", "metal brush"};
+		final long[] toolIds = new long[toolNames.length];
+		final List<String> missingTools = new ArrayList<>();
+		for(int i = 0; i < toolNames.length; i++) {
+			InventoryMetaItem tool = Utils.locateToolItem(toolNames[i]);
+			if(tool == null)
+				missingTools.add(toolNames[i]);
+			else
+				toolIds[i] = tool.getId();
+		}
+		if(!missingTools.isEmpty()) {
+			Utils.consolePrint("Missing required archaeology tools: %s", String.join(", ", missingTools));
 			return;
 		}
+		trowelId = toolIds[0];
+		shovelId = toolIds[1];
+		chiselId = toolIds[2];
+		brushId = toolIds[3];
 
 		registerEventProcessor(
 			msg -> {
@@ -132,7 +142,8 @@ public class ArcheoBot extends Bot {
 							tilesToBeInvestigated.add(next);
 						}
 					
-					if(tilesToBeInvestigated.isEmpty()) {
+					// without an area tour there is nowhere to move on to; carry on so identifying and combining still run
+					if(tilesToBeInvestigated.isEmpty() && areaAssistant.areaTourActivated()) {
 						Thread.sleep(1000);
 						areaAssistant.areaNextPosition();
 						continue outer;
@@ -206,7 +217,9 @@ public class ArcheoBot extends Bot {
 						);
 						anyQueued = true;
 					} else {
-						Utils.consolePrint("Don't know how to identify fragment `%s`!", fragment.getDisplayName());
+						// once per fragment, not on every pass
+						if(unknownFragments.add(fragment.getId()))
+							Utils.consolePrint("Don't know how to identify fragment `%s`!", fragment.getDisplayName());
 						action--;
 					}
 				}

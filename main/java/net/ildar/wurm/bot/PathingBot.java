@@ -179,7 +179,7 @@ public class PathingBot extends Bot
 	{
 		if(walking || following || murdering || groomTask.running || shearTask.running)
 		{
-			Utils.consolePrint("Another task is already running - turn it off first");
+			Utils.consolePrint("Another task is already running - stop it first (use its key again)");
 			return false;
 		}
 		return true;
@@ -209,6 +209,14 @@ public class PathingBot extends Bot
 	volatile boolean walking = false;
 	void cmdWalkto(String[] args)
 	{
+		// the walk stops after the tile it is crossing: walkPath ends when the target it asks for changes
+		if(walking)
+		{
+			walking = false;
+			Utils.feedback("Stopping the walk");
+			return;
+		}
+
 		final Vec2i target;
 		if(args == null || args.length < 2)
 		{
@@ -253,11 +261,18 @@ public class PathingBot extends Bot
 		
 		if(!checkNoTasksRunning()) return;
 		walking = true;
+		try
+		{
 		
-		Utils.consolePrint("Pathfinding to %d,%d", target.x, target.y);
-		if(walkPath(() -> target) != WalkStatus.complete)
-			Utils.consolePrint("Couldn't find a path/interrupted");
-		walking = false;
+			Utils.consolePrint("Pathfinding to %d,%d", target.x, target.y);
+			final Vec2i stopped = new Vec2i(Integer.MIN_VALUE, Integer.MIN_VALUE);
+			if(walkPath(() -> walking ? target : stopped) != WalkStatus.complete)
+				Utils.consolePrint("Couldn't find a path/interrupted");
+		}
+		finally
+		{
+			walking = false;
+		}
 	}
 	
 	volatile boolean following = false;
@@ -291,64 +306,70 @@ public class PathingBot extends Bot
 		
 		followTargetName = name.toLowerCase();
 		following = true;
-		Utils.feedback("Following `%s`", name);
-		while(!exiting && following)
+		try
 		{
-			final String targetPlayerName = followTargetName;
-			CreatureCellRenderable _targetPlayer = null;
-			for(int i = 0; i < 10; i++)
+			Utils.feedback("Following `%s`", name);
+			while(!exiting && following)
 			{
-				_targetPlayer = Utils
-					.findCreatures((creature, data) ->
-						creature.getModelName().toString().contains(".player") &&
-						creature.getHoverName().toLowerCase().startsWith(targetPlayerName)
-					)
-					.stream()
-					.findFirst()
-					.orElse(null)
-				;
-				if(_targetPlayer != null) break;
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-			}
-			if(_targetPlayer == null)
-			{
-				Utils.consolePrint("Couldn't find any players with name `%s`", targetPlayerName);
-				break;
-			}
-			
-			final CreatureCellRenderable targetPlayer = _targetPlayer;
-			final Supplier<Vec2i> targetPos = () -> new Vec2i(
-				(int)(targetPlayer.getXPos() / 4f),
-				(int)(targetPlayer.getYPos() / 4f)
-			);
-			final Vec2i currentPos = targetPos.get();
-			if(currentPos.x == world.getPlayerCurrentTileX() && currentPos.y == world.getPlayerCurrentTileY())
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				continue;
-			}
-			
-			WalkStatus res = walkPath(targetPos);
-			if(res == WalkStatus.interrupted)
-				continue;
-			else if(res == WalkStatus.noPath)
-			{
-				try
+				final String targetPlayerName = followTargetName;
+				CreatureCellRenderable _targetPlayer = null;
+				for(int i = 0; i < 10; i++)
 				{
-					hud.addOnscreenMessage(
-						String.format("Couldn't find path to %s", targetPlayer.getHoverName()),
-						1f,
-						.5f,
-						0f,
-						(byte)1
-					);
-					ForkJoinPool.managedBlock(new SleepBlocker(5000));
+					_targetPlayer = Utils
+						.findCreatures((creature, data) ->
+							creature.getModelName().toString().contains(".player") &&
+							creature.getHoverName().toLowerCase().startsWith(targetPlayerName)
+						)
+						.stream()
+						.findFirst()
+						.orElse(null)
+					;
+					if(_targetPlayer != null) break;
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+				}
+				if(_targetPlayer == null)
+				{
+					Utils.consolePrint("Couldn't find any players with name `%s`", targetPlayerName);
+					break;
+				}
+			
+				final CreatureCellRenderable targetPlayer = _targetPlayer;
+				final Supplier<Vec2i> targetPos = () -> new Vec2i(
+					(int)(targetPlayer.getXPos() / 4f),
+					(int)(targetPlayer.getYPos() / 4f)
+				);
+				final Vec2i currentPos = targetPos.get();
+				if(currentPos.x == world.getPlayerCurrentTileX() && currentPos.y == world.getPlayerCurrentTileY())
+				{
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
 					continue;
 				}
-				catch(Exception err) { Utils.consolePrint("%s", err); }
+			
+				WalkStatus res = walkPath(targetPos);
+				if(res == WalkStatus.interrupted)
+					continue;
+				else if(res == WalkStatus.noPath)
+				{
+					try
+					{
+						hud.addOnscreenMessage(
+							String.format("Couldn't find path to %s", targetPlayer.getHoverName()),
+							1f,
+							.5f,
+							0f,
+							(byte)1
+						);
+						ForkJoinPool.managedBlock(new SleepBlocker(5000));
+						continue;
+					}
+					catch(Exception err) { Utils.consolePrint("%s", err); }
+				}
 			}
 		}
-		following = false;
+		finally
+		{
+			following = false;
+		}
 	}
 	
 	volatile boolean murdering = false;
@@ -372,147 +393,153 @@ public class PathingBot extends Bot
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
 
 		murdering = true;
-		HashSet<Long> ignoredCreatures = new HashSet<>();
-		List<CreatureCellRenderable> creatures;
-		TargetWindow targetWindow = Utils.rethrow(() -> Utils.getField(hud, "targetWindow"));
-		CreatureCellRenderable target = murderTarget = null;
-		outer: while(!exiting && murdering)
+		try
 		{
-			if(!waitOnPauseFJ()) break;
-			long targetId = -1;
-			while(murdering && target != null && (targetId = Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId"))) > 0)
+			HashSet<Long> ignoredCreatures = new HashSet<>();
+			List<CreatureCellRenderable> creatures;
+			TargetWindow targetWindow = Utils.rethrow(() -> Utils.getField(hud, "targetWindow"));
+			CreatureCellRenderable target = murderTarget = null;
+			outer: while(!exiting && murdering)
 			{
-				if(!waitOnPauseFJ()) break outer;
-				if(targetId != target.getId())
+				if(!waitOnPauseFJ()) break;
+				long targetId = -1;
+				while(murdering && target != null && (targetId = Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId"))) > 0)
 				{
-					hud.sendAction(PlayerAction.TARGET, target.getId());
-					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-					if(exiting || !murdering) break outer;
-				}
-
-				// attacking a creature on a deed draws "That would be illegal here."
-				if(illegalStrikes.get() >= 2)
-				{
-					Utils.consolePrint("Attacking `%s` is illegal here, ignoring it", target.getHoverName());
-					ignoredCreatures.add(target.getId());
-					target = murderTarget = null;
-					hud.sendAction(PlayerAction.NO_TARGET, -1);
-					continue outer;
-				}
-
-				if(Utils.sqdistFromPlayer(target) > 4 * 4)
-				{
-					final CreatureCellRenderable _target = target; // capture restrictions
-					final Supplier<Vec2i> targetPos = () -> new Vec2i(
-						(int)(_target.getXPos() / 4f),
-						(int)(_target.getYPos() / 4f)
-					);
-					WalkStatus res = walkPathToCreature(targetPos);
-					if(res == WalkStatus.noPath)
+					if(!waitOnPauseFJ()) break outer;
+					if(targetId != target.getId())
 					{
+						hud.sendAction(PlayerAction.TARGET, target.getId());
+						Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+						if(exiting || !murdering) break outer;
+					}
+
+					// attacking a creature on a deed draws "That would be illegal here."
+					if(illegalStrikes.get() >= 2)
+					{
+						Utils.consolePrint("Attacking `%s` is illegal here, ignoring it", target.getHoverName());
 						ignoredCreatures.add(target.getId());
 						target = murderTarget = null;
 						hud.sendAction(PlayerAction.NO_TARGET, -1);
 						continue outer;
 					}
-					// TODO: position player a reasonable distance from target
+
+					if(Utils.sqdistFromPlayer(target) > 4 * 4)
+					{
+						final CreatureCellRenderable _target = target; // capture restrictions
+						final Supplier<Vec2i> targetPos = () -> new Vec2i(
+							(int)(_target.getXPos() / 4f),
+							(int)(_target.getYPos() / 4f)
+						);
+						WalkStatus res = walkPathToCreature(targetPos);
+						if(res == WalkStatus.noPath)
+						{
+							ignoredCreatures.add(target.getId());
+							target = murderTarget = null;
+							hud.sendAction(PlayerAction.NO_TARGET, -1);
+							continue outer;
+						}
+						// TODO: position player a reasonable distance from target
+						if(exiting || !murdering) break outer;
+					}
+
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
 					if(exiting || !murdering) break outer;
 				}
 
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
-				if(exiting || !murdering) break outer;
-			}
+				// the target is dead or gone: clean up and repair before picking the next one
+				processCorpses();
+				if(repairing)
+					repairEquipped();
 
-			// the target is dead or gone: clean up and repair before picking the next one
-			processCorpses();
-			if(repairing)
-				repairEquipped();
-
-			while(
-				Utils.getPlayerStamina() < 0.99 ||
-				creationWindow.getActionInUse() > 0 ||
-				Utils.rethrow(() -> Utils.<Object, Float>getField(progressBar, "progress")) > 0f
-			)
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
-				if(exiting || !murdering) break outer;
-			}
-
-			creatures = Utils.findCreatures((creature, data) ->
-				!ignoredCreatures.contains(creature.getId()) &&
-				!creature.isItem() &&
-				creature.getKingdomId() == 0 &&
-				!creature.isControlled() &&
-				creature.getLayer() == world.getPlayerLayer() &&
-				!creature.getHoverName().startsWith("preserved") &&
-				murderBlacklist.stream().noneMatch(kw ->
-					creature.getHoverName().toLowerCase().contains(kw) ||
-					data.getHoverText().toLowerCase().contains(kw)
-				) &&
-				(!avoidPassives || !isPassive(creature)) &&
-				(!avoidNamed || data.getHoverText().isEmpty()) &&
-				!petItemRe.matcher(data.getHoverText()).find()
-			);
-			creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
-
-			target = creatures.stream().findFirst().orElse(null);
-			if(target == null)
-			{
-				Utils.consolePrint("Can't find any creatures to target");
-				break;
-			}
-			murderTarget = target;
-			illegalStrikes.set(0);
-
-			// the server rejects TARGET beyond its targeting range ("too far away"),
-			// so walk to the creature first and only target it once we are close
-			for(int attempts = 0; attempts < 10 && murdering && !exiting && Utils.sqdistFromPlayer(target) > 4 * 4; attempts++)
-			{
-				final CreatureCellRenderable _target = target;
-				final Supplier<Vec2i> targetPos = () -> new Vec2i(
-					(int)(_target.getXPos() / 4f),
-					(int)(_target.getYPos() / 4f)
-				);
-				if(walkPathToCreature(targetPos) == WalkStatus.noPath)
+				while(
+					Utils.getPlayerStamina() < 0.99 ||
+					creationWindow.getActionInUse() > 0 ||
+					Utils.rethrow(() -> Utils.<Object, Float>getField(progressBar, "progress")) > 0f
+				)
 				{
-					ignoredCreatures.add(target.getId());
-					target = murderTarget = null;
-					continue outer;
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(1000)));
+					if(exiting || !murdering) break outer;
 				}
-			}
-			if(exiting || !murdering) break;
-			// even if we are not adjacent after 10 attempts, still try targeting:
-			// the targeting range is larger than melee range
 
-			hud.sendAction(PlayerAction.TARGET, target.getId());
-			Utils.consolePrint("Murdering `%s`", target.getHoverName());
+				creatures = Utils.findCreatures((creature, data) ->
+					!ignoredCreatures.contains(creature.getId()) &&
+					!creature.isItem() &&
+					creature.getKingdomId() == 0 &&
+					!creature.isControlled() &&
+					creature.getLayer() == world.getPlayerLayer() &&
+					!creature.getHoverName().startsWith("preserved") &&
+					murderBlacklist.stream().noneMatch(kw ->
+						creature.getHoverName().toLowerCase().contains(kw) ||
+						data.getHoverText().toLowerCase().contains(kw)
+					) &&
+					(!avoidPassives || !isPassive(creature)) &&
+					(!avoidNamed || data.getHoverText().isEmpty()) &&
+					!petItemRe.matcher(data.getHoverText()).find()
+				);
+				creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
 
-			// wait for the server to confirm the target; a creature the client still
-			// lists but the server doesn't know (despawned/died/another layer) never
-			// confirms even up close, and is ignored after the retries
-			final CreatureCellRenderable unconfirmed = target;
-			boolean confirmed = false;
-			for(int i = 0; i < 10; i++)
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(500)));
-				if(exiting || !murdering) break outer;
-				if(Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId")) == unconfirmed.getId())
+				target = creatures.stream().findFirst().orElse(null);
+				if(target == null)
 				{
-					confirmed = true;
+					Utils.consolePrint("Can't find any creatures to target");
 					break;
 				}
-				hud.sendAction(PlayerAction.TARGET, unconfirmed.getId());
-			}
-			if(!confirmed)
-			{
-				Utils.consolePrint("Couldn't target `%s`, ignoring it", unconfirmed.getHoverName());
-				ignoredCreatures.add(unconfirmed.getId());
-				target = murderTarget = null;
-				hud.sendAction(PlayerAction.NO_TARGET, -1);
+				murderTarget = target;
+				illegalStrikes.set(0);
+
+				// the server rejects TARGET beyond its targeting range ("too far away"),
+				// so walk to the creature first and only target it once we are close
+				for(int attempts = 0; attempts < 10 && murdering && !exiting && Utils.sqdistFromPlayer(target) > 4 * 4; attempts++)
+				{
+					final CreatureCellRenderable _target = target;
+					final Supplier<Vec2i> targetPos = () -> new Vec2i(
+						(int)(_target.getXPos() / 4f),
+						(int)(_target.getYPos() / 4f)
+					);
+					if(walkPathToCreature(targetPos) == WalkStatus.noPath)
+					{
+						ignoredCreatures.add(target.getId());
+						target = murderTarget = null;
+						continue outer;
+					}
+				}
+				if(exiting || !murdering) break;
+				// even if we are not adjacent after 10 attempts, still try targeting:
+				// the targeting range is larger than melee range
+
+				hud.sendAction(PlayerAction.TARGET, target.getId());
+				Utils.consolePrint("Murdering `%s`", target.getHoverName());
+
+				// wait for the server to confirm the target; a creature the client still
+				// lists but the server doesn't know (despawned/died/another layer) never
+				// confirms even up close, and is ignored after the retries
+				final CreatureCellRenderable unconfirmed = target;
+				boolean confirmed = false;
+				for(int i = 0; i < 10; i++)
+				{
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(500)));
+					if(exiting || !murdering) break outer;
+					if(Utils.rethrow(() -> (long)Utils.getField(targetWindow, "targetId")) == unconfirmed.getId())
+					{
+						confirmed = true;
+						break;
+					}
+					hud.sendAction(PlayerAction.TARGET, unconfirmed.getId());
+				}
+				if(!confirmed)
+				{
+					Utils.consolePrint("Couldn't target `%s`, ignoring it", unconfirmed.getHoverName());
+					ignoredCreatures.add(unconfirmed.getId());
+					target = murderTarget = null;
+					hud.sendAction(PlayerAction.NO_TARGET, -1);
+				}
 			}
 		}
-		murdering = false;
-		murderTarget = null;
+		finally
+		{
+			murdering = false;
+			murderTarget = null;
+		}
 	}
 	
 	// a task that walks to each matching creature in turn and uses a tool on it
@@ -593,116 +620,122 @@ public class PathingBot extends Bot
 		Object progressBar = Utils.rethrow(() -> Utils.getField(creationWindow, "progressBar"));
 
 		task.running = true;
-		Utils.feedback("%s is on", task.label);
-		final HashSet<Long> ignoredCreatures = new HashSet<>();
-		List<CreatureCellRenderable> creatures;
-		final Cell<CreatureCellRenderable> target = new Cell<>(null);
-		// written by the message processors
-		final AtomicBoolean started = new AtomicBoolean(false);
-		final AtomicBoolean done = new AtomicBoolean(false);
-		outer: while(!exiting && task.running)
+		try
 		{
-			if(!waitOnPauseFJ()) break;
-			if(done.get())
+			Utils.feedback("%s is on", task.label);
+			final HashSet<Long> ignoredCreatures = new HashSet<>();
+			List<CreatureCellRenderable> creatures;
+			final Cell<CreatureCellRenderable> target = new Cell<>(null);
+			// written by the message processors
+			final AtomicBoolean started = new AtomicBoolean(false);
+			final AtomicBoolean done = new AtomicBoolean(false);
+			outer: while(!exiting && task.running)
 			{
-				if(target.val != null)
-					ignoredCreatures.add(target.val.getId());
-				target.val = null;
-				done.set(false);
-			}
+				if(!waitOnPauseFJ()) break;
+				if(done.get())
+				{
+					if(target.val != null)
+						ignoredCreatures.add(target.val.getId());
+					target.val = null;
+					done.set(false);
+				}
 
-			if(target.val == null)
-			{
-				creatures = Utils.findCreatures((creature, data) ->
-					!ignoredCreatures.contains(creature.getId()) &&
-					!creature.isItem() &&
-					creature.getKingdomId() == 0 &&
-					!creature.isControlled() &&
-					creature.getLayer() == world.getPlayerLayer() &&
-					!creature.getHoverName().startsWith("preserved") &&
-					task.filter.test(creature) &&
-					!petItemRe.matcher(data.getHoverText()).find()
-				);
-				creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
-
-				target.val = creatures.stream().findFirst().orElse(null);
 				if(target.val == null)
 				{
-					Utils.consolePrint("Can't find any creatures to %s", task.verb);
+					creatures = Utils.findCreatures((creature, data) ->
+						!ignoredCreatures.contains(creature.getId()) &&
+						!creature.isItem() &&
+						creature.getKingdomId() == 0 &&
+						!creature.isControlled() &&
+						creature.getLayer() == world.getPlayerLayer() &&
+						!creature.getHoverName().startsWith("preserved") &&
+						task.filter.test(creature) &&
+						!petItemRe.matcher(data.getHoverText()).find()
+					);
+					creatures.sort((l, r) -> Float.compare(Utils.sqdistFromPlayer(l), Utils.sqdistFromPlayer(r)));
+
+					target.val = creatures.stream().findFirst().orElse(null);
+					if(target.val == null)
+					{
+						Utils.consolePrint("Can't find any creatures to %s", task.verb);
+						break;
+					}
+				
+					task.onDone = () -> {
+						done.set(true);
+						task.onDone = null;
+					};
+				}
+
+				while(Utils.sqdistFromPlayer(target.val) > 4 * 4)
+				{
+					if(exiting || !task.running)
+						break outer;
+
+					final Supplier<Vec2i> targetPos = () -> new Vec2i(
+						(int)(target.val.getXPos() / 4f),
+						(int)(target.val.getYPos() / 4f)
+					);
+					WalkStatus res = walkPathToCreature(targetPos);
+					if(res == WalkStatus.noPath)
+					{
+						ignoredCreatures.add(target.val.getId());
+						task.onDone = null;
+						target.val = null;
+						hud.sendAction(PlayerAction.NO_TARGET, -1);
+						continue outer;
+					}
+					else if(res == WalkStatus.interrupted)
+						continue;
 					break;
 				}
-				
-				task.onDone = () -> {
-					done.set(true);
-					task.onDone = null;
+
+				final long actionSent = System.currentTimeMillis();
+				started.set(false);
+				task.onStart = () -> {
+					started.set(true);
+					task.onStart = null;
 				};
-			}
-
-			while(Utils.sqdistFromPlayer(target.val) > 4 * 4)
-			{
-				if(exiting || !task.running)
-					break outer;
-
-				final Supplier<Vec2i> targetPos = () -> new Vec2i(
-					(int)(target.val.getXPos() / 4f),
-					(int)(target.val.getYPos() / 4f)
+				hud.getWorld().getServerConnection().sendAction(
+					toolItem.getId(),
+					new long[]{target.val.getId()},
+					task.action
 				);
-				WalkStatus res = walkPathToCreature(targetPos);
-				if(res == WalkStatus.noPath)
-				{
-					ignoredCreatures.add(target.val.getId());
-					task.onDone = null;
-					target.val = null;
-					hud.sendAction(PlayerAction.NO_TARGET, -1);
-					continue outer;
-				}
-				else if(res == WalkStatus.interrupted)
-					continue;
-				break;
-			}
-
-			final long actionSent = System.currentTimeMillis();
-			started.set(false);
-			task.onStart = () -> {
-				started.set(true);
-				task.onStart = null;
-			};
-			hud.getWorld().getServerConnection().sendAction(
-				toolItem.getId(),
-				new long[]{target.val.getId()},
-				task.action
-			);
-			Utils.consolePrint("%s `%s`", task.label, target.val.getHoverName());
+				Utils.consolePrint("%s `%s`", task.label, target.val.getHoverName());
 			
-			while(!started.get() && !done.get())
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				if(exiting || !task.running) break outer;
-				
-				// action never started; skip this creature rather than retrying it forever
-				if(System.currentTimeMillis() - actionSent >= 5000)
+				while(!started.get() && !done.get())
 				{
-					Utils.consolePrint("Timed out waiting for %s to start", task.label.toLowerCase());
-					ignoredCreatures.add(target.val.getId());
-					task.onDone = null;
-					target.val = null;
-					continue outer;
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+					if(exiting || !task.running) break outer;
+				
+					// action never started; skip this creature rather than retrying it forever
+					if(System.currentTimeMillis() - actionSent >= 5000)
+					{
+						Utils.consolePrint("Timed out waiting for %s to start", task.label.toLowerCase());
+						ignoredCreatures.add(target.val.getId());
+						task.onDone = null;
+						target.val = null;
+						continue outer;
+					}
 				}
-			}
-			// already done
-			if(done.get()) continue outer;
+				// already done
+				if(done.get()) continue outer;
 
-			while(
-				Utils.getPlayerStamina() < 0.99 ||
-				creationWindow.getActionInUse() > 0 ||
-				Utils.rethrow(() -> Utils.<Object, Float>getField(progressBar, "progress")) > 0f
-			)
-			{
-				Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
-				if(exiting || !task.running) break outer;
+				while(
+					Utils.getPlayerStamina() < 0.99 ||
+					creationWindow.getActionInUse() > 0 ||
+					Utils.rethrow(() -> Utils.<Object, Float>getField(progressBar, "progress")) > 0f
+				)
+				{
+					Utils.rethrow(() -> ForkJoinPool.managedBlock(new SleepBlocker(250)));
+					if(exiting || !task.running) break outer;
+				}
 			}
 		}
-		task.running = false;
+		finally
+		{
+			task.running = false;
+		}
 	}
 
 	@Override
@@ -1314,7 +1347,7 @@ public class PathingBot extends Bot
 	static enum Inputs implements Bot.InputKey
 	{
 		speed("Speed", "Set speed at which bot will move, in km/h", "<km/h>"),
-		walkto("Walk To", "Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running", "[<x> <y>]"),
+		walkto("Walk To", "Walk to given tile coordinates, or to the hovered tile when none are given. Use it again while walking to stop. Needs the bot running", "[<x> <y>]"),
 		follow("Follow", "Follow the player whose name starts with the given text. Without a name it stops following; with a name while following it switches to that player. Needs the bot running", "[<player name>]"),
 		murder("Murder", "Toggle finding and murdering nearby creatures. Needs the bot running", ""),
 		groom("Grooming", "Toggle finding and grooming nearby creatures. Needs the bot running", ""),

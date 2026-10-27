@@ -62,7 +62,12 @@ public class FishBuddy implements WurmClientMod, Initable, PreInitable {
             // Hook HUD init to setup our stuff
             HookManager.getInstance().registerHook("com.wurmonline.client.renderer.gui.HeadsUpDisplay", "init", "(II)V", () -> (proxy, method, args) -> {
                 method.invoke(proxy, args);
-                Hooks.init((HeadsUpDisplay) proxy);
+                try {
+                    Hooks.init((HeadsUpDisplay) proxy);
+                } catch (Throwable e) {
+                    // a failure here must not abort the client's own HUD init
+                    java.util.logging.Logger.getLogger("FishBuddy").log(java.util.logging.Level.SEVERE, "FishBuddy could not start", e);
+                }
                 return null;
             });
         } catch (Throwable e) {

@@ -82,7 +82,10 @@ public class ContainerItemGetterBot extends Bot
                 
                 srcItems.clear();
                 for(String name: items)
-                    srcItems.addAll(Utils.getInventoryItems(src, name));
+                    for(InventoryMetaItem found: Utils.getInventoryItems(src, name))
+                        // not the container itself, and not twice when several names match
+                        if(found.getId() != srcRoot.getId() && srcItems.stream().noneMatch(have -> have.getId() == found.getId()))
+                            srcItems.add(found);
                 
                 if(verbose)
                     Utils.consolePrint(

@@ -61,7 +61,7 @@ public class HealingBot extends Bot {
                     inventoryItems.addAll(item.getChildren());
             }
             if (wounds.size() == 0) {
-                Utils.consolePrint("All wounds were treated");
+                Utils.consolePrint("No wounds left that need treating (damage above " + minDamage + ")");
                 return;
             }
             wounds.sort(Comparator.comparingDouble(InventoryMetaItem::getDamage).reversed());

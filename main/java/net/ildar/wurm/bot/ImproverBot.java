@@ -141,6 +141,12 @@ public class ImproverBot extends Bot {
                             Utils.consolePrint("Can't find a tool to improve " + itemToImprove.getBaseName() + " " + itemToImprove.getId());
                             continue;
                         }
+                        // a fixed tool that was destroyed, dropped or moved away must be looked up again
+                        if (tool.fixed && tool.itemId != 0) {
+                            final long fixedToolId = tool.itemId;
+                            if (Utils.getInventoryItems(tool.name).stream().noneMatch(item -> item.getId() == fixedToolId))
+                                tool.itemId = 0;
+                        }
                         if (tool.itemId == 0 || !tool.fixed) {
                             boolean toolItemFound = assignItemForTool(tool, itemToImprove.getWeight());
                             if (!toolItemFound)
@@ -206,7 +212,14 @@ public class ImproverBot extends Bot {
                         improveInitiated = true;
                         WurmHelper.hud.getWorld().getServerConnection().sendAction(tool.itemId,
                                 new long[]{pickableUnit.getId()}, PlayerAction.IMPROVE);
-                        sleep(100);
+                        // the tool that fits the item starts an action: the rest of the tools are not needed
+                        boolean started = false;
+                        for (int wait = 0; wait < 4 && !started; wait++) {
+                            sleep(100);
+                            started = creationWindow.getActionInUse() != 0 || !isProgressZero();
+                        }
+                        if (started)
+                            break;
                     }
                 }
                 // wait for improve completion
@@ -341,7 +354,8 @@ public class ImproverBot extends Bot {
         }
         InventoryMetaItem instrument = selectedItems.get(0);
         for(Tool tool : tools) {
-            if(instrument.getBaseName().contains(tool.name)) {
+            // lump tools are named like 'lump, iron' (quoted), which only the display name matcher understands
+            if(instrument.getBaseName().contains(tool.name) || Utils.displayNameMatches(instrument, tool.name)) {
                 printShortToolInfo(instrument);
                 Utils.feedback("\"" + instrument.getDisplayName() + "\" will be used as " + tool.name);
                 tool.itemId = instrument.getId();

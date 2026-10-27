@@ -56,10 +56,13 @@ public class ProspectorBot extends Bot {
         while (isActive()) {
             waitOnPause();
             if (canDoWork(staminaThreshold)) {
-                if (toolItem.getDamage() > 10)
-                    WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxeId);
+                // read each pass so the "tool" key takes effect while the bot is running
+                InventoryMetaItem currentTool = toolItem;
+                long currentToolId = currentTool.getId();
+                if (currentTool.getDamage() > 10)
+                    WurmHelper.hud.sendAction(PlayerAction.REPAIR, currentToolId);
                 for(int i = 0; i < clicks; i++)
-                    WurmHelper.hud.getWorld().getServerConnection().sendAction(pickaxeId, new long[]{caveWallId}, PlayerAction.PROSPECT);
+                    WurmHelper.hud.getWorld().getServerConnection().sendAction(currentToolId, new long[]{caveWallId}, PlayerAction.PROSPECT);
             }
             sleep(timeout);
         }

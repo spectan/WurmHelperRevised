@@ -64,7 +64,7 @@ public class ForesterBot extends Bot {
         registerInputHandler(ForesterBot.InputKey.h, input -> toggleHarvesting());
         registerInputHandler(ForesterBot.InputKey.p, input -> togglePlanting());
         registerInputHandler(ForesterBot.InputKey.scn, this::setContainerName);
-        registerInputHandler(ForesterBot.InputKey.na, this::setMaxActions);
+        registerInputHandler(ForesterBot.InputKey.c, this::setMaxActions);
         registerInputHandler(ForesterBot.InputKey.aim, this::addItemToMove);
         registerInputHandler(ForesterBot.InputKey.atw, this::addTreeWhitelist);
         registerInputHandler(ForesterBot.InputKey.ctw, input -> clearTreeWhitelist());
@@ -306,7 +306,7 @@ public class ForesterBot extends Bot {
     }
 
     private void setMaxActions(String [] input) {
-        Integer value = parseIntArg(input, ForesterBot.InputKey.na, 1, 100);
+        Integer value = parseIntArg(input, ForesterBot.InputKey.c, 1, 100);
         if (value == null)
             return;
         maxActions = value;
@@ -514,7 +514,7 @@ public class ForesterBot extends Bot {
         h("Harvest Mode", "Toggle the harvesting", ""),
         p("Planting", "Toggle the planting", ""),
         scn("Container Name", "Set the name of the containers to put sprouts/harvest in (may contain spaces)", "<container name>"),
-        na("Clicks", "Set the number of actions bot will do each time", "<clicks>"),
+        c("Clicks", "Set the number of actions bot will do each time", "<clicks>"),
         aim("Add Item", "Add item name(s), separated by commas, to move into the containers along with sprouts", "<item name>[, <item name>...]"),
         atw("Add Tree Whitelist", "Add whitelisted tree type(s), separated by commas. When the whitelist is not empty only those trees are processed", "<tree name>[, <tree name>...]"),
         ctw("Clear Tree Whitelist", "Clear whitelisted tree types", ""),

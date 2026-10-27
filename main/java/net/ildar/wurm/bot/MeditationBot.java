@@ -50,7 +50,8 @@ public class MeditationBot extends Bot {
             if (Math.abs(lastRepair - System.currentTimeMillis()) > repairTimeout) {
                 repairInitiated = false;
                 int count = 0;
-                while(!repairInitiated && count++ < 30) {
+                while(isActive() && !repairInitiated && count++ < 30) {
+                    waitOnPause();
                     WurmHelper.hud.sendAction(PlayerAction.REPAIR, carpetId);
                     sleep(1000);
                 }
@@ -62,6 +63,7 @@ public class MeditationBot extends Bot {
             clicked = 0;
             int attempts = 0;
             while(isActive() && clicked < clicks) {
+                waitOnPause();
                 if (hasStamina(staminaThreshold)) {
                     if (attempts++ >= MAX_MEDITATION_ATTEMPTS) {
                         Utils.consolePrint("Couldn't start meditating after " + MAX_MEDITATION_ATTEMPTS + " attempts!");

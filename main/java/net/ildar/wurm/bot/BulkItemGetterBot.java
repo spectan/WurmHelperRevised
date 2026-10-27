@@ -25,6 +25,8 @@ public class BulkItemGetterBot extends Bot
 
     public static volatile boolean closeBMLWindow;
     public static volatile int currentMoveQuantity = -1;
+    /** Set when the server answered a transfer with "That item is already busy": the question will never come. */
+    public static volatile boolean bulkBusy;
     /** Held for the whole of a bulk transfer (the quantity is passed to the question window through the two
      *  fields above, so two bots must never use them at once). */
     public static final Object bulkLock = new Object();
@@ -54,7 +56,10 @@ public class BulkItemGetterBot extends Bot
         currentMoveQuantity = -1;
         registerEventProcessor(
             message -> message.contains("That item is already busy"),
-            () -> closeBMLWindow = false
+            () -> {
+                bulkBusy = true;
+                closeBMLWindow = false;
+            }
         );
         
         while(isActive())
@@ -100,6 +105,7 @@ public class BulkItemGetterBot extends Bot
                 synchronized(bulkLock)
                 {
                     currentMoveQuantity = moveQuantity;
+                    bulkBusy = false;
                     closeBMLWindow = true;
                     WurmHelper.hud.getWorld().getServerConnection().sendMoveSomeItems(spec.target.getId(), new long[]{spec.source.getId()});
 
@@ -285,8 +291,8 @@ class ItemSpec
     
     public void setSource(boolean fixed)
     {
-        final int mouseX = WurmHelper.hud.getWorld().getClient().getXMouse();
-        final int mouseY = WurmHelper.hud.getWorld().getClient().getYMouse();
+        final int mouseX = Utils.getGuiMouseX();
+        final int mouseY = Utils.getGuiMouseY();
         
         source = null;
         fixedX = -1;

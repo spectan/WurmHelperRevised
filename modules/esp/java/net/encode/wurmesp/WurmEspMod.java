@@ -59,7 +59,7 @@ Configurable {
     public static CaveDataBuffer _caveBuffer;
     public static NearTerrainDataBuffer _terrainBuffer;
     public static NearTerrainDataBuffer _terrainBuffer2;
-    public static CopyOnWriteArrayList<float[]> _terrain;
+    public static volatile CopyOnWriteArrayList<float[]> _terrain;
     public static CopyOnWriteArrayList<float[]> _flowerTerrain;
     public static CopyOnWriteArrayList<float[]> _closeByTerrain;
     public static CopyOnWriteArrayList<float[]> _closeByWalkableTerrain;

@@ -12,16 +12,16 @@ Type `info` in the game console to see the list of available commands, and `info
 
 Bots are controlled with `bot <bot> <key> [arguments]`:
 
-  * `<bot>` is the bot's abbreviation or its full name, e.g. `bot ch` or `bot chopper`, `bot tc` or `bot tree cutter`
+  * `<bot>` is the bot's abbreviation or its full name, e.g. `bot tc` or `bot tree cutter`
   * `bot <bot>` shows what the bot does and lists all of its keys with their arguments
   * `bot <bot> on` starts the bot, `bot <bot> off` stops it, `bot <bot> pause` pauses/resumes it
   * `bot <bot> status` shows the bot's current settings
   * `bot <bot> info <key>` describes a key
-  * keys can be typed by their short name or full name: `bot ch s 0.9` is the same as `bot ch stamina 0.9`
+  * keys can be typed by their short name or full name: `bot tc s 0.9` is the same as `bot tc stamina 0.9`
   * bots can be configured before they are started: `bot m c 3` on a stopped miner remembers the setting
     for when you run `bot m on`. You can also configure and start in one go: `bot m on c 3`
   * stamina thresholds are compared with stamina + damage, so they take a value between 0 and 2,
-    or a percentage: `bot ch s 90` is the same as `bot ch s 0.9`
+    or a percentage: `bot tc s 90` is the same as `bot tc s 0.9`
   * names can be several words, and lists are comma separated: `bot cig a small barrel, large crate`
   * `bot list` shows all bots and their state, `bot pause` pauses/resumes all running bots, `bot off` stops them
 

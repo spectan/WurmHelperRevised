@@ -78,7 +78,8 @@ public class GainTrackerWindow extends WWindow implements ConsoleListener {
         popup.addSeparator();
         popup.addButton(popup.new WPopupLiveButton("Reset") {
             protected void handleLeftClick() {
-                SkillTrackMod.tracker.skillsCleared();
+                if (SkillTrackMod.tracker != null)
+                    SkillTrackMod.tracker.skillsCleared();
             }
         });
         hud.showPopupComponent(popup);

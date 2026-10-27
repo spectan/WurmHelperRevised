@@ -41,7 +41,7 @@ public class ItemMoverBot extends Bot {
                     boolean notRare = invItem.getRarity() == 0;
                     for (String itemName : itemNames) {
                         float maxWeight = itemMaximumWeights.getOrDefault(itemName, 0f);
-                        if (invItem.getBaseName().contains(itemName)
+                        if (invItem.getBaseName().toLowerCase().contains(itemName.toLowerCase())
                                 && (maxWeight == 0 || invItem.getWeight() <= maxWeight)
                                 && (!notMoveRares || notRare)) {
                             itemsToMove.add(invItem);
@@ -245,8 +245,8 @@ public class ItemMoverBot extends Bot {
     }
     private void setTargetItem() {
         try {
-            int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-            int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+            int x = Utils.getGuiMouseX();
+            int y = Utils.getGuiMouseY();
             long [] targets = WurmHelper.hud.getCommandTargetsFrom(x,y);
             if (targets != null && targets.length > 0) {
                 target = 0;

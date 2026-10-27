@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 @BotInfo(name = "Tree Cutter", description =
-        "Cuts trees",
+        "Cuts trees and chops up the felled ones",
         abbreviation = "tc")
 public class TreeCutterBot extends Bot{
     private volatile int maxActions;
@@ -33,6 +33,11 @@ public class TreeCutterBot extends Bot{
     private volatile String treeType;
     private volatile boolean bushCutting;
     private volatile boolean sproutingTreeCutting;
+    private volatile boolean chopFelled;
+    private volatile float distance = 4;
+    /** When chops were last queued on each felled tree, so a tree is not chopped at again while they run. */
+    private final Map<Long, Long> chopSentAt = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long CHOP_RETRY_MS = 15000;
 
     private volatile long toolId;
     private InventoryMetaItem selectedTool;
@@ -53,12 +58,15 @@ public class TreeCutterBot extends Bot{
         registerInputHandler(InputKey.tt, this::setTreeType);
         registerInputHandler(InputKey.b, input-> toggleBushCutting());
         registerInputHandler(InputKey.sp, input-> toggleSproutingTreeCutting());
+        registerInputHandler(InputKey.ch, input -> toggleChopFelled());
+        registerInputHandler(InputKey.d, this::setDistance);
 
         areaAssistant.setMoveAheadDistance(1);
         areaAssistant.setMoveRightDistance(1);
 
         bushCutting = true;
         sproutingTreeCutting = true;
+        chopFelled = true;
         minTreeAge=TreeAge.any;
         treeType="";
         staminaThreshold = 0.96f;
@@ -72,6 +80,7 @@ public class TreeCutterBot extends Bot{
         lines.add("Minimal tree age: " + minTreeAge.name);
         lines.add("Bush cutting: " + onOff(bushCutting));
         lines.add("Sprouting trees cutting: " + onOff(sproutingTreeCutting));
+        lines.add("Chop up felled trees: " + onOff(chopFelled) + " within " + distance + " meters");
         lines.add("Tool: " + (selectedTool != null ? selectedTool.getDisplayName() : "a hatchet from the inventory (looked up on start)"));
         areaAssistant.describeSettings(lines);
     }
@@ -103,6 +112,13 @@ public class TreeCutterBot extends Bot{
 
             if (Math.abs(lastActionFinishedTime - System.currentTimeMillis()) > 10000 && hasStamina(staminaThreshold))
                 queuedTiles.clear();
+
+            if (chopFelled && progress == 0f && hasStamina(staminaThreshold) && chopNearestFelledTree(sscc)) {
+                // nothing is running, so the cuts that were being waited for are over
+                queuedTiles.clear();
+                sleep(timeout);
+                continue;
+            }
 
             if (hasStamina(staminaThreshold) && queuedTiles.size() == 0) {
                 int checkedtiles[][] = Utils.getAreaCoordinates();
@@ -140,6 +156,50 @@ public class TreeCutterBot extends Bot{
             }
             sleep(timeout);
         }
+    }
+
+    /**
+     * Chop up the first felled tree within the lookup distance
+     * @return true if a chop was queued
+     */
+    private boolean chopNearestFelledTree(ServerConnectionListenerClass sscc) throws Exception {
+        Map<Long, GroundItemCellRenderable> groundItems = Utils.getField(sscc, "groundItems");
+        if (groundItems == null || groundItems.isEmpty())
+            return false;
+        World world = WurmHelper.hud.getWorld();
+        float x = world.getPlayerPosX();
+        float y = world.getPlayerPosY();
+        float range = distance;
+        long now = System.currentTimeMillis();
+        chopSentAt.values().removeIf(sentAt -> now - sentAt > CHOP_RETRY_MS);
+        GroundItemData nearest = null;
+        float nearestSquared = range * range;
+        try {
+            for (GroundItemCellRenderable groundItem : groundItems.values()) {
+                GroundItemData data = Utils.getField(groundItem, "item");
+                if (data == null || data.getName() == null || !data.getName().contains("felled tree"))
+                    continue;
+                // chops already queued for this tree; one it can't reach is retried after a while, not at once
+                if (chopSentAt.containsKey(data.getId()))
+                    continue;
+                float dx = data.getX() - x;
+                float dy = data.getY() - y;
+                float squared = dx * dx + dy * dy;
+                if (squared <= nearestSquared) {
+                    nearestSquared = squared;
+                    nearest = data;
+                }
+            }
+        } catch (ConcurrentModificationException e) {
+            // the ground items changed under us; look again on the next pass
+            return false;
+        }
+        if (nearest == null)
+            return false;
+        for (int i = 0; i < maxActions; i++)
+            world.getServerConnection().sendAction(toolId, new long[]{nearest.getId()}, PlayerAction.CHOP_UP);
+        chopSentAt.put(nearest.getId(), now);
+        return true;
     }
 
     /**
@@ -202,6 +262,19 @@ public class TreeCutterBot extends Bot{
                 lastActionFinishedTime = System.currentTimeMillis();
             }
         }
+    }
+
+    private void toggleChopFelled() {
+        chopFelled = !chopFelled;
+        Utils.feedback("Chopping up felled trees is " + onOff(chopFelled));
+    }
+
+    private void setDistance(String[] input) {
+        Float value = parseFloatArg(input, InputKey.d, 0.1f, 100);
+        if (value == null)
+            return;
+        distance = value;
+        Utils.consolePrint("New lookup distance for felled trees is " + distance + " meters");
     }
 
     private void setTreeType(String[] strings) {
@@ -274,7 +347,9 @@ public class TreeCutterBot extends Bot{
         tool("Tool", "Use the item selected in your inventory as the cutting tool (a hatchet is looked up on start otherwise)", ""),
         al("Age List", "Show the tree ages and their abbreviations", ""),
         b("Bush Cutting", "Toggle bush cutting. Enabled by default", ""),
-        sp("Sprout Cutting", "Toggle sprouting trees cutting. Enabled by default", "");
+        sp("Sprout Cutting", "Toggle sprouting trees cutting. Enabled by default", ""),
+        ch("Chop Felled", "Toggle chopping up the felled trees near the player with the same tool. Enabled by default", ""),
+        d("Distance", "Set the distance (in meters) the bot should look around the player in search for a felled tree", "<distance>");
 
         private final KeyInfo keyInfo;
 

@@ -9,12 +9,29 @@ import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
 import net.encode.wurmesp.Unit;
 import net.encode.wurmesp.WurmEspMod;
 
 public class ConfigUtils {
+    /**
+     * An integer setting that keeps its current value when the entry is blank or not a number,
+     * so a typo in the file can't fail the whole module.
+     */
+    private static int intProp(Properties properties, String key, int current) {
+        String value = properties.getProperty(key);
+        if (value == null || value.trim().isEmpty())
+            return current;
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return current;
+        }
+    }
+
     /*
      * WARNING - Removed try catching itself - possible behaviour change.
      */
@@ -57,10 +74,10 @@ public class ConfigUtils {
         WurmEspMod.xray = Boolean.valueOf(properties.getProperty("xray", Boolean.toString(WurmEspMod.xray)));
         WurmEspMod.xraythread = Boolean.valueOf(properties.getProperty("xraythread", Boolean.toString(WurmEspMod.xraythread)));
         WurmEspMod.xrayrefreshthread = Boolean.valueOf(properties.getProperty("xrayrefreshthread", Boolean.toString(WurmEspMod.xrayrefreshthread)));
-        WurmEspMod.xraydiameter = Integer.parseInt(properties.getProperty("xraydiameter", Integer.toString(WurmEspMod.xraydiameter)));
-        WurmEspMod.xrayrefreshrate = Integer.parseInt(properties.getProperty("xrayrefreshrate", Integer.toString(WurmEspMod.xrayrefreshrate)));
-        WurmEspMod.tilenotrideable = Integer.parseInt(properties.getProperty("tilenotrideable", Integer.toString(WurmEspMod.tilenotrideable)));
-        WurmEspMod.flowerdiameter = Integer.parseInt(properties.getProperty("flowerdiameter", Integer.toString(WurmEspMod.flowerdiameter)));
+        WurmEspMod.xraydiameter = intProp(properties, "xraydiameter", WurmEspMod.xraydiameter);
+        WurmEspMod.xrayrefreshrate = intProp(properties, "xrayrefreshrate", WurmEspMod.xrayrefreshrate);
+        WurmEspMod.tilenotrideable = intProp(properties, "tilenotrideable", WurmEspMod.tilenotrideable);
+        WurmEspMod.flowerdiameter = intProp(properties, "flowerdiameter", WurmEspMod.flowerdiameter);
         WurmEspMod.playsoundspecial = Boolean.valueOf(properties.getProperty("playsoundspecial", Boolean.toString(WurmEspMod.playsoundspecial)));
         WurmEspMod.playsounditem = Boolean.valueOf(properties.getProperty("playsounditem", Boolean.toString(WurmEspMod.playsounditem)));
         WurmEspMod.playsoundunique = Boolean.valueOf(properties.getProperty("playsoundunique", Boolean.toString(WurmEspMod.playsoundunique)));
@@ -264,13 +281,23 @@ public class ConfigUtils {
     }
 
     private static String[] splitList(String value, String defaultValue) {
-        return (value != null ? value : defaultValue).split(";");
+        // empty entries are dropped: an empty name would match everything
+        List<String> parts = new ArrayList<>();
+        for (String part : (value != null ? value : defaultValue).split(";"))
+            if (!part.trim().isEmpty())
+                parts.add(part.trim());
+        return parts.toArray(new String[0]);
     }
 
     private static float[] colorStringToFloatA(String color) {
-        String[] colors = color.split(",");
-        float[] colorf = new float[]{Float.valueOf(colors[0]).floatValue() / 255.0f, Float.valueOf(colors[1]).floatValue() / 255.0f, Float.valueOf(colors[2]).floatValue() / 255.0f};
-        return colorf;
+        try {
+            String[] colors = color.split(",");
+            return new float[]{Float.parseFloat(colors[0].trim()) / 255.0f, Float.parseFloat(colors[1].trim()) / 255.0f, Float.parseFloat(colors[2].trim()) / 255.0f};
+        } catch (RuntimeException e) {
+            // a malformed color must not take the whole module down
+            WurmEspMod.logger.log(Level.WARNING, "[WurmEspMod] Bad color \"" + color + "\", using white");
+            return new float[]{1.0f, 1.0f, 1.0f};
+        }
     }
 
     private static String colorFloatAToString(float[] color) {

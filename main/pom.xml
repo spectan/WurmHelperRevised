@@ -70,6 +70,11 @@
                                 <resource>
                                     <directory>${project.basedir}/../modules/tooltips/resources</directory>
                                 </resource>
+                                <!-- default settings of the merged mods, written to mods/WurmHelper on first run -->
+                                <resource>
+                                    <directory>${project.basedir}/../modules/default-config</directory>
+                                    <targetPath>default-config</targetPath>
+                                </resource>
                             </resources>
                         </configuration>
                     </execution>
@@ -105,10 +110,6 @@
                                     <zipfileset dir="${project.basedir}/.."
                                                 includes="Mod.properties"
                                                 fullpath="${project.parent.artifactId}.properties"/>
-                                    <!-- default settings of the merged mods: mods/WurmHelper/<id>.properties -->
-                                    <zipfileset dir="${project.basedir}/../modules/default-config"
-                                                includes="*.properties"
-                                                prefix="${project.parent.artifactId}"/>
                                     <!-- licenses, permission notes and upstream versions of the merged mods -->
                                     <zipfileset dir="${project.basedir}/../modules"
                                                 includes="*/LICENSE*,*/PERMISSION.txt,*/SOURCE.txt"

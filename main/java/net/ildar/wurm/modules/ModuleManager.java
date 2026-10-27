@@ -197,7 +197,8 @@ public final class ModuleManager {
             boolean jarMissing = false;
             for (String jar : classpath.split(",")) {
                 jar = jar.trim();
-                if (!jar.isEmpty() && !new File(MODS_DIR, jar).isFile()) {
+                // the loader resolves the classpath inside mods/<name>/ (mods/<name>.properties + mods/<name>/<jar>)
+                if (!jar.isEmpty() && !new File(new File(MODS_DIR, name), jar).isFile() && !new File(MODS_DIR, jar).isFile()) {
                     logger.fine("[WurmHelper] " + propFile + " references mods/" + jar + " which is missing, treating the mod as not installed");
                     jarMissing = true;
                 }
@@ -211,9 +212,27 @@ public final class ModuleManager {
     private static Properties loadModuleConfig(Module module) throws IOException {
         Properties properties = new Properties();
         File file = new File(CONFIG_DIR, module.id + ".properties");
+        String resource = "/default-config/" + module.id + ".properties";
+        if (!file.isFile()) {
+            // first run: write the bundled defaults so the settings can be edited (an update never overwrites them)
+            try (InputStream in = ModuleManager.class.getResourceAsStream(resource)) {
+                if (in != null) {
+                    CONFIG_DIR.mkdirs();
+                    java.nio.file.Files.copy(in, file.toPath());
+                }
+            } catch (IOException e) {
+                logger.log(Level.WARNING, "[WurmHelper] Cannot write the default settings " + file, e);
+            }
+        }
         if (file.isFile()) {
             try (InputStream in = new FileInputStream(file)) {
                 properties.load(in);
+            }
+        } else {
+            // read-only install folder: use the bundled defaults directly
+            try (InputStream in = ModuleManager.class.getResourceAsStream(resource)) {
+                if (in != null)
+                    properties.load(in);
             }
         }
         return properties;

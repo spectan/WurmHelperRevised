@@ -82,7 +82,7 @@ public class ForagerBot extends Bot {
         registerInputHandler(ForagerBot.InputKey.dfc, input -> clearFilter());
         registerInputHandler(ForagerBot.InputKey.v, input -> toggleVerboseMode());
         registerInputHandler(ForagerBot.InputKey.scn, this::setContainerName);
-        registerInputHandler(ForagerBot.InputKey.na, this::setMaxActions);
+        registerInputHandler(ForagerBot.InputKey.c, this::setMaxActions);
         staminaThreshold = 0.9f;
         timeout = 300;
         maxActions = Utils.getMaxActionNumber();
@@ -274,6 +274,8 @@ public class ForagerBot extends Bot {
                     }
                 }
             }
+            if (foragables.isEmpty())
+                return;
             long[] foragablesIds = Utils.getItemIds(foragables);
             WurmHelper.hud.sendAction(PlayerAction.DROP, foragablesIds);
         }
@@ -344,7 +346,7 @@ public class ForagerBot extends Bot {
     }
 
     private void setMaxActions(String [] input) {
-        Integer value = parseIntArg(input, ForagerBot.InputKey.na, 1, 100);
+        Integer value = parseIntArg(input, ForagerBot.InputKey.c, 1, 100);
         if (value == null)
             return;
         maxActions = value;
@@ -487,8 +489,8 @@ public class ForagerBot extends Bot {
         dfc("Clear Items", "Clear the drop filter", ""),
         v("Verbose", "Toggle the verbose mode. " +
                 "Additional information will be shown in console during the work of the bot in verbose mode", ""),
-        scn("Container Name", "Set the name of the containers to put sprouts/harvest in (may contain spaces)", "<container name>"),
-        na("Clicks", "Set the number of actions bot will do each time", "<clicks>");
+        scn("Container Name", "Set the name of the containers to put the foraged items in (may contain spaces)", "<container name>"),
+        c("Clicks", "Set the number of actions bot will do each time", "<clicks>");
 
         private final KeyInfo keyInfo;
 

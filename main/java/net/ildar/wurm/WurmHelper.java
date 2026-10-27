@@ -267,7 +267,7 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
                 classPool.get("java.lang.Throwable")
             );
 
-            ctSocketConnection.getMethod("flush", "()V").insertAfter("net.ildar.wurm.Utils.serverCallLock.unlock();", true);
+            ctSocketConnection.getMethod("flush", "()V").insertAfter("if (net.ildar.wurm.Utils.serverCallLock.isHeldByCurrentThread()) net.ildar.wurm.Utils.serverCallLock.unlock();", true);
 
             final CtClass ctConsoleComponent = classPool.getCtClass("com.wurmonline.client.renderer.gui.ConsoleComponent");
             CtMethod consoleGameTickMethod = CtNewMethod.make(
@@ -309,6 +309,8 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             CtClass creatureRenderable = classPool.getCtClass("com.wurmonline.client.renderer.cell.CreatureCellRenderable");
             creatureRenderable.getMethod("isVisible", "(Lcom/wurmonline/client/renderer/Frustum;)Z").insertBefore(
                 "if(net.ildar.wurm.WurmHelper.hideMount && " +
+                "net.ildar.wurm.WurmHelper.hud != null && net.ildar.wurm.WurmHelper.hud.getWorld() != null && " +
+                "net.ildar.wurm.WurmHelper.hud.getWorld().getPlayer() != null && " +
                 "this == net.ildar.wurm.WurmHelper.hud.getWorld().getPlayer().getCarrierCreature())" +
                 "return false;"
             );
@@ -348,16 +350,19 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
                 boolean notadd = false;
                 if (BulkItemGetterBot.closeBMLWindow && wc instanceof BmlWindowComponent) {
                     String title = Utils.getField(wc, "title");
-                    if (title.equals("Removing items")) {
+                    if ("Removing items".equals(title)) {
                         if(BulkItemGetterBot.currentMoveQuantity > 0)
                         {
                             Map<String, Object> inputs = Utils.getField(wc, "inputFields");
-                            Object quantityField = inputs.values().iterator().next();
-                            Utils.setField(
-                                quantityField,
-                                "input",
-                                String.format("%d", BulkItemGetterBot.currentMoveQuantity)
-                            );
+                            if (inputs != null && !inputs.isEmpty())
+                            {
+                                Object quantityField = inputs.values().iterator().next();
+                                Utils.setField(
+                                    quantityField,
+                                    "input",
+                                    String.format("%d", BulkItemGetterBot.currentMoveQuantity)
+                                );
+                            }
                         }
                         
                         Method clickButton = ReflectionUtil.getMethod(wc.getClass(), "processButtonPressed");

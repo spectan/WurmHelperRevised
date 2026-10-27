@@ -45,8 +45,9 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
 
     private static boolean isMoving = false;
     private static Object lastDragNode = null;
-    private static final java.util.IdentityHashMap<Object, Boolean> answeredBml =
-            new java.util.IdentityHashMap<Object, Boolean>();
+    // weak, so the amount windows are not kept alive for the whole session
+    private static final java.util.Map<Object, Boolean> answeredBml =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, Boolean>());
     private static long[] lastDropSourceIds = new long[0];
     private static volatile boolean pendingAutoAll = false;
     private static long pendingDestId = -1L;
@@ -1263,7 +1264,10 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
             lastDropSourceIds = (long[]) args[1];
             log("handleDrop destId=" + args[0] + " sources=" + lastDropSourceIds.length);
         }
-        if (transferActive()) return true;
+        if (transferActive()) {
+            // only the vanilla move this transfer replaces; other moves (a bot's, for one) go through
+            return args != null && args.length >= 1 && args[0] instanceof Long && (Long) args[0] == pendingDestId;
+        }
         if (args == null || args.length < 2) return false;
         if (!(args[0] instanceof Long) || !(args[1] instanceof long[])) return false;
 
@@ -1549,7 +1553,8 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
         boolean ourJob = pendingAutoAll
                 || (waitingForDone && !moveQueue.isEmpty() && moveQueueIndex.get() > 0);
         boolean modifier = isShiftDown() || isCtrlDown();
-        if (!ourJob && modifier) startFromAmountMenu();
+        // a bot's bulk question (BulkItemGetterBot) is its own, whatever keys are held
+        if (!ourJob && modifier && !net.ildar.wurm.bot.BulkItemGetterBot.closeBMLWindow) startFromAmountMenu();
         ourJob = pendingAutoAll
                 || transferActive()
                 || (waitingForDone && !moveQueue.isEmpty());
@@ -1763,7 +1768,10 @@ public class EZBulk implements WurmClientMod, Initable, PreInitable {
 
     private static boolean interceptSendMove(Object[] args) {
         if (isMoving) return false;
-        if (transferActive()) return true;
+        if (transferActive()) {
+            // only the vanilla move this transfer replaces; other moves (a bot's, for one) go through
+            return args != null && args.length >= 1 && args[0] instanceof Long && (Long) args[0] == pendingDestId;
+        }
         if (args == null || args.length < 2) return false;
         if (!(args[0] instanceof Long) || !(args[1] instanceof long[])) return false;
         long destId = (Long) args[0];

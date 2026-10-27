@@ -123,16 +123,18 @@ public class FarmerBot extends Bot {
             }
             if (dropping) {
                 List<InventoryMetaItem> droplist = new ArrayList<>();
+                Set<Long> droplistIds = new HashSet<>();
                 List<InventoryMetaItem> inventoryItems = Utils.getSelectedItems(true, true);
-                for(String dropName : dropNamesList)
-                    droplist.addAll(Utils.getInventoryItems(inventoryItems, dropName));
+                for(String dropName : dropNamesList) {
+                    // the drop limit is kept per drop name, and an item matching two names is dropped once
+                    List<InventoryMetaItem> matches = new ArrayList<>(Utils.getInventoryItems(inventoryItems, dropName));
+                    if (dropLimit != 0)
+                        matches = matches.size() > dropLimit ? matches.subList(dropLimit, matches.size()) : new ArrayList<>();
+                    for (InventoryMetaItem match : matches)
+                        if (droplistIds.add(match.getId()))
+                            droplist.add(match);
+                }
                 if (droplist.size() > 0) {
-                    if (dropLimit != 0) {
-                        if (droplist.size() > dropLimit) {
-                            droplist = droplist.subList(dropLimit, droplist.size());
-                        } else
-                            droplist = new ArrayList<>();
-                    }
                     droplist = droplist.stream().filter(item -> item.getRarity() == 0).collect(Collectors.toList());
                     if (droplist.size() > 0)
                         WurmHelper.hud.sendAction(PlayerAction.DROP, Utils.getItemIds(droplist));

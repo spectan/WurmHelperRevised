@@ -48,7 +48,7 @@ public class DiggerBot extends Bot{
         registerInputHandler(DiggerBot.InputKey.dtp, input -> toggleDigToPileAction());
         registerInputHandler(DiggerBot.InputKey.l, input -> toggleLevelling());
         registerInputHandler(DiggerBot.InputKey.la, this::toggleLevellingArea);
-        registerInputHandler(DiggerBot.InputKey.tr, input -> toggleToolRepairing());
+        registerInputHandler(DiggerBot.InputKey.r, input -> toggleToolRepairing());
         registerInputHandler(DiggerBot.InputKey.sm, input -> toggleSurfaceMining());
         registerInputHandler(DiggerBot.InputKey.tool, input -> selectTool());
 
@@ -125,14 +125,16 @@ public class DiggerBot extends Bot{
         try {
             while (isActive()) {
                 waitOnPause();
-                if (toolRepairing) {
+                if (toolRepairing && isProgressZero()) {
                     if (surfaceMiningMode && pickaxeItem.getDamage() > 10)
                         WurmHelper.hud.sendAction(PlayerAction.REPAIR, pickaxeItem.getId());
                     if (!surfaceMiningMode && shovelItem.getDamage() > 10)
                         WurmHelper.hud.sendAction(PlayerAction.REPAIR, shovelItem.getId());
                 }
                 float progress = Utils.getField(progressBar, "progress");
-                stopDiggingIfHeightIsLower(progressBar);
+                // only cancel actions the bot itself started, not ones the player is doing by hand
+                if (workMode != WorkMode.Unknown)
+                    stopDiggingIfHeightIsLower(progressBar);
                 if (progress == 0f && slopeMovement.recoverIfNeeded(
                         WurmHelper.hud.getWorld().getPlayer().getStamina(),
                         WurmHelper.hud.getWorld().getPlayer().getDamage(),
@@ -159,6 +161,7 @@ public class DiggerBot extends Bot{
                                     slopeMovement.moveTo(diggingTileInfo.x * 4 + 2, diggingTileInfo.y * 4 + 2, STEPS, stepDuration);
                                     if (areaAssistant.areaTourActivated()) {
                                         while(areaAssistant.areaTourActivated()) {
+                                            waitOnPause();
                                             areaAssistant.areaNextPosition();
                                             diggingTileInfo.x = (int)(WurmHelper.hud.getWorld().getPlayerPosX() / 4);
                                             diggingTileInfo.y = (int)(WurmHelper.hud.getWorld().getPlayerPosY() / 4);
@@ -571,7 +574,7 @@ public class DiggerBot extends Bot{
         c("Clicks", "Set the amount of actions the bot will do each time", "<clicks>"),
         l("Levelling", "Toggle the levelling of selected tile", ""),
         la("Area Levelling", "Level the area around player to the specified height (in slopes). With a height it turns area levelling on; without one it turns it off", "[<height>]"),
-        tr("Repair", "Toggle the repairing of the tool", ""),
+        r("Repair", "Toggle the repairing of the tool", ""),
         sm("Surface Mining", "Toggle the surface mining. The bot will do the same but with the pickaxe on the rock", ""),
         tool("Tool", "Set the digging tool from selected inventory item", "");
 

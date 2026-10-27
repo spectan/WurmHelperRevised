@@ -50,7 +50,7 @@ def evaluate(expr):
         if term.startswith('"') and term.endswith('"'):
             out.append(bytes(term[1:-1], "utf-8").decode("unicode_escape"))
         else:
-            m = re.fullmatch(r"(\w+)\.name\(\)", term)
+            m = re.fullmatch(r"(\w+)\.(?:name|class\.getSimpleName)\(\)", term)
             out.append(m.group(1) if m else term)
     return "".join(out)
 
@@ -140,7 +140,7 @@ def main():
         "Generated from the sources by `tools/gen_commands.py` - don't edit by hand.",
         "",
         "Use `bot <bot> <key> [arguments]`. A bot is named by its abbreviation or full name, and a key by its",
-        "short name or full name (`bot ch s 0.9` = `bot chopper stamina 0.9`). Keys can be set before the bot",
+        "short name or full name (`bot tc s 0.9` = `bot tree cutter stamina 0.9`). Keys can be set before the bot",
         "is turned on. See the README for the general usage.",
         "",
         "## Keys every bot has",

@@ -3,6 +3,7 @@ package net.ildar.wurm.bot;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,10 @@ import net.ildar.wurm.annotations.BotInfo;
         abbreviation = "pc")
 public class PileCollector extends Bot {
     private final float MAX_DISTANCE = 4;
+    private static final long TAKE_RETRY_MS = 15000;
     private Set<Long> openedPiles = new HashSet<>();
+    private final Map<Long, Long> takeSentAt = new HashMap<>();
+    private boolean noContainersWarned;
     private volatile InventoryListComponent targetLc;
     private volatile String containerName = "large crate";
     private volatile int containerCapacity = 300;
@@ -54,7 +58,10 @@ public class PileCollector extends Bot {
     protected void work() throws Exception {
         ServerConnectionListenerClass sscc = WurmHelper.hud.getWorld().getServerConnection().getServerConnectionListener();
         Set<Long> pickedUpItems = new HashSet<>();
+        takeSentAt.clear();
         openedPiles.clear();
+        if (targetLc == null)
+            Utils.consolePrint("No target inventory set yet: hover the inventory with the containers and use \"bot pc st\"");
         while (isActive()) {
             waitOnPause();
             Map<Long, GroundItemCellRenderable> groundItemsMap = Utils.getField(sscc, "groundItems");
@@ -82,14 +89,21 @@ public class PileCollector extends Bot {
                                 // we can't get quality of items on the ground (not synced with client)
                                 // so they have to be temporarily moved into player inventory
                                 // (not sure why this was also done previously, moving ground items directly works?)
-                                WurmHelper.hud.sendAction(PlayerAction.TAKE, itemID);
-                                pickedUpItems.add(itemID);
+                                // once per item: re-sending every cycle queues duplicate actions
+                                // an item still on the ground long after (inventory full or too heavy) is tried again
+                                long now = System.currentTimeMillis();
+                                Long sentAt = takeSentAt.get(itemID);
+                                if (pickedUpItems.add(itemID) || sentAt != null && now - sentAt > TAKE_RETRY_MS) {
+                                    WurmHelper.hud.sendAction(PlayerAction.TAKE, itemID);
+                                    takeSentAt.put(itemID, now);
+                                }
                             }
                         }
                     }
                 } catch (ConcurrentModificationException ignored) {}
                 
-                for(WurmComponent wurmComponent : WurmHelper.getInstance().components) {
+                Set<Long> pilesInWindows = new HashSet<>();
+                for(WurmComponent wurmComponent : Utils.getLiveComponents()) {
                     final boolean isContainerWindow = wurmComponent instanceof ItemListWindow;
                     if (!(isContainerWindow || wurmComponent instanceof InventoryWindow))
                         continue;
@@ -105,7 +119,10 @@ public class PileCollector extends Bot {
                             continue;
                         
                         openedPiles.add(rootItem.getId());
+                        pilesInWindows.add(rootItem.getId());
                         targetItems = Utils.getInventoryItems(ilc, targetItemName);
+                        // the pile itself can match the name ("pile of dirt"); it is not an item to move
+                        targetItems.removeIf(item -> item.getId() == rootItem.getId());
                     } else {
                         targetItems = Utils.getInventoryItems(targetItemName);
                     }
@@ -138,6 +155,8 @@ public class PileCollector extends Bot {
                             );
                         }
                 }
+                // a pile whose window was closed is opened again the next time it is in reach
+                openedPiles.retainAll(pilesInWindows);
             }
             sleep(timeout);
         }
@@ -154,9 +173,13 @@ public class PileCollector extends Bot {
         if (targetItems != null && targetItems.size() > 0) {
             List<InventoryMetaItem> containers = Utils.getInventoryItems(targetLc, containerName);
             if (containers == null || containers.size() == 0) {
-                Utils.consolePrint("No target containers!");
+                // once, not on every tick
+                if (!noContainersWarned)
+                    Utils.consolePrint("No target containers named \"" + containerName + "\" in the target inventory!");
+                noContainersWarned = true;
                 return false;
             }
+            noContainersWarned = false;
             for(InventoryMetaItem container : containers) {
                 List<InventoryMetaItem> containerContents = container.getChildren();
                 int itemsCount = 0;

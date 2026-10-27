@@ -67,6 +67,8 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     static final long syncTargetDelay = 500; // doesn't need to be as fine grained
     boolean syncPosition;
     boolean syncHeading;
+    boolean syncTargetRunning; // guards against scheduling more than one syncTargetTask loop
+    private boolean syncTargetRescheduled;
     boolean syncPositionRunning; // guards against scheduling more than one syncPositionTask loop
     long syncDelay = 50;
     
@@ -320,10 +322,22 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             port -> new ServerSocket(port, 16, InetAddress.getByName(registryHost))
         );
         
-        Remote stub = UnicastRemoteObject.exportObject(this, 0);
-        serverRegistry.bind("BotServer", stub);
-        
-        clients = new ClientSet();
+        try
+        {
+            Remote stub = UnicastRemoteObject.exportObject(this, 0);
+            serverRegistry.bind("BotServer", stub);
+            
+            clients = new ClientSet();
+        }
+        catch(Exception err)
+        {
+            // don't stay half-enabled: isServer() would be true with nothing registered
+            printExceptions(() -> UnicastRemoteObject.unexportObject(this, true), "Got %s when unexporting server: %s");
+            printExceptions(() -> UnicastRemoteObject.unexportObject(serverRegistry, true), "Got %s when unexporting registry: %s");
+            serverRegistry = null;
+            clients = null;
+            throw err;
+        }
         
         Utils.feedback("Server mode active, RMI registry running at %s:%d", registryHost, registryPort);
     }
@@ -359,10 +373,21 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         }
         
         clientRegistry = LocateRegistry.getRegistry(registryHost, registryPort);
-        Remote stub = UnicastRemoteObject.exportObject(this, 0);
-        clientRegistry.bind(regName, stub);
-        Utils.feedback("Client mode enabled");
-        ((BotServer)clientRegistry.lookup("BotServer")).onClientJoin(getPlayerName());
+        try
+        {
+            Remote stub = UnicastRemoteObject.exportObject(this, 0);
+            clientRegistry.bind(regName, stub);
+            Utils.feedback("Client mode enabled");
+            ((BotServer)clientRegistry.lookup("BotServer")).onClientJoin(getPlayerName());
+        }
+        catch(Exception err)
+        {
+            // e.g. no server running: don't stay half-enabled
+            printExceptions(() -> clientRegistry.unbind(regName), "Got %s when unbinding client: %s");
+            printExceptions(() -> UnicastRemoteObject.unexportObject(this, true), "Got %s when unexporting client: %s");
+            clientRegistry = null;
+            throw err;
+        }
     }
     
     void serverRefreshClients() throws Exception
@@ -407,8 +432,8 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             return;
         }
         
-        final int mouseX = world().getClient().getXMouse();
-        final int mouseY = world().getClient().getYMouse();
+        final int mouseX = Utils.getGuiMouseX();
+        final int mouseY = Utils.getGuiMouseY();
         final PickableUnit hoveredUnit = world().getCurrentHoveredObject();
         
         switch(args[0].toLowerCase())
@@ -419,7 +444,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 final String cmdKeyword = Inputs.sr.getName();
                 
                 Utils.consolePrint(
-                    "bot %s %s exec [@characterName] <cmd1 [\\; cmd2...]> -- clients (or only named client,) but not master, execute given commands",
+                    "bot %s %s exec [@characterName] <cmd1 [# cmd2...]> (## for a literal #) -- clients (or only named client,) but not master, execute given commands",
                     botKeyword, cmdKeyword
                 );
                 Utils.consolePrint(
@@ -585,7 +610,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
             {
                 syncTarget = !syncTarget;
                 if(syncTarget)
-                    execute(this::syncTargetTask);
+                    startSyncTargetTask();
                 
                 Utils.feedback(
                     "Target synchronization %s",
@@ -853,7 +878,36 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
         }
     }
     
+    // tasks run while holding this object's monitor (see work()), so this check can't race with the loop ending
+    synchronized void startSyncTargetTask()
+    {
+        if(syncTargetRunning)
+            return;
+        syncTargetRunning = tryExecute(this::syncTargetTask);
+    }
+    
+    private void scheduleSyncTarget(long msecs)
+    {
+        schedule(this::syncTargetTask, msecs);
+        syncTargetRescheduled = true;
+    }
+    
     void syncTargetTask()
+    {
+        syncTargetRescheduled = false;
+        try
+        {
+            syncTargetStep();
+        }
+        finally
+        {
+            // let synctarget start the loop again if it ended for any reason
+            if(!syncTargetRescheduled)
+                syncTargetRunning = false;
+        }
+    }
+    
+    private void syncTargetStep()
     {
         if(!syncTarget) return;
         printExceptions(
@@ -861,8 +915,18 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 ArrayList<CombatInfo> infos = new ArrayList<>();
                 infos.add(getCombatInfo());
                 for(BotClient remote: clients.remotes)
-                    infos.add(remote.getCombatInfo());
-                
+                {
+                    // a client that closed without leaving would otherwise end the whole synchronization
+                    try
+                    {
+                        infos.add(remote.getCombatInfo());
+                    }
+                    catch(RemoteException e)
+                    {
+                        Utils.consolePrint("Skipping an unreachable client in target synchronization: %s", e.getMessage());
+                    }
+                }
+
                 final Set<Long> targetSet = infos
                     .stream()
                     .map(info -> info.target)
@@ -872,7 +936,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 targetSet.removeIf(x -> x < 0);
                 if(allTargetingSame || targetSet.size() == 0)
                 {
-                    schedule(this::syncTargetTask, syncTargetDelay);
+                    scheduleSyncTarget(syncTargetDelay);
                     return;
                 }
                 
@@ -896,7 +960,7 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
                 
                 attack(target);
                 clients.attack(target);
-                schedule(this::syncTargetTask, syncTargetDelay + 1000); // wait for network roundtrip
+                scheduleSyncTarget(syncTargetDelay + 1000); // wait for network roundtrip
             },
             "Got %s when running target synchronization: %s"
         );
@@ -996,8 +1060,11 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void genericAction(short actionID, long targetID) throws RemoteException
     {
-        PlayerAction action = new PlayerAction(actionID, PlayerAction.ANYTHING, "", false);
-        hud.sendAction(action, targetID);
+        // remote calls arrive on an RMI thread; the game is touched from the bot thread
+        execute(() -> {
+            PlayerAction action = new PlayerAction(actionID, PlayerAction.ANYTHING, "", false);
+            hud.sendAction(action, targetID);
+        });
     }
     
     @Override
@@ -1014,20 +1081,22 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void embark(long vehicleID) throws RemoteException
     {
-        hud.sendAction(PlayerAction.EMBARK_PASSENGER, vehicleID);
+        execute(() -> hud.sendAction(PlayerAction.EMBARK_PASSENGER, vehicleID));
     }
     
     @Override
     public void disembark() throws RemoteException
     {
-        CreatureCellRenderable vehicle = world().getPlayer().getCarrierCreature();
-        if(vehicle == null)
-        {
-            Utils.consolePrint("Got disembark request but not riding anything");
-            return;
-        }
-        
-        hud.sendAction(PlayerAction.DISEMBARK, vehicle.getId());
+        execute(() -> {
+            CreatureCellRenderable vehicle = world().getPlayer().getCarrierCreature();
+            if(vehicle == null)
+            {
+                Utils.consolePrint("Got disembark request but not riding anything");
+                return;
+            }
+            
+            hud.sendAction(PlayerAction.DISEMBARK, vehicle.getId());
+        });
     }
 
     @Override
@@ -1054,22 +1123,26 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void dig() throws RemoteException
     {
-        if(!locateShovel())
-            return;
-        
-        final int tx = Math.round(world().getPlayerPosX() / 4);
-        final int ty = Math.round(world().getPlayerPosY() / 4);
-        final long tileID = Tiles.getTileId(tx, ty, 0);
-        world().getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.DIG);
+        execute(() -> {
+            if(!locateShovel())
+                return;
+            
+            final int tx = (int) Math.floor(world().getPlayerPosX() / 4f);
+            final int ty = (int) Math.floor(world().getPlayerPosY() / 4f);
+            final long tileID = Tiles.getTileId(tx, ty, 0);
+            world().getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.DIG);
+        });
     }
     
     @Override
     public void level(long tileID) throws RemoteException
     {
-        if(!locateShovel())
-            return;
-        
-        world().getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.LEVEL);
+        execute(() -> {
+            if(!locateShovel())
+                return;
+            
+            world().getServerConnection().sendAction(shovelID, new long[]{tileID}, PlayerAction.LEVEL);
+        });
     }
     
     @Override
@@ -1096,23 +1169,26 @@ public class RMIBot extends Bot implements BotServer, BotClient, Executor
     @Override
     public void clearCrafting() throws RemoteException
     {
-        try
-        {
-            CreationWindow creationWindow = hud.getCreationWindow();
-            CreationFrame source = Utils.getField(creationWindow, "source");
-            CreationFrame target = Utils.getField(creationWindow, "target");
-            
-            source.clearGroundItem();
-            target.clearGroundItem();
-            source.clearItemList();
-            target.clearItemList();
-            source.clearTexture();
-            target.clearTexture();
-        }
-        catch(Exception err)
-        {
-            throw new RemoteException("Failed to clear crafting source/target: ", err);
-        }
+        // the crafting window is only touched from the bot thread, so a failure is reported here, not to the caller
+        execute(() -> {
+            try
+            {
+                CreationWindow creationWindow = hud.getCreationWindow();
+                CreationFrame source = Utils.getField(creationWindow, "source");
+                CreationFrame target = Utils.getField(creationWindow, "target");
+                
+                source.clearGroundItem();
+                target.clearGroundItem();
+                source.clearItemList();
+                target.clearItemList();
+                source.clearTexture();
+                target.clearTexture();
+            }
+            catch(Exception err)
+            {
+                Utils.consolePrint("Failed to clear crafting source/target: %s", err);
+            }
+        });
     }
 }
 

@@ -24,7 +24,7 @@ public class ArcheoGroupMod implements WurmClientMod, PreInitable {
             classPool.getCtClass("com.wurmonline.client.game.inventory.InventoryMetaItem")
                     .getMethod("updateDisplayName", "()V")
                     .insertAfter(
-                            "if (this.groupName.contains(\"fragment\") && this.groupName.contains(\"[\")) {" +
+                            "if (this.groupName != null && this.groupName.contains(\"fragment\") && this.groupName.contains(\"[\")) {" +
                                     "int openIdx = this.groupName.indexOf('[');" +
                                     "int closeIdx = this.groupName.indexOf(']');" +
                                     "if (openIdx > 0 && closeIdx > openIdx) {" +

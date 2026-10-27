@@ -75,8 +75,8 @@ public class ForageStuffMoverBot extends Bot {
     }
 
     private void addTarget() {
-        int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-        int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+        int x = Utils.getGuiMouseX();
+        int y = Utils.getGuiMouseY();
         long[] targets = WurmHelper.hud.getCommandTargetsFrom(x, y);
         if (targets != null && targets.length > 0) {
             long target = targets[0];

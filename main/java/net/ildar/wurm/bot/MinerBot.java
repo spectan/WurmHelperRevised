@@ -25,8 +25,9 @@ public class MinerBot extends Bot {
     private volatile InventoryMetaItem pickaxe;
     private static final String[] VALID_TOOLS = {"pickaxe"};
     private volatile long fixedTileId;
-    private int[] lastTile;
-    private Set<Pair<Integer, Integer>> errorTiles = new HashSet<>();
+    private volatile int[] lastTile;
+    // touched by the chat event thread, the console thread and the bot thread
+    private Set<Pair<Integer, Integer>> errorTiles = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private long lastMining;
     private volatile int clicks = 2;
     private volatile boolean shardsCombining;
@@ -36,7 +37,7 @@ public class MinerBot extends Bot {
     private long lastFuelling;
     private volatile boolean moving;
     private int movingForwardBias;
-    private boolean smelting = false;
+    private volatile boolean smelting = false;
     private volatile boolean verbose = false;
     private volatile boolean noOre;
     private Random random = new Random();
@@ -125,17 +126,20 @@ public class MinerBot extends Bot {
                 List<InventoryMetaItem> invShards = Utils.getInventoryItems(shards);
 
                 if (invShards.size() > 1) {
-                    long ids[] = new long[invShards.size()];
-                    for (int i = 0; i < invShards.size(); i++)
-                        ids[i] = invShards.get(i).getId();
-                    if (verbose) Utils.consolePrint("Combining " + Arrays.toString(ids));
-                    WurmHelper.hud.getWorld().getServerConnection().sendAction(
-                            ids[0], ids, PlayerAction.COMBINE);
+                    // not while a combine (or anything else) is still running
+                    if (isProgressZero()) {
+                        long ids[] = new long[invShards.size()];
+                        for (int i = 0; i < invShards.size(); i++)
+                            ids[i] = invShards.get(i).getId();
+                        if (verbose) Utils.consolePrint("Combining " + Arrays.toString(ids));
+                        WurmHelper.hud.getWorld().getServerConnection().sendAction(
+                                ids[0], ids, PlayerAction.COMBINE);
+                    }
                 } else {
                     int needed = 2 - invShards.size();
 
                     List<ItemListWindow> piles = new ArrayList<>();
-                    for (WurmComponent wurmComponent : WurmHelper.getInstance().components)
+                    for (WurmComponent wurmComponent : Utils.getLiveComponents())
                         if (wurmComponent instanceof ItemListWindow) {
                             InventoryMetaItem root = Utils.getRootItem(Utils.getField(wurmComponent, "component"));
                             if (root != null && root.getBaseName().toLowerCase().contains("pile of"))
@@ -187,7 +191,8 @@ public class MinerBot extends Bot {
                         InventoryListComponent ilc = Utils.getField(wurmComponent, "component");
                         InventoryMetaItem rootItem = Utils.getRootItem(ilc);
                         if (rootItem == null) continue;
-                        if (!groundItemEntries.isEmpty() && !closePileIds.contains(rootItem.getId())) {
+                        // the pile chosen for smelting stays open even when it is not on this tile
+                        if (!groundItemEntries.isEmpty() && !closePileIds.contains(rootItem.getId()) && ilc != smeltingOptions.pile) {
                             if (verbose)
                                 Utils.consolePrint("Closing distant pile window: " + rootItem.getBaseName() + " [id=" + rootItem.getId() + "]");
                             WurmHelper.hud.sendAction(PlayerAction.CLOSE, rootItem.getId());
@@ -449,8 +454,8 @@ public class MinerBot extends Bot {
         Float minQuality = parseFloatArg(input, MinerBot.InputKey.at, 0, 100);
         if (minQuality == null)
             return;
-        int x = WurmHelper.hud.getWorld().getClient().getXMouse();
-        int y = WurmHelper.hud.getWorld().getClient().getYMouse();
+        int x = Utils.getGuiMouseX();
+        int y = Utils.getGuiMouseY();
         long[] container = WurmHelper.hud.getCommandTargetsFrom(x, y);
         if (container != null && container.length > 0) {
             addSmeltingTarget(container[0], null, minQuality);
@@ -703,7 +708,7 @@ public class MinerBot extends Bot {
     private void setSmelter() {
         WurmComponent smelter = Utils.getTargetComponent(c -> c instanceof ItemListWindow);
         if (smelter == null) {
-            Utils.consolePrint("Can't set the smelter!");
+            Utils.consolePrint("Can't set the smelter! " + Utils.describeComponentsAtMouse());
             return;
         }
         try {
@@ -717,7 +722,7 @@ public class MinerBot extends Bot {
     private void setPile() {
         WurmComponent pile = Utils.getTargetComponent(c -> c instanceof ItemListWindow);
         if (pile == null) {
-            Utils.consolePrint("Can't set the pile!");
+            Utils.consolePrint("Can't set the pile! " + Utils.describeComponentsAtMouse());
             return;
         }
         try {
@@ -729,9 +734,9 @@ public class MinerBot extends Bot {
     }
 
     static class SmeltingOptions {
-        InventoryListComponent smelter;
-        InventoryListComponent pile;
-        ArrayList<Pair<Long, Float>> containers = new ArrayList<>();
+        volatile InventoryListComponent smelter;
+        volatile InventoryListComponent pile;
+        List<Pair<Long, Float>> containers = new java.util.concurrent.CopyOnWriteArrayList<>();
     }
 
     enum MiningMode{

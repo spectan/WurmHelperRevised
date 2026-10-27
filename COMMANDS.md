@@ -3,7 +3,7 @@
 Generated from the sources by `tools/gen_commands.py` - don't edit by hand.
 
 Use `bot <bot> <key> [arguments]`. A bot is named by its abbreviation or full name, and a key by its
-short name or full name (`bot ch s 0.9` = `bot chopper stamina 0.9`). Keys can be set before the bot
+short name or full name (`bot tc s 0.9` = `bot tree cutter stamina 0.9`). Keys can be set before the bot
 is turned on. See the README for the general usage.
 
 ## Keys every bot has
@@ -25,7 +25,6 @@ is turned on. See the README for the general usage.
 | [Archer](#archer) | `ar` | Automatically shoots at selected target with currently equipped bow. When the string breaks tries to place a new one. Deactivates on target death. |
 | [Assistant](#assistant) | `a` | Assists player in various ways |
 | [Bulk Item Getter](#bulk-item-getter) | `big` | Automatically transfers items to player's inventory from configured bulk storages. The n-th  source item will be transferred to the n-th target item |
-| [Chopper](#chopper) | `ch` | Automatically chops felled trees near player |
 | [Container Item Getter](#container-item-getter) | `cig` | Retrieves items from containers |
 | [Crafter](#crafter) | `c` | Automatically does crafting operations using items from crafting window. New crafting operations are not starting until an action queue becomes empty. This behaviour can be disabled.  |
 | [Digger](#digger) | `d` | Does the dirty job |
@@ -46,7 +45,8 @@ is turned on. See the README for the general usage.
 | [Prospector](#prospector) | `pr` | Prospects selected tile |
 | [RMI](#rmi) | `rmi` | Remotely control other clients |
 | [Seller](#seller) | `s` | Sells items to tokens |
-| [Tree Cutter](#tree-cutter) | `tc` | Cuts trees |
+| [Tree Cutter](#tree-cutter) | `tc` | Cuts trees and chops up the felled ones |
+| [Unfinished Finisher](#unfinished-finisher) | `uf` | Finds unfinished items on the ground near the player, adds each to the crafting window and pulls the materials it still needs out of bulk storage bins until it is finished |
 
 ## Archeo
 
@@ -91,7 +91,7 @@ is turned on. See the README for the general usage.
 | `cwov` | Wisdom of Vynora | Toggle automatic casts of Wisdom of Vynora spell. Turns other spellcasts off |
 | `eat` | Eating | Toggle automatic eating of the food the user is pointing at |
 | `groom` | Grooming | Toggle grooming of creatures |
-| `kb` | Kindling Burning | Toggle automatic burning of kindlings in player's inventory. AssistantBot.class.getSimpleName() will combine the kindlings and burn them using the selected forge. The timeout of burns can be configured separately |
+| `kb` | Kindling Burning | Toggle automatic burning of kindlings in player's inventory. AssistantBot will combine the kindlings and burn them using the selected forge. The timeout of burns can be configured separately |
 | `kbid <id>` | Kindling By Forge ID | Turn on automatic kindling burns at the forge with the provided id (changes the forge if burning is already on) |
 | `kbt <milliseconds>` | Kindling Timeout | Change the timeout between kindling burns. Default is 10000 |
 | `l` | Lockpicking | Toggle automatic lockpicking. The target chest should be beneath the user's mouse |
@@ -113,7 +113,7 @@ is turned on. See the README for the general usage.
 | `s` | Sacrificing | Toggle automatic sacrificing at the selected altar. The timeout between sacrifices can be configured separately. |
 | `sid <id>` | Sacrifice By ID | Turn on automatic sacrifices at the altar with the provided id (changes the altar if sacrificing is already on) |
 | `st <milliseconds>` | Sacrifice Timeout | Change the timeout between sacrifices. Default is 1230000 (20.5 minutes) |
-| `v` | Verbose | Toggle verbose mode. In verbose mode the AssistantBot.class.getSimpleName() will output additional info to the console |
+| `v` | Verbose | Toggle verbose mode. In verbose mode the AssistantBot will output additional info to the console |
 | `w` | Drinking | Toggle automatic drinking of the liquid the user is pointing at |
 | `wid <id>` | Drink By ID | Turn on automatic drinking of the liquid with the provided id (changes the target if drinking is already on) |
 
@@ -131,19 +131,6 @@ is turned on. See the README for the general usage.
 | `ss` | Set Source | Set the source item for chosen spec (in bulk storage) to what the user is currently pointing to |
 | `ssxy` | Source XY | Find source item(s) for chosen spec from a fixed point at current cursor position |
 | `st` | Set Target | Set the target item for chosen spec to what the user is currently pointing to |
-
-## Chopper
-
-`bot ch` - Automatically chops felled trees near player
-
-| Key | Name | Description |
-|---|---|---|
-| `area [<tiles ahead> <tiles to the right>]` | Area Mode | Start the area processing mode for an area of the given size, starting from the bottom left corner where the player stands and facing forward. While it is running, the same size (or no arguments) stops it and a different size resizes it |
-| `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
-| `c <clicks>` | Clicks | Set the amount of chops the bot will do each time |
-| `d <distance>` | Distance | Set the distance (in meters) the bot should look around player in search for a felled tree |
-| `s <threshold>` | Stamina | Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold |
-| `tool` | Tool | Set the chopping tool from the selected inventory item |
 
 ## Container Item Getter
 
@@ -167,17 +154,17 @@ is turned on. See the README for the general usage.
 | `cs` | Combine Sources | Combine source items(on the left side of crafting window) |
 | `ct` | Combine Targets | Combine target items(on the right side of crafting window) |
 | `ctimeout <milliseconds>` | Combine Timeout | Set the timeout for item combining in milliseconds |
-| `noan` | Toggle Action Check | Toggles the check for action queue state before the start of each crafting operation. By default CrafterBot.class.getSimpleName() will check action queue and start crafting operations only when it is empty |
+| `noan` | Toggle Action Check | Toggles the check for action queue state before the start of each crafting operation. By default CrafterBot will check action queue and start crafting operations only when it is empty |
 | `nosort` | Toggle Sorting | Sorting of source and target items by weight is disabled by default. This key toggles sorting on and off |
 | `r` | Repair | Toggle the source item repairing (on the left side of crafting window). Usually it is an instrument. When the source item gets 10% damage player will repair it automatically |
 | `s <threshold>` | Stamina | Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold |
 | `s1s` | Single Source | Toggles the setting of single item to source slot of crafting window |
-| `ss <item name>` | Set Source | Set the source item name. CrafterBot.class.getSimpleName() will place item with provided name from your inventory to the source slot(on the left side of crafting window). The name may contain spaces |
+| `ss <item name>` | Set Source | Set the source item name. CrafterBot will place item with provided name from your inventory to the source slot(on the left side of crafting window). The name may contain spaces |
 | `ssid <item id>` | Source By ID | Set an item with provided id to the source slot(on the left side of crafting window) |
-| `ssxy` | Source XY | Set the source item fixed point. CrafterBot.class.getSimpleName() will place item from that fixed point of screen to the source item slot(on the left side of crafting window) |
-| `st <item name>` | Set Target | Set the target item name. CrafterBot.class.getSimpleName() will place item with provided name from your inventory to the target slot(on the right side of crafting window). The name may contain spaces |
-| `stxy` | Target XY | Set the target item fixed point. CrafterBot.class.getSimpleName() will place item from that fixed point of screen to the target item slot(on the right side of crafting window) |
-| `u` | Unfinished Mode | Toggle the special mode in which CrafterBot.class.getSimpleName() will place an item to the target item slot which is at the top of "Needed items" list |
+| `ssxy` | Source XY | Set the source item fixed point. CrafterBot will place item from that fixed point of screen to the source item slot(on the left side of crafting window) |
+| `st <item name>` | Set Target | Set the target item name. CrafterBot will place item with provided name from your inventory to the target slot(on the right side of crafting window). The name may contain spaces |
+| `stxy` | Target XY | Set the target item fixed point. CrafterBot will place item from that fixed point of screen to the target item slot(on the right side of crafting window) |
+| `u` | Unfinished Mode | Toggle the special mode in which CrafterBot will place an item to the target item slot which is at the top of "Needed items" list |
 
 ## Digger
 
@@ -193,10 +180,10 @@ is turned on. See the README for the general usage.
 | `dtp` | Dig To Pile | Toggle the use of "Dig to pile" action instead of "Dig" |
 | `l` | Levelling | Toggle the levelling of selected tile |
 | `la [<height>]` | Area Levelling | Level the area around player to the specified height (in slopes). With a height it turns area levelling on; without one it turns it off |
+| `r` | Repair | Toggle the repairing of the tool |
 | `s <threshold>` | Stamina | Set the stamina threshold (0 to 1). Player will not do any actions if his stamina is lower than specified threshold |
 | `sm` | Surface Mining | Toggle the surface mining. The bot will do the same but with the pickaxe on the rock |
 | `tool` | Tool | Set the digging tool from selected inventory item |
-| `tr` | Repair | Toggle the repairing of the tool |
 
 ## Farmer
 
@@ -245,6 +232,7 @@ is turned on. See the README for the general usage.
 | `b` | Botanizing | Toggle the botanizing |
 | `bt <type>` | Botanize Type | Set the botanizing type. Use the "btl" key to see the available types |
 | `btl` | Botanize Types | Show the list of botanizing types |
+| `c <clicks>` | Clicks | Set the number of actions bot will do each time |
 | `d` | Drop | Toggle the dropping of collected items to the ground |
 | `dfa <item name>[, <item name>...]` | Add Item | Add item name(s) to the drop filter, separated by commas. Items whose name contains a filter name won't be dropped |
 | `dfc` | Clear Items | Clear the drop filter |
@@ -253,9 +241,8 @@ is turned on. See the README for the general usage.
 | `ft <type>` | Forage Type | Set the foraging type. Use the "ftl" key to see the available types |
 | `ftl` | Forage Types | Show the list of foraging types |
 | `g` | Grass | Toggle the grass gathering |
-| `na <clicks>` | Clicks | Set the number of actions bot will do each time |
 | `s <threshold>` | Stamina | Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold |
-| `scn <container name>` | Container Name | Set the name of the containers to put sprouts/harvest in (may contain spaces) |
+| `scn <container name>` | Container Name | Set the name of the containers to put the foraged items in (may contain spaces) |
 | `v` | Verbose | Toggle the verbose mode. Additional information will be shown in console during the work of the bot in verbose mode |
 
 ## Forester
@@ -270,6 +257,7 @@ is turned on. See the README for the general usage.
 | `asb <tree name>[, <tree name>...]` | Add Sprout Blacklist | Add tree type(s), separated by commas, to not pick sprouts from |
 | `atb <tree name>[, <tree name>...]` | Add Tree Blacklist | Add blacklisted tree type(s), separated by commas. Those trees are skipped |
 | `atw <tree name>[, <tree name>...]` | Add Tree Whitelist | Add whitelisted tree type(s), separated by commas. When the whitelist is not empty only those trees are processed |
+| `c <clicks>` | Clicks | Set the number of actions bot will do each time |
 | `ca` | Cut All Sprouts | Toggle the cutting of sprouts from all trees |
 | `cs` | Cut Shriveled | Toggle the cutting of shriveled trees |
 | `csb` | Clear Sprout Blacklist | Clear blacklisted tree types for sprout picking |
@@ -277,7 +265,6 @@ is turned on. See the README for the general usage.
 | `ctw` | Clear Tree Whitelist | Clear whitelisted tree types |
 | `df` | Deforestation | Toggle the cutting of all trees (deforestation) |
 | `h` | Harvest Mode | Toggle the harvesting |
-| `na <clicks>` | Clicks | Set the number of actions bot will do each time |
 | `p` | Planting | Toggle the planting |
 | `po` | Prune Overaged | Toggle the pruning of overaged trees (on by default). Ignored while deforestation is on |
 | `s <threshold>` | Stamina | Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold |
@@ -377,6 +364,7 @@ is turned on. See the README for the general usage.
 |---|---|---|
 | `a <item name>` | Add Item | Add item names to chosen set. Separate several names with commas |
 | `cd` | Collect Destination | Where collected items go: hover a container window to use it, or your inventory window to go back to the inventory (the default) |
+| `ci [<item names>]` | Collect Items | Names of the items collect mode takes out of the containers, separated by commas (e.g. pizza), when they differ from the set's own items. Without names, collecting takes the set's own items again |
 | `clear` | Clear Items | Clear list of items in chosen set |
 | `co` | Collect | Switch the chosen nested set between filling the containers and collecting: collecting takes the set's items (e.g. meal) out of every nested container and moves them to your inventory, or to the window set with cd |
 | `fl` | First Level Only | Toggle moving of only top-level items |
@@ -414,7 +402,7 @@ is turned on. See the README for the general usage.
 | `r` | Repair | Toggle automatic repairing of equipped items while murdering. When an equipped item gets 2 damage it is repaired between kills (unrepairable items like summer hats are skipped) |
 | `shear` | Shear | Toggle finding and shearing nearby sheep. Needs the bot running |
 | `speed <km/h>` | Speed | Set speed at which bot will move, in km/h |
-| `walkto [<x> <y>]` | Walk To | Walk to given tile coordinates, or to the hovered tile when none are given. Needs the bot running |
+| `walkto [<x> <y>]` | Walk To | Walk to given tile coordinates, or to the hovered tile when none are given. Use it again while walking to stop. Needs the bot running |
 
 ## Pile Collector
 
@@ -467,7 +455,7 @@ is turned on. See the README for the general usage.
 
 ## Tree Cutter
 
-`bot tc` - Cuts trees
+`bot tc` - Cuts trees and chops up the felled ones
 
 | Key | Name | Description |
 |---|---|---|
@@ -477,7 +465,21 @@ is turned on. See the README for the general usage.
 | `area_speed <tiles per second>` | Area Speed | Set the moving speed for area mode in tiles per second (0.01 to 100). Default value is 1 tile per second. |
 | `b` | Bush Cutting | Toggle bush cutting. Enabled by default |
 | `c <clicks>` | Clicks | Set the number of chops queued each time |
+| `ch` | Chop Felled | Toggle chopping up the felled trees near the player with the same tool. Enabled by default |
+| `d <distance>` | Distance | Set the distance (in meters) the bot should look around the player in search for a felled tree |
 | `s <threshold>` | Stamina | Set the stamina threshold. Player will not do any actions if his stamina is lower than specified threshold |
 | `sp` | Sprout Cutting | Toggle sprouting trees cutting. Enabled by default |
 | `tool` | Tool | Use the item selected in your inventory as the cutting tool (a hatchet is looked up on start otherwise) |
 | `tt <tree types>` | Tree Type | Set tree types for chopping, e.g. "birch oak" or "birch, oak". Use "all" to chop all trees again (the default) |
+
+## Unfinished Finisher
+
+`bot uf` - Finds unfinished items on the ground near the player, adds each to the crafting window and pulls the materials it still needs out of bulk storage bins until it is finished
+
+| Key | Name | Description |
+|---|---|---|
+| `c <count>` | Pull Count | Set how many of an ingredient the bot pulls from the bin at a time (it never pulls more than the item still needs) |
+| `csb` | Clear Bins | Forget all the bins |
+| `d <distance>` | Distance | Set the distance (in meters) the bot should look around the player in search for unfinished items |
+| `s <threshold>` | Stamina | Set the stamina threshold (0 to 1, or a percentage). Player will not do any actions if his stamina is lower than specified threshold |
+| `sb` | Set Bin | Add the bulk storage bin window under the cursor as a place to pull ingredients from |
