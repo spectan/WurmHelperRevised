@@ -1,0 +1,6 @@
+SkloGraphics 0.2.9 (release channel), graphics overhaul for the Wurm Unlimited client.
+Binary only, no source: SkloGraphics.jar was added by the repository owner. Its classes and resources are
+unpacked into WurmHelper.jar at build time (see the unpack-sklographics execution in main/pom.xml), and the
+jar itself is installed to mods/skloGraphics/SkloGraphics.jar because the mod registers that file as a resource pack.
+WurmHelper turns the mod's own auto-updater off (a replaced jar would not be loaded; update by replacing
+modules/sklographics/SkloGraphics.jar and rebuilding). Redistribution terms are not recorded here.

@@ -32,6 +32,9 @@ public final class ModuleManager {
     static final File MODS_DIR = new File("mods");
     static final File CONFIG_DIR = new File(MODS_DIR, "WurmHelper");
 
+    private static final File SKLOGRAPHICS_JAR = new File(new File(MODS_DIR, "skloGraphics"), "SkloGraphics.jar");
+    private static final List<String> EARLY_INIT = Arrays.asList("uiscale", "sklographics");
+
     public enum State { DISABLED, SEPARATELY_INSTALLED, FAILED, LOADED }
 
     public static final class Module {
@@ -62,11 +65,13 @@ public final class ModuleManager {
         }
     }
 
-    // UI Scale comes first: its init rewrites game classes and skips any class that is already loaded,
-    // so it must run before the other mods (and WurmHelper) make the game load them
+    // UI Scale comes first, then SkloGraphics: their inits rewrite game classes and skip any class that is
+    // already loaded, so they must run before the other mods (and WurmHelper) make the game load them
     private final List<Module> modules = Arrays.asList(
             new Module("uiscale", "UI Scale", "Scales the whole interface for high-resolution screens (console: uifade)",
                     "uiscale.UiScaleMod", "uiscale"),
+            new Module("sklographics", "SkloGraphics", "Graphics overhaul: shadows, water, sky, trees and post-processing (settings: quality preset)",
+                    "com.sklotopolis.mod.client.graphics.SkloGraphics", "skloGraphics"),
             new Module("archeogroup", "Archeology Grouping", "Groups archaeology fragments in the inventory",
                     "net.bdew.wurm.archeogroup.ArcheoGroupMod", "archeogroup"),
             new Module("compass", "Improved Compass", "Improved compass on the HUD",
@@ -91,8 +96,6 @@ public final class ModuleManager {
                     "net.bdew.wurm.toolbelt.ToolbeltMod", "toolbelt"),
             new Module("tooltips", "Better Tooltips", "Extra information in tooltips",
                     "net.bdew.wurm.tooltip.TooltipMod", "tooltips"),
-            new Module("thirdperson", "Third Person", "Third person camera with zoom and a side offset (console: tp)",
-                    "dev.thource.wurmunlimited.clientmods.thirdperson.ThirdPerson", "thirdperson", "thources-third-person-mod"),
             new Module("rendertweaks", "Render Tweaks", "Hide grass and trees, change the weather (console: toggleGrass, toggleTrees, weather)",
                     "org.tmarchuk.wurmunlimited.client.rendertweaks.ClientRenderTweaksMod", "rendertweaks", "ClientRenderTweaks")
     );
@@ -117,10 +120,15 @@ public final class ModuleManager {
                 logger.warning("[WurmHelper] Module " + module.id + " skipped: " + module.problem);
                 continue;
             }
+            if (module.id.equals("sklographics") && !SKLOGRAPHICS_JAR.isFile()) {
+                // it adds this jar to the game as a resource pack and crashes the client at startup without it
+                fail(module, "configure", new IOException(SKLOGRAPHICS_JAR.getPath() + " is missing, install WurmHelper.zip again"));
+                continue;
+            }
             try {
                 module.instance = Class.forName(module.className).getDeclaredConstructor().newInstance();
                 if (module.instance instanceof Configurable)
-                    ((Configurable) module.instance).configure(loadModuleConfig(module));
+                    ((Configurable) module.instance).configure(withOverrides(module, loadModuleConfig(module)));
                 module.state = State.LOADED;
             } catch (Throwable t) {
                 fail(module, "configure", t);
@@ -158,7 +166,7 @@ public final class ModuleManager {
         for (Module module : modules) {
             if (module.state != State.LOADED || !(module.instance instanceof Initable))
                 continue;
-            if (early != module.id.equals("uiscale"))
+            if (early != EARLY_INIT.contains(module.id))
                 continue;
             try {
                 ((Initable) module.instance).init();
@@ -166,6 +174,13 @@ public final class ModuleManager {
                 fail(module, "init", t);
             }
         }
+    }
+
+    private static Properties withOverrides(Module module, Properties properties) {
+        // the built-in copy cannot replace its own jar, so SkloGraphics' updater stays off
+        if (module.id.equals("sklographics"))
+            properties.setProperty("autoUpdate", "false");
+        return properties;
     }
 
     private void fail(Module module, String phase, Throwable t) {
