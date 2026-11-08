@@ -40,6 +40,7 @@ public class MinerBot extends Bot {
     private volatile boolean smelting = false;
     private volatile boolean verbose = false;
     private volatile boolean noOre;
+    private volatile boolean reinforced;
     private Random random = new Random();
     private volatile Direction direction = Direction.FORWARD;
 
@@ -53,6 +54,7 @@ public class MinerBot extends Bot {
         registerInputHandler(MinerBot.InputKey.area, input -> setAreaMiningMode());
         registerInputHandler(MinerBot.InputKey.ft, input -> setFrontTileMiningMode());
         registerInputHandler(MinerBot.InputKey.o, input -> toggleOreMining());
+        registerInputHandler(MinerBot.InputKey.r, input -> toggleReinforcedMining());
         registerInputHandler(MinerBot.InputKey.m, input -> toggleMoving());
         registerInputHandler(MinerBot.InputKey.sm, input -> toggleSmelting());
         registerInputHandler(MinerBot.InputKey.at, this::addTarget);
@@ -82,6 +84,7 @@ public class MinerBot extends Bot {
         lines.add("Mining mode: " + mode);
         lines.add("Direction: " + direction.abbreviation);
         lines.add("Ore mining: " + onOff(!noOre));
+        lines.add("Reinforced walls: " + onOff(reinforced));
         lines.add("Moving: " + onOff(moving));
         lines.add("Shard combining: " + onOff(shardsCombining) + " (shards: " + shards + ")");
         lines.add("Smelting: " + onOff(smelting));
@@ -381,7 +384,8 @@ public class MinerBot extends Bot {
     }
 
     private boolean isMineableWall(Tiles.Tile type) {
-        return type.tilename.equals("Cave wall") || type.tilename.equals("Rocksalt") || (type.isOreCave() && !noOre);
+        return type.tilename.equals("Cave wall") || type.tilename.equals("Rocksalt") || (type.isOreCave() && !noOre)
+                || (reinforced && type.tilename.startsWith("Reinforced") && type.tilename.endsWith("wall"));
     }
 
     static <K, V> List<Map.Entry<K, V>> snapshotEntries(Map<K, V> map, int maxTries) {
@@ -509,6 +513,14 @@ public class MinerBot extends Bot {
         }
         else
             Utils.feedback(getClass().getSimpleName() + " will NOT move automatically");
+    }
+
+    private void toggleReinforcedMining() {
+        reinforced = !reinforced;
+        if (reinforced)
+            Utils.feedback(getClass().getSimpleName() + " will mine reinforced walls too (only possible on a deed you may mine on)");
+        else
+            Utils.feedback(getClass().getSimpleName() + " will NOT mine reinforced walls");
     }
 
     private void toggleOreMining() {
@@ -758,6 +770,7 @@ public class MinerBot extends Bot {
         area("Area Mining", "Set the 3x3 area mining mode in which bot will mine the 3x3 area around player (takes no arguments)", ""),
         ft("Front Tile", "Set the mining mode in which bot will mine a tile in front of a player", ""),
         o("Ore Mining", "Toggle the mining of ore tiles. Enabled by default", ""),
+        r("Reinforced Walls", "Toggle the mining of reinforced cave walls (works on a deed where you may mine them). Disabled by default", ""),
         m("Moving", "Toggle the automatic moving forward when bot have no work", ""),
         sm("Smelting", "Toggle the smelting of ores in selected pile. Set the smelter, pile and lump targets first", ""),
         at("Add Target", "Add the target (under the mouse cursor) for lumps with provided minimum quality (0-100)", "<min quality>"),

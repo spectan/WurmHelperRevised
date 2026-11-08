@@ -344,6 +344,7 @@ is turned on. See the README for the general usage.
 | `ft` | Front Tile | Set the mining mode in which bot will mine a tile in front of a player |
 | `m` | Moving | Toggle the automatic moving forward when bot have no work |
 | `o` | Ore Mining | Toggle the mining of ore tiles. Enabled by default |
+| `r` | Reinforced Walls | Toggle the mining of reinforced cave walls (works on a deed where you may mine them). Disabled by default |
 | `s <threshold>` | Stamina | Set the stamina threshold (0 to 1). Player will not do any actions if his stamina is lower than specified threshold |
 | `sc` | Shard Combining | Toggle the combining of shards lying around the player in piles |
 | `scn <shards name>` | Shards Name | Change the name of shards to combine. See "sc" key |
