@@ -41,6 +41,32 @@ extends Hook {
         }
     }
 
+    private static Field hudVisibleField;
+    private static boolean hudVisibleUnreadable;
+
+    /** True while the player has hidden the interface (the hide UI key): ESP unit outlines go with it. */
+    private static boolean hudHidden(World world) {
+        if (hudVisibleUnreadable) {
+            return false;
+        }
+        try {
+            Object hud = world.getHud();
+            if (hud == null) {
+                return false;
+            }
+            if (hudVisibleField == null) {
+                Field field = ReflectionUtil.getField(hud.getClass(), "visible");
+                field.setAccessible(true);
+                hudVisibleField = field;
+            }
+            return !hudVisibleField.getBoolean(hud);
+        } catch (Throwable t) {
+            hudVisibleUnreadable = true;
+            logOnce("hide with the UI", t);
+            return false;
+        }
+    }
+
     /** Runs one feature of the frame; a failure is logged once per feature and never reaches the renderer. */
     private static void guard(String feature, Runnable body) {
         try {
@@ -71,6 +97,9 @@ extends Hook {
             }
             // each feature on its own: one that throws must not switch off the ones after it
             guard("units", () -> {
+                if (hudHidden(world)) {
+                    return;
+                }
                 for (Unit unit : WurmEspMod.trackedUnits()) {
                     if (!WurmEspMod.shouldRender(unit)) {
                         continue;
