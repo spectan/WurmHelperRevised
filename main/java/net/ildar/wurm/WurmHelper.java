@@ -45,7 +45,7 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
     private static WurmHelper instance;
     public static boolean hideMount = false;
     public static boolean hideStructures = false;
-    public static boolean showTileCoords = false;
+    public static boolean showTileCoords = true;
 
     public volatile List<WurmComponent> components;
     private Logger logger;
@@ -220,7 +220,9 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             default:
                 prefix = "";
         }
-        pickData.addText(String.format("%s%d, %d", prefix, x, y));
+        // the coordinates themselves are not shown: only what the hover is on, when that is not a plain tile
+        if (!prefix.isEmpty())
+            pickData.addText(prefix.endsWith(" of ") ? prefix.substring(0, prefix.length() - 4) : prefix.trim());
         // surface tiles only: the height of the corner at (x, y), measured from the water level (0)
         if (section >= 0 && hud != null && hud.getWorld() != null && hud.getWorld().getNearTerrainBuffer() != null) {
             float h = hud.getWorld().getNearTerrainBuffer().getHeight(x, y);
@@ -294,9 +296,9 @@ public class WurmHelper implements WurmClientMod, Initable, Configurable, PreIni
             CtClass itemCellRenderableClass = classPool.getCtClass("com.wurmonline.client.renderer.cell.GroundItemCellRenderable");
             itemCellRenderableClass.defrost();
             CtMethod itemCellRenderableInitializeMethod = CtNewMethod.make("public void initialize() {\n" +
-                    "                net.ildar.wurm.bot.Bot gigBot = net.ildar.wurm.BotController.getInstance().getActiveInstance(net.ildar.wurm.bot.GroundItemGetterBot.class);\n" +
+                    "                net.ildar.wurm.bot.GroundItemGetterBot gigBot = net.ildar.wurm.BotController.getActiveGroundItemGetter();\n" +
                     "                if (gigBot != null) {\n" +
-                    "                   ((net.ildar.wurm.bot.GroundItemGetterBot)gigBot).processNewItem(this);\n" +
+                    "                   gigBot.processNewItem(this);\n" +
                     "                }\n" +
                     "        super.initialize();\n" +
                     "    };", itemCellRenderableClass);

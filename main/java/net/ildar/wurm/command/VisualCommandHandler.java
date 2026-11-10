@@ -24,7 +24,7 @@ public class VisualCommandHandler {
         });
 
         registry.register("showcoords", new SimpleHandler("",
-                "Toggle display of coordinates, and the corner height above the water level, in tile/border/corner tooltips") {
+                "Toggle the corner height above the water level (and the border/face name) in tile tooltips") {
             @Override
             public void handle(String[] args) {
                 WurmHelper.showTileCoords = !WurmHelper.showTileCoords;
