@@ -133,6 +133,36 @@ public final class UiScale {
         fadingWindow = null;
         fadeFactor = 1f;
         hud.beginRender(fraction, mouseAvailable, vx, vy);
+        probeHoverMouse(hud, x, y, vx, vy);
+    }
+
+    private static long probeAt;
+    private static int probes;
+
+    /** Diagnostic for a hover box drawn away from the cursor: a few samples of the mouse as the real window,
+     *  the interface and the renderer's own copy (what places the box) see it. */
+    private static void probeHoverMouse(HeadsUpDisplay hud, int x, int y, int vx, int vy) {
+        long now = System.currentTimeMillis();
+        if (!mouseOk || probes >= 40 || now < probeAt) {
+            return;
+        }
+        probeAt = now + 3000;
+        probes++;
+        try {
+            java.lang.reflect.Field rf = HeadsUpDisplay.class.getDeclaredField("renderer");
+            rf.setAccessible(true);
+            Object renderer = rf.get(hud);
+            java.lang.reflect.Field fx = renderer.getClass().getDeclaredField("xMouse");
+            java.lang.reflect.Field fy = renderer.getClass().getDeclaredField("yMouse");
+            fx.setAccessible(true);
+            fy.setAccessible(true);
+            Patcher.log("hover probe: real " + x + "," + y + "  interface " + vx + "," + vy
+                    + "  renderer " + fx.getInt(renderer) + "," + fy.getInt(renderer)
+                    + "  (window " + realW + "x" + realH + ", interface " + virtW + "x" + virtH + ")");
+        } catch (Throwable t) {
+            probes = 40;
+            Patcher.log("hover probe unavailable: " + t);
+        }
     }
 
     // ---- mouse events (WurmEventHandler) ------------------------------------

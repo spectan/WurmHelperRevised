@@ -146,6 +146,15 @@ public final class ModuleManager {
                 fail(module, "preInit", t);
             }
         }
+        for (Module module : modules) {
+            if (module.id.equals("sklographics") && module.state == State.LOADED) {
+                try {
+                    SkloKeys.install();
+                } catch (Throwable t) {
+                    logger.log(Level.WARNING, "[WurmHelper] SkloGraphics prompts keep E and R", t);
+                }
+            }
+        }
     }
 
     /**
@@ -227,30 +236,79 @@ public final class ModuleManager {
     private static Properties loadModuleConfig(Module module) throws IOException {
         Properties properties = new Properties();
         File file = new File(CONFIG_DIR, module.id + ".properties");
-        String resource = "/default-config/" + module.id + ".properties";
+        String source;
         if (!file.isFile()) {
             // first run: write the bundled defaults so the settings can be edited (an update never overwrites them)
-            try (InputStream in = ModuleManager.class.getResourceAsStream(resource)) {
-                if (in != null) {
+            byte[] bundled = readBundledDefaults(module);
+            if (bundled != null) {
+                try {
                     CONFIG_DIR.mkdirs();
-                    java.nio.file.Files.copy(in, file.toPath());
+                    java.nio.file.Files.write(file.toPath(), bundled);
+                } catch (IOException e) {
+                    logger.log(Level.WARNING, "[WurmHelper] Cannot write the default settings " + file, e);
                 }
-            } catch (IOException e) {
-                logger.log(Level.WARNING, "[WurmHelper] Cannot write the default settings " + file, e);
+                // read-only install folder: use the bundled defaults directly
+                try (InputStream in = new java.io.ByteArrayInputStream(bundled)) {
+                    properties.load(in);
+                }
+                source = file.isFile() ? "bundled defaults, written to " + file : "bundled defaults (" + file + " not writable)";
+            } else {
+                source = "NOTHING: no " + file + " and no bundled defaults found";
+                logger.warning("[WurmHelper] " + module.id + ": " + source);
             }
-        }
-        if (file.isFile()) {
+        } else {
             try (InputStream in = new FileInputStream(file)) {
                 properties.load(in);
             }
-        } else {
-            // read-only install folder: use the bundled defaults directly
-            try (InputStream in = ModuleManager.class.getResourceAsStream(resource)) {
-                if (in != null)
-                    properties.load(in);
+            source = file.getPath();
+        }
+        logger.info("[WurmHelper] Module " + module.id + " settings from " + source + " (" + properties.size() + " entries)");
+        return properties;
+    }
+
+    /** The module's default settings from WurmHelper.jar: the class loader first, then the jar itself. */
+    private static byte[] readBundledDefaults(Module module) {
+        String name = "default-config/" + module.id + ".properties";
+        try (InputStream in = ModuleManager.class.getResourceAsStream("/" + name)) {
+            if (in != null)
+                return readAll(in);
+        } catch (IOException e) {
+            logger.log(Level.WARNING, "[WurmHelper] Cannot read bundled " + name, e);
+        }
+        // the mod loader's class loader does not serve resources and gives its classes no code source,
+        // so open the jar the loader named in WurmHelper.properties ("classpath=WurmHelper.jar", in mods/WurmHelper/)
+        List<File> jars = new ArrayList<>();
+        try {
+            java.security.CodeSource source = ModuleManager.class.getProtectionDomain().getCodeSource();
+            if (source != null)
+                jars.add(new File(source.getLocation().toURI()));
+        } catch (Exception ignored) {
+            // fall through to the known location
+        }
+        jars.add(new File(CONFIG_DIR, "WurmHelper.jar"));
+        for (File jarFile : jars) {
+            if (!jarFile.isFile())
+                continue;
+            try (java.util.zip.ZipFile jar = new java.util.zip.ZipFile(jarFile)) {
+                java.util.zip.ZipEntry entry = jar.getEntry(name);
+                if (entry != null) {
+                    try (InputStream in = jar.getInputStream(entry)) {
+                        return readAll(in);
+                    }
+                }
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "[WurmHelper] Cannot read " + name + " from " + jarFile, e);
             }
         }
-        return properties;
+        return null;
+    }
+
+    private static byte[] readAll(InputStream in) throws IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[16384];
+        for (int n; (n = in.read(buffer)) > 0; )
+            out.write(buffer, 0, n);
+        return out.toByteArray();
     }
 
     /**

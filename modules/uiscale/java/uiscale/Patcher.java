@@ -191,6 +191,12 @@ public final class Patcher {
         c = HUD;
         rule(c, V, CLIENT, "getXMouse", "()I", "guiMouseX");
         rule(c, V, CLIENT, "getYMouse", "()I", "guiMouseY");
+        // The same for SkloGraphics' interface classes (in this jar), which read the real mouse themselves:
+        // without it the key prompts, menus, hover card and search bars land at 1.5x the cursor position.
+        for (String sklo : new String[] { "DefaultActions", "PopupStyle", "WorldOverlay", "ChatSkin", "InventorySearch" }) {
+            rule("com/wurmonline/client/renderer/gui/" + sklo, V, CLIENT, "getXMouse", "()I", "guiMouseX");
+            rule("com/wurmonline/client/renderer/gui/" + sklo, V, CLIENT, "getYMouse", "()I", "guiMouseY");
+        }
 
         // Interface drawing that must go out to OpenGL in real pixels.
         c = "com/wurmonline/client/renderer/gui/Renderer";
