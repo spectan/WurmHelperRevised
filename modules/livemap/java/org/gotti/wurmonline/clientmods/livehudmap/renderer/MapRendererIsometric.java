@@ -2,6 +2,7 @@ package org.gotti.wurmonline.clientmods.livehudmap.renderer;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 
 import com.wurmonline.client.game.NearTerrainDataBuffer;
 import com.wurmonline.mesh.Tiles.Tile;
@@ -18,8 +19,10 @@ public class MapRendererIsometric extends AbstractSurfaceRenderer {
         if (xo < 0)
             xo = 0;
 
-        final BufferedImage bi2 = new BufferedImage(lWidth, lHeight, BufferedImage.TYPE_INT_RGB);
-        final float[] data = new float[lWidth * lHeight * 3];
+        final BufferedImage bi2 = reuseImage(lWidth, lHeight);
+        final int[] data = pixels(bi2);
+        // not every pixel is drawn: the rest stay black, as in a new image
+        Arrays.fill(data, 0);
                 
         int y0 = lHeight + lHeight / 2;
         
@@ -79,16 +82,13 @@ public class MapRendererIsometric extends AbstractSurfaceRenderer {
                 final int altTarget = y - (int) (getSurfaceHeight(x + xo, y + yo) * MAP_HEIGHT / 4  / (Short.MAX_VALUE / 2.5f));
                 while (alt > altTarget && alt >= 0) {
                 	if (alt < lHeight) {
-	                    data[(x + alt * lWidth) * 3 + 0] = r * 255;
-	                    data[(x + alt * lWidth) * 3 + 1] = g * 255;
-	                    data[(x + alt * lWidth) * 3 + 2] = b * 255;
+	                    data[x + alt * lWidth] = rgb((int) (r * 255), (int) (g * 255), (int) (b * 255));
                 	}
                     alt--;
                 }
             }
         }
 
-        bi2.getRaster().setPixels(0, 0, lWidth, lHeight, data);
         return bi2;
     }
 	

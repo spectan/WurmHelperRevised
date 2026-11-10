@@ -1,15 +1,27 @@
 package net.encode.wurmesp.feature;
 
 import com.wurmonline.client.game.PlayerPosition;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.encode.wurmesp.WurmEspMod;
 import net.encode.wurmesp.util.RenderUtils;
 import net.encode.wurmesp.util.TerrainUtils;
 
 public class FeatureTilesWalkable
 extends Feature {
+    private static final float[] COLOR = new float[]{1.0f, 0.0f, 0.0f, 0.5f};
+    private static final int[] INDEXDATA = new int[]{1, 0, 0, 2, 2, 3, 3, 1};
+
+    // the not rideable tiles in one primitive, rebuilt when the tiles or the steepness setting change
+    private RenderUtils.LineBatch batch;
+    private List<float[]> batchTiles;
+    private int batchThreshold;
+
     @Override
     public void refresh() {
-        WurmEspMod._closeByWalkableTerrain.clear();
+        // built off to the side and swapped in whole
+        List<float[]> built = new ArrayList<>();
         WurmEspMod._terrainBuffer2 = this.world.getNearTerrainBuffer();
         PlayerPosition pos = this.world.getPlayer().getPos();
         int px = pos.getTileX();
@@ -35,21 +47,31 @@ extends Feature {
                 float z1 = WurmEspMod._terrainBuffer2.getHeight((int)tileX + 1, (int)tileY);
                 float z2 = WurmEspMod._terrainBuffer2.getHeight((int)tileX, (int)tileY + 1);
                 float z3 = WurmEspMod._terrainBuffer2.getHeight((int)tileX + 1, (int)tileY + 1);
-                WurmEspMod._closeByWalkableTerrain.add(new float[]{x0, z0, y0, x1, z1, y0, x0, z2, y1, x1, z3, y1});
+                built.add(new float[]{x0, z0, y0, x1, z1, y0, x0, z2, y1, x1, z3, y1});
             }
         }
+        WurmEspMod._closeByWalkableTerrain = new CopyOnWriteArrayList<>(built);
     }
 
     @Override
     public void queue() {
-        if (WurmEspMod._closeByWalkableTerrain == null) {
+        List<float[]> tiles = WurmEspMod._closeByWalkableTerrain;
+        if (tiles == null) {
             return;
         }
-        WurmEspMod._closeByWalkableTerrain.stream().filter(t -> TerrainUtils.isNotRideable(t)).forEachOrdered(t -> {
-            float[] color = new float[]{1.0f, 0.0f, 0.0f, 0.5f};
-            int[] indexdata = new int[]{1, 0, 0, 2, 2, 3, 3, 1};
-            RenderUtils.renderPrimitiveLines(4, t, indexdata, this.queuePick, color);
-        });
+        if (tiles != this.batchTiles || WurmEspMod.tilenotrideable != this.batchThreshold) {
+            this.batchTiles = tiles;
+            this.batchThreshold = WurmEspMod.tilenotrideable;
+            RenderUtils.LineBatchBuilder builder = new RenderUtils.LineBatchBuilder();
+            for (float[] t : tiles) {
+                if (TerrainUtils.isNotRideable(t)) {
+                    builder.add(t, INDEXDATA);
+                }
+            }
+            RenderUtils.LineBatch next = RenderUtils.keepIfSame(this.batch, builder.build());
+            RenderUtils.release(this.batch, next);
+            this.batch = next;
+        }
+        this.batch.render(this.queuePick, COLOR, null);
     }
 }
-

@@ -34,8 +34,13 @@ public class LiveMap implements TerrainChangeListener, CaveBufferChangeListener 
 	private int x;
 	private int y;
 	
-	private int px = 0, py = 0;
+	private volatile int px = 0, py = 0;
 	private final Method preprocessImage;
+
+	/** Re-render at most this often; terrain packets and walking would otherwise redraw the map most frames. */
+	private static final long RENDER_INTERVAL_NANOS = 250_000_000L;
+	private long lastRender;
+	private boolean rendered;
 	
 	public LiveMap(World world, int size) {
 		this.size = size;
@@ -50,6 +55,7 @@ public class LiveMap implements TerrainChangeListener, CaveBufferChangeListener 
 		
 		try {
 			this.preprocessImage = ReflectionUtil.getMethod(TextureLoader.class, "preprocessImage", new Class[] { BufferedImage.class, boolean.class });
+			this.preprocessImage.setAccessible(true);
 		} catch (NoSuchMethodException e) {
 			throw new RuntimeException(e);
 		}
@@ -61,23 +67,50 @@ public class LiveMap implements TerrainChangeListener, CaveBufferChangeListener 
 
 		PlayerPosition pos = world.getPlayer().getPos();
 		if (dirty || px != pos.getTileX() || py != pos.getTileY()) {
+			long now = System.nanoTime();
+			if (rendered && now - lastRender < RENDER_INTERVAL_NANOS) {
+				return;
+			}
+			rendered = true;
+			lastRender = now;
+			// cleared first so a change that arrives while rendering is drawn next time
+			dirty = false;
+
 			px = pos.getTileX();
 			py = pos.getTileY();
-			
+
+			// the renderers reuse one image; it is copied into the texture data here before the next render
 			image = getLayer().render(px, py);
 			if (texture == null) {
 				texture = ImageTextureLoader.loadNowrapNearestTexture(image, false);
 			} else {
 				try {
-					PreProcessedTextureData data = ReflectionUtil.callPrivateMethod(TextureLoader.class, preprocessImage, image, true);
+					PreProcessedTextureData data = (PreProcessedTextureData) preprocessImage.invoke(null, image, true);
 					texture.deferInit(data, TextureLoader.Filter.NEAREST, false, false, false);
 				} catch (InvocationTargetException | IllegalAccessException | IllegalArgumentException e) {
 					throw new RuntimeException(e);
 				}
 			}
-			
-			dirty = false;
 		}
+	}
+
+	/** Lets a change the user asked for (zoom, map type) skip the render throttle. */
+	private void forceRender() {
+		rendered = false;
+		dirty = true;
+	}
+
+	/**
+	 * Whether the tiles x0..x1, y0..y1 can show on either map. The bounds are generous: the isometric map looks
+	 * half a map above and below the square, and the renderers read neighbouring tiles.
+	 */
+	private boolean isNearShown(int x0, int y0, int x1, int y1) {
+		if (surface == null || cave == null) {
+			return true; // the listeners are added before the views exist
+		}
+		int reach = Math.max(surface.getSize(), cave.getSize()) + 2;
+		int cx = px, cy = py;
+		return x1 >= cx - reach && x0 <= cx + reach && y1 >= cy - reach && y0 <= cy + reach;
 	}
 	
 	private MapLayerView getLayer() {
@@ -100,17 +133,17 @@ public class LiveMap implements TerrainChangeListener, CaveBufferChangeListener 
 	
 	public void setRenderer(MapLayer layer, RenderType renderType) {
 		getLayer(layer).setRenderer(renderType);
-		dirty = true;
+		forceRender();
 	}
-	
+
 	public void zoomIn() {
 		getLayer().zoomIn();
-		dirty = true;
+		forceRender();
 	}
 
 	public void zoomOut() {
 		getLayer().zoomOut();
-		dirty = true;
+		forceRender();
 	}
 
 	private boolean isSurface() {
@@ -129,13 +162,18 @@ public class LiveMap implements TerrainChangeListener, CaveBufferChangeListener 
 	}
 
 	@Override
-	public void caveChanged(int paramInt1, int paramInt2, int paramInt3, int paramInt4, boolean paramBoolean) {
-		dirty = true;
+	public void caveChanged(int x0, int y0, int x1, int y1, boolean paramBoolean) {
+		// the client passes the changed tiles as x0, y0, x0 + width, y0 + height
+		if (isNearShown(x0, y0, x1, y1)) {
+			dirty = true;
+		}
 	}
 
 	@Override
-	public void terrainUpdated(int paramInt1, int paramInt2, int paramInt3, int paramInt4, boolean paramBoolean1, boolean paramBoolean2) {
-		dirty = true;
+	public void terrainUpdated(int x0, int y0, int x1, int y1, boolean paramBoolean1, boolean paramBoolean2) {
+		if (isNearShown(x0, y0, x1, y1)) {
+			dirty = true;
+		}
 	}
 
 	public void pick(final PickData pickData, final float xMouse, final float yMouse) {

@@ -22,8 +22,8 @@ public class MapRendererCave extends AbstractCaveRenderer {
 		if (xo < 0)
 			xo = 0;
 
-		final BufferedImage bi2 = new BufferedImage(lWidth, lWidth, BufferedImage.TYPE_INT_RGB);
-		final float[] data = new float[lWidth * lWidth * 3];
+		final BufferedImage bi2 = reuseImage(lWidth, lWidth);
+		final int[] data = pixels(bi2);
 
 		for (int x = 0; x < lWidth; x++) {
 			for (int y = lWidth - 1; y >= 0; y--) {
@@ -53,13 +53,10 @@ public class MapRendererCave extends AbstractCaveRenderer {
 					b = 0;
 				}
 
-				data[(x + y * lWidth) * 3 + 0] = r;
-				data[(x + y * lWidth) * 3 + 1] = g;
-				data[(x + y * lWidth) * 3 + 2] = b;
+				data[x + y * lWidth] = rgb(r, g, b);
 			}
 		}
 
-		bi2.getRaster().setPixels(0, 0, lWidth, lWidth, data);
 		return bi2;
 	}
 	

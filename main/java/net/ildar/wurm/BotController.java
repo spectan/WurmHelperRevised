@@ -1,6 +1,7 @@
 package net.ildar.wurm;
 
 import net.ildar.wurm.bot.Bot;
+import net.ildar.wurm.bot.GroundItemGetterBot;
 import net.ildar.wurm.bot.RMIBot;
 
 import java.util.*;
@@ -9,6 +10,8 @@ public class BotController {
     private static BotController instance;
     private List<BotRegistration> botList;
     private List<Bot> activeBots = new ArrayList<>();
+    // the running GroundItemGetterBot, if any, kept in step with activeBots for the ground item hook
+    private static volatile GroundItemGetterBot activeGroundItemGetter;
     // bots configured while off; started (and moved to activeBots) by "bot X on"
     private final Map<Class<? extends Bot>, Bot> stagedBots = new java.util.concurrent.ConcurrentHashMap<>();
     // bots paused by the global "bot pause", so the global resume leaves individually paused bots alone
@@ -177,6 +180,7 @@ public class BotController {
 
     public synchronized void onBotInterruption(Bot bot) {
         activeBots.remove(bot);
+        refreshActiveGroundItemGetter();
         globallyPaused.remove(bot);
         if (activeBots.isEmpty())
             gPaused = false;
@@ -212,6 +216,7 @@ public class BotController {
                 //noinspection unchecked
                 instance = staged != null ? (T) staged : botClass.getDeclaredConstructor().newInstance();
                 activeBots.add(instance);
+                refreshActiveGroundItemGetter();
             } else
                 //noinspection unchecked
                 instance = (T) optionalBot.get();
@@ -269,7 +274,17 @@ public class BotController {
         return null;
     }
 
-    //this method is being invoked from com.wurmonline.client.renderer.cell.GroundItemCellRenderable
+    //this method is being invoked from com.wurmonline.client.renderer.cell.GroundItemCellRenderable once per ground item,
+    //so it is a field read; the field follows activeBots
+    public static GroundItemGetterBot getActiveGroundItemGetter() {
+        return activeGroundItemGetter;
+    }
+
+    // call after every change to activeBots, holding the lock
+    private void refreshActiveGroundItemGetter() {
+        activeGroundItemGetter = getActiveInstance(GroundItemGetterBot.class);
+    }
+
     @SuppressWarnings({"WeakerAccess", "unchecked"})
     public synchronized <T extends Bot> T getActiveInstance(Class<T> botClass) {
         Optional<Bot> optionalBot = activeBots.stream()

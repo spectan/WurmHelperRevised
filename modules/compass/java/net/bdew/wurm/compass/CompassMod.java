@@ -9,6 +9,7 @@ import org.gotti.wurmunlimited.modloader.interfaces.Initable;
 import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
 import org.gotti.wurmunlimited.modloader.interfaces.WurmMod;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.logging.Level;
@@ -16,6 +17,9 @@ import java.util.logging.Logger;
 
 public class CompassMod implements WurmMod, Initable, PreInitable {
     private static Logger logger = Logger.getLogger("CompassMod");
+    private static volatile Method setQlMethod;
+    private static volatile Field isMovingField;
+    private static volatile Field fadeAlphaField;
 
     @Override
     public void init() {
@@ -29,10 +33,22 @@ public class CompassMod implements WurmMod, Initable, PreInitable {
                         @Override
                         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                             method.invoke(proxy, args);
-                            Class<?> cls = proxy.getClass();
-                            ReflectionUtil.callPrivateMethod(proxy, ReflectionUtil.getMethod(cls, "setQl"), 99);
-                            ReflectionUtil.setPrivateField(proxy, ReflectionUtil.getField(cls, "isMoving"), false);
-                            ReflectionUtil.setPrivateField(proxy, ReflectionUtil.getField(cls, "fadeAlpha"), 1f);
+                            // runs every game tick: look the members up once and keep them
+                            if (setQlMethod == null) {
+                                Class<?> cls = proxy.getClass();
+                                Field moving = ReflectionUtil.getField(cls, "isMoving");
+                                Field alpha = ReflectionUtil.getField(cls, "fadeAlpha");
+                                Method setQl = ReflectionUtil.getMethod(cls, "setQl");
+                                moving.setAccessible(true);
+                                alpha.setAccessible(true);
+                                setQl.setAccessible(true);
+                                isMovingField = moving;
+                                fadeAlphaField = alpha;
+                                setQlMethod = setQl;
+                            }
+                            ReflectionUtil.callPrivateMethod(proxy, setQlMethod, 99);
+                            ReflectionUtil.setPrivateField(proxy, isMovingField, false);
+                            ReflectionUtil.setPrivateField(proxy, fadeAlphaField, 1f);
                             return null;
                         }
                     };

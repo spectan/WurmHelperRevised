@@ -153,6 +153,7 @@ public class GainTrackerWindow extends WWindow implements ConsoleListener {
 
         void update(GainTracker.Status status) {
             this.status = status;
+            formatStatus();
             if (status.skill.getValue() > lastLevel) {
                 this.setCustomColor(0.3F, 0.9F, 0.3F);
                 this.setCustomSecondaryColor(0.3F, 0.9F, 0.3F);
@@ -210,20 +211,47 @@ public class GainTrackerWindow extends WWindow implements ConsoleListener {
             } else return 0;
         }
 
+        // getParameter runs per visible row per frame: the column text is formatted only when its value changes
+        private String rateText, avgText;
+        private float shownValue = Float.NaN, shownChange = Float.NaN;
+        private String valueText, changeText;
+
+        /** The G/Hr and Avg. Tick columns come from the status snapshot alone. */
+        private void formatStatus() {
+            if (status.firstTick - status.lastTick > 1000)
+                rateText = String.format("%.4f", status.gainValue / (status.firstTick - status.lastTick) * 60 * 60 * 1000);
+            else
+                rateText = "-";
+            avgText = String.format("%.6f", status.avgTick);
+        }
+
         @Override
         String getParameter(int param) {
             switch (param) {
-                case 0:
-                    return String.format("%.4f", status.skill.getValue());
-                case 1:
-                    return String.format("%.4f", status.skill.getTotalValueChange());
+                case 0: {
+                    float value = status.skill.getValue();
+                    if (valueText == null || Float.compare(value, shownValue) != 0) {
+                        valueText = String.format("%.4f", value);
+                        shownValue = value;
+                    }
+                    return valueText;
+                }
+                case 1: {
+                    float change = status.skill.getTotalValueChange();
+                    if (changeText == null || Float.compare(change, shownChange) != 0) {
+                        changeText = String.format("%.4f", change);
+                        shownChange = change;
+                    }
+                    return changeText;
+                }
                 case 2:
-                    if (status.firstTick - status.lastTick > 1000)
-                        return String.format("%.4f", status.gainValue / (status.firstTick - status.lastTick) * 60 * 60 * 1000);
-                    else
-                        return "-";
+                    if (rateText == null)
+                        formatStatus();
+                    return rateText;
                 case 3:
-                    return String.format("%.6f", status.avgTick);
+                    if (avgText == null)
+                        formatStatus();
+                    return avgText;
                 default:
                     return "";
             }

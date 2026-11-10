@@ -39,6 +39,11 @@ public class MapLayerView {
 		}
 	}
 
+	/** The side of the shown square, in tiles. */
+	public int getSize() {
+		return type.getMapSize() / zoom;
+	}
+
 	public BufferedImage render(int px, int py) {
 		int sz = type.getMapSize() / zoom;
 		return renderer.createMapDump(px - sz / 2, py - sz / 2, sz, sz, px, py);

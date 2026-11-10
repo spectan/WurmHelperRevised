@@ -86,6 +86,7 @@ public class UnitTest {
         assertArrayEquals(AGGRO, u.outlineColor(true), 0f);
 
         hover.set("raging troll");
+        WurmEspMod.invalidate();   // a unit re-reads its hover name every 250-500 ms; invalidate() makes it do so at once
 
         assertTrue("the unit must read the hover name as it is now", u.isConditioned());
         assertArrayEquals(RAGING, u.outlineColor(true), 0f);
@@ -99,6 +100,7 @@ public class UnitTest {
         assertTrue(u.isConditioned());
 
         hover.set("troll");
+        WurmEspMod.invalidate();
 
         assertFalse(u.isConditioned());
     }

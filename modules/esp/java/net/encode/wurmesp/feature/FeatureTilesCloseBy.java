@@ -1,15 +1,29 @@
 package net.encode.wurmesp.feature;
 
 import com.wurmonline.client.game.PlayerPosition;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.encode.wurmesp.WurmEspMod;
 import net.encode.wurmesp.util.RenderUtils;
 import net.encode.wurmesp.util.TerrainUtils;
 
 public class FeatureTilesCloseBy
 extends Feature {
+    private static final float[] FLAT_COLOR = new float[]{0.0f, 1.0f, 0.0f, 0.5f};
+    private static final float[] SLOPE_COLOR = new float[]{1.0f, 1.0f, 0.0f, 0.5f};
+    private static final int[] INDEXDATA = new int[]{1, 0, 0, 2, 2, 3, 3, 1};
+
+    // all flat tiles in one primitive and all sloped ones in another; kept while the tiles stay the same
+    private RenderUtils.LineBatch flat;
+    private RenderUtils.LineBatch slope;
+
     @Override
     public void refresh() {
-        WurmEspMod._closeByTerrain.clear();
+        // built off to the side and swapped in whole
+        List<float[]> built = new ArrayList<>();
+        RenderUtils.LineBatchBuilder flatBuilder = new RenderUtils.LineBatchBuilder();
+        RenderUtils.LineBatchBuilder slopeBuilder = new RenderUtils.LineBatchBuilder();
         WurmEspMod._terrainBuffer = this.world.getNearTerrainBuffer();
         PlayerPosition pos = this.world.getPlayer().getPos();
         int px = pos.getTileX();
@@ -35,21 +49,27 @@ extends Feature {
                 float z1 = WurmEspMod._terrainBuffer.getHeight((int)tileX + 1, (int)tileY);
                 float z2 = WurmEspMod._terrainBuffer.getHeight((int)tileX, (int)tileY + 1);
                 float z3 = WurmEspMod._terrainBuffer.getHeight((int)tileX + 1, (int)tileY + 1);
-                WurmEspMod._closeByTerrain.add(new float[]{x0, z0, y0, x1, z1, y0, x0, z2, y1, x1, z3, y1});
+                float[] t = new float[]{x0, z0, y0, x1, z1, y0, x0, z2, y1, x1, z3, y1};
+                built.add(t);
+                (TerrainUtils.isFlat(t) ? flatBuilder : slopeBuilder).add(t, INDEXDATA);
             }
         }
+        WurmEspMod._closeByTerrain = new CopyOnWriteArrayList<>(built);
+        RenderUtils.LineBatch nextFlat = RenderUtils.keepIfSame(this.flat, flatBuilder.build());
+        RenderUtils.LineBatch nextSlope = RenderUtils.keepIfSame(this.slope, slopeBuilder.build());
+        RenderUtils.release(this.flat, nextFlat);
+        RenderUtils.release(this.slope, nextSlope);
+        this.flat = nextFlat;
+        this.slope = nextSlope;
     }
 
     @Override
     public void queue() {
-        if (WurmEspMod._closeByTerrain == null) {
-            return;
+        if (this.flat != null) {
+            this.flat.render(this.queuePick, FLAT_COLOR, null);
         }
-        WurmEspMod._closeByTerrain.forEach(t -> {
-            float[] color = TerrainUtils.isFlat(t) ? new float[]{0.0f, 1.0f, 0.0f, 0.5f} : new float[]{1.0f, 1.0f, 0.0f, 0.5f};
-            int[] indexdata = new int[]{1, 0, 0, 2, 2, 3, 3, 1};
-            RenderUtils.renderPrimitiveLines(4, t, indexdata, this.queuePick, color);
-        });
+        if (this.slope != null) {
+            this.slope.render(this.queuePick, SLOPE_COLOR, null);
+        }
     }
 }
-

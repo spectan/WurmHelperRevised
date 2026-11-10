@@ -17,6 +17,10 @@ import org.gotti.wurmunlimited.modloader.interfaces.Initable;
 import org.gotti.wurmunlimited.modloader.interfaces.WurmMod;
 import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 
+// Javassist
+import javassist.ClassPool;
+import javassist.CtClass;
+
 // Base Java
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,8 +28,9 @@ import java.util.logging.Logger;
 public class ClientRenderTweaksMod implements WurmMod, Initable
 {
     private static final Logger logger = Logger.getLogger(ClientRenderTweaksMod.class.getName());
-    private volatile boolean renderGrass = true;
-    private volatile boolean renderTrees = true;
+    // static: read by the code patched into DecorationChunk.render and SurfaceCell.renderTrees
+    public static volatile boolean renderGrass = true;
+    public static volatile boolean renderTrees = true;
 
     public static void logException(String msg, Throwable e)
     {
@@ -93,15 +98,18 @@ public class ClientRenderTweaksMod implements WurmMod, Initable
                         }
                     });
 
+            // Both run per chunk/cell per frame, so they are patched in place rather than proxied through a hook.
+            ClassPool pool = hooks.getClassPool();
+
             // Grass: one chunk of grass sprites is drawn by DecorationChunk.render(Queue).
-            hooks.registerHook("com.wurmonline.client.renderer.terrain.decorator.DecorationChunk", "render",
-                    "(Lcom/wurmonline/client/renderer/backend/Queue;)V",
-                    () -> (proxy, method, args) -> renderGrass ? method.invoke(proxy, args) : null);
+            CtClass decorationChunk = pool.getCtClass("com.wurmonline.client.renderer.terrain.decorator.DecorationChunk");
+            decorationChunk.getMethod("render", "(Lcom/wurmonline/client/renderer/backend/Queue;)V")
+                    .insertBefore("if (!org.tmarchuk.wurmunlimited.client.rendertweaks.ClientRenderTweaksMod.renderGrass) return;");
 
             // Trees and bushes: SurfaceCell.renderTrees(Queue, Frustum, boolean) adds a cell's trees to the queue.
-            hooks.registerHook("com.wurmonline.client.renderer.cell.SurfaceCell", "renderTrees",
-                    "(Lcom/wurmonline/client/renderer/backend/Queue;Lcom/wurmonline/client/renderer/Frustum;Z)V",
-                    () -> (proxy, method, args) -> renderTrees ? method.invoke(proxy, args) : null);
+            CtClass surfaceCell = pool.getCtClass("com.wurmonline.client.renderer.cell.SurfaceCell");
+            surfaceCell.getMethod("renderTrees", "(Lcom/wurmonline/client/renderer/backend/Queue;Lcom/wurmonline/client/renderer/Frustum;Z)V")
+                    .insertBefore("if (!org.tmarchuk.wurmunlimited.client.rendertweaks.ClientRenderTweaksMod.renderTrees) return;");
         }
         catch (Throwable e)
         {

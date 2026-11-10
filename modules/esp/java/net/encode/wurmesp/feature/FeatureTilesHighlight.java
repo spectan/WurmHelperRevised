@@ -2,18 +2,29 @@ package net.encode.wurmesp.feature;
 
 import com.wurmonline.client.game.PlayerPosition;
 import com.wurmonline.client.game.World;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.encode.wurmesp.WurmEspMod;
 import net.encode.wurmesp.util.RenderUtils;
 
 public class FeatureTilesHighlight
 extends Feature {
+    private static final float[] COLOR = new float[]{1.0f, 0.0f, 0.0f, 1.0f};
+    private static final int[] INDEXDATA = new int[]{1, 0, 0, 2, 2, 3, 3, 1, 1, 2, 0, 3, 5, 4, 4, 6, 6, 7, 7, 5, 0, 4, 1, 5, 2, 6, 3, 7};
+
+    // every highlighted tile in one primitive, kept while the tiles stay the same
+    private RenderUtils.LineBatch batch;
+
     @Override
     public void refresh() {
-        WurmEspMod._tilesHighlightTerrain.clear();
+        // built off to the side and swapped in whole
+        List<float[]> built = new ArrayList<>();
+        RenderUtils.LineBatchBuilder builder = new RenderUtils.LineBatchBuilder();
         WurmEspMod._terrainBuffer = this.world.getNearTerrainBuffer();
         float ox = this.world.getRenderOriginX();
         float oy = this.world.getRenderOriginY();
-        WurmEspMod._tilesHighlightBase.forEach(base -> {
+        for (int[] base : WurmEspMod._tilesHighlightBase) {
             float curX = (float)(base[0] * 4) - ox;
             float curY = (float)(base[1] * 4) - oy;
             float nextX = (float)((base[0] + 1) * 4) - ox;
@@ -26,20 +37,22 @@ extends Feature {
             float z1 = WurmEspMod._terrainBuffer.getHeight(base[0] + 1, base[1]);
             float z2 = WurmEspMod._terrainBuffer.getHeight(base[0], base[1] + 1);
             float z3 = WurmEspMod._terrainBuffer.getHeight(base[0] + 1, base[1] + 1);
-            WurmEspMod._tilesHighlightTerrain.add(new float[]{x0, z0, y0, x1, z1, y0, x0, z2, y1, x1, z3, y1, x0, 0.0f, y0, x1, 0.0f, y0, x0, 0.0f, y1, x1, 0.0f, y1});
-        });
+            float[] t = new float[]{x0, z0, y0, x1, z1, y0, x0, z2, y1, x1, z3, y1, x0, 0.0f, y0, x1, 0.0f, y0, x0, 0.0f, y1, x1, 0.0f, y1};
+            built.add(t);
+            builder.add(t, INDEXDATA);
+        }
+        WurmEspMod._tilesHighlightTerrain = new CopyOnWriteArrayList<>(built);
+        RenderUtils.LineBatch next = RenderUtils.keepIfSame(this.batch, builder.build());
+        RenderUtils.release(this.batch, next);
+        this.batch = next;
     }
 
     @Override
     public void queue() {
-        if (WurmEspMod._tilesHighlightTerrain == null) {
+        if (this.batch == null) {
             return;
         }
-        WurmEspMod._tilesHighlightTerrain.forEach(t -> {
-            float[] color = new float[]{1.0f, 0.0f, 0.0f, 1.0f};
-            int[] indexdata = new int[]{1, 0, 0, 2, 2, 3, 3, 1, 1, 2, 0, 3, 5, 4, 4, 6, 6, 7, 7, 5, 0, 4, 1, 5, 2, 6, 3, 7};
-            RenderUtils.renderPrimitiveLines(8, t, indexdata, this.queuePick, color);
-        });
+        this.batch.render(this.queuePick, COLOR, null);
     }
 
     public void setWorld(World world) {

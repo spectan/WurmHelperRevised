@@ -1,5 +1,6 @@
 package freecammod;
 
+import java.lang.reflect.Field;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,6 +19,7 @@ public class FreecamMod implements WurmClientMod, Initable
 {
 	public static HeadsUpDisplay mHud;
 	public static World mWorld;
+	private static volatile Field mWorldField;
 	public static Logger mLogger = Logger.getLogger( "FreecamMod" );	
 	private static boolean mFreecam = false;
 	
@@ -281,9 +283,15 @@ public class FreecamMod implements WurmClientMod, Initable
 			HookManager.getInstance().registerHook( "com.wurmonline.client.renderer.WorldRender", "renderPickedItem", "(Lcom/wurmonline/client/renderer/backend/Queue;)V", () -> ( pProxy, pMethod, pArgs ) -> 
 			{
 				pMethod.invoke(pProxy, pArgs);
-				Class<?> lCls = pProxy.getClass();
+				// runs every frame: resolve the field once, then it is a plain read
+				if ( mWorldField == null )
+				{
+					Field lField = ReflectionUtil.getField( pProxy.getClass(), "world" );
+					lField.setAccessible( true );
+					mWorldField = lField;
+				}
 
-				mWorld = ReflectionUtil.getPrivateField( pProxy, ReflectionUtil.getField( lCls, "world" ) );
+				mWorld = ( World ) mWorldField.get( pProxy );
 
 				return null;
 			});

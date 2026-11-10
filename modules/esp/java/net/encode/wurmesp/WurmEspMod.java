@@ -1,6 +1,9 @@
 package net.encode.wurmesp;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -44,6 +47,11 @@ Configurable {
      *  renderable hooks (game threads) while the renderer iterates it, so it is concurrent;
      *  what is outlined is decided every frame ({@link #shouldRender}), not when a unit appears. */
     private static final ConcurrentHashMap<Long, Unit> trackedUnits = new ConcurrentHashMap<Long, Unit>();
+    private static final long RELEVANT_RECHECK_MS = 1000L;
+    /** Snapshot of the relevant tracked units, replaced whole ({@link #relevantUnits()}). */
+    private static volatile List<Unit> relevantUnits = Collections.emptyList();
+    private static volatile boolean relevantDirty = true;
+    private static volatile long relevantBuiltAt;
     /** Bumped when the config or the search changes: units read their names again. */
     private static volatile int generation;
     public static CronoManager xrayCronoManager;
@@ -127,36 +135,56 @@ Configurable {
     /** The config, the lists or the search changed: every unit works out what it is again. */
     public static void invalidate() {
         generation++;
+        relevantDirty = true;
     }
 
     public static void track(Unit unit) {
         trackedUnits.put(unit.getId(), unit);
+        relevantDirty = true;
     }
 
     public static void untrack(long id) {
         trackedUnits.remove(id);
+        relevantDirty = true;
     }
 
     public static Collection<Unit> trackedUnits() {
         return trackedUnits.values();
     }
 
+    /** The tracked units ESP could outline at all ({@link Unit#isRelevant()}), so the renderer does
+     *  not walk every ground item each frame. Rebuilt on the next call after a unit comes or goes or
+     *  {@link #invalidate()}, and every second anyway for hover names that changed meanwhile. */
+    public static List<Unit> relevantUnits() {
+        long now = System.currentTimeMillis();
+        if (relevantDirty || now - relevantBuiltAt >= RELEVANT_RECHECK_MS) {
+            // cleared first: a unit tracked while this runs marks it again
+            relevantDirty = false;
+            relevantBuiltAt = now;
+            ArrayList<Unit> relevant = new ArrayList<Unit>();
+            for (Unit unit : trackedUnits.values()) {
+                if (unit.isRelevant()) {
+                    relevant.add(unit);
+                }
+            }
+            relevantUnits = relevant;
+        }
+        return relevantUnits;
+    }
+
     public static void clearTracked() {
         trackedUnits.clear();
+        relevantDirty = true;
+    }
+
+    /** Whether any toggle that outlines units is on; when none is, the unit pass is skipped. */
+    public static boolean anyUnitToggle() {
+        return players || uniques || conditioned || animals || mobs || specials || items;
     }
 
     /** Whether the unit is outlined now, by the toggles and search as they are now. */
     public static boolean shouldRender(Unit unit) {
-        if (!unit.isRelevant()) {
-            return false;
-        }
-        return players && unit.isPlayer()
-                || uniques && unit.isUnique()
-                || conditioned && unit.isConditioned()
-                || animals && unit.isMob() && !unit.isAggroMob()
-                || mobs && unit.isAggroMob()
-                || specials && unit.isSpecial()
-                || items && unit.isSpotted();
+        return unit.shouldRender();
     }
 
     public void configure(Properties properties) {

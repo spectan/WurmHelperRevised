@@ -47,7 +47,7 @@ public class Unit {
 
 
     /** What the unit is, worked out from its names. Replaced as a whole when the hover name
-     *  changes (a creature turns raging, a champion...) or the config / search changes
+     *  changes (a creature turns raging, a champion...; seen within half a second) or the config / search changes
      *  ({@link WurmEspMod#invalidate()}), so it never goes stale and is cheap per frame. */
     private static final class Facts {
         final int generation;
@@ -62,6 +62,18 @@ public class Unit {
     }
 
     private volatile Facts facts;
+    /** When the live hover name is read again: reading it allocates a fresh string, so it is
+     *  rechecked every {@link #hoverInterval} ms rather than on every call. */
+    private volatile long nextHoverCheck;
+    /** 250-499 ms, spread by id so units made together do not all read their names in one frame. */
+    private final long hoverInterval;
+
+    /** Shared by every outline: only touched on the render thread, and the queue copies the
+     *  state and colour into its own primitives, so nothing is held between units. */
+    private static final RenderState STATE_FILL = new RenderState();
+    private static final RenderState STATE_FILL_DEPTH = new RenderState();
+    private static final RenderState STATE_OUTLINE = new RenderState();
+    private static final Color COLOR = new Color();
 
     public Unit(World world, long id, PickableUnit pickableUnit, String modelName, String hoverName) {
         this.world = world;
@@ -69,6 +81,7 @@ public class Unit {
         this.pickableUnit = pickableUnit;
         this.modelName = modelName == null ? "" : modelName;
         this.hoverName = hoverName == null ? "" : hoverName;
+        this.hoverInterval = 250L + Math.floorMod(Long.hashCode(id), 250);
     }
 
     public long getId() {
@@ -96,9 +109,14 @@ public class Unit {
     }
 
     private Facts facts() {
-        String hover = this.getHoverName();
         Facts f = this.facts;
         int gen = WurmEspMod.generation();
+        long now = System.currentTimeMillis();
+        if (f != null && f.generation == gen && now < this.nextHoverCheck) {
+            return f;
+        }
+        String hover = this.getHoverName();
+        this.nextHoverCheck = now + this.hoverInterval;
         if (f != null && f.generation == gen && f.hover.equals(hover)) {
             return f;
         }
@@ -190,13 +208,52 @@ public class Unit {
 
     /** Whether ESP can ever outline this: a player, a mob, or a special / spotted thing. */
     public boolean isRelevant() {
-        Facts f = this.facts();
+        return relevant(this.facts());
+    }
+
+    private static boolean relevant(Facts f) {
         return f.player || f.mob || f.special || f.spotted;
+    }
+
+    /** Whether the unit is outlined now, by the toggles and search as they are now. */
+    public boolean shouldRender() {
+        return shown(this.facts());
+    }
+
+    private static boolean shown(Facts f) {
+        if (!relevant(f)) {
+            return false;
+        }
+        return WurmEspMod.players && f.player
+                || WurmEspMod.uniques && f.unique
+                || WurmEspMod.conditioned && f.condition != null
+                || WurmEspMod.animals && f.mob && !f.aggro
+                || WurmEspMod.mobs && f.aggro
+                || WurmEspMod.specials && f.special
+                || WurmEspMod.items && f.spotted;
+    }
+
+    /** Outlines the unit when it is shown now; works out what it is once for the whole frame. */
+    public void renderIfShown(Queue queue) {
+        if (this.pickableUnit == null) {
+            return;
+        }
+        Facts f = this.facts();
+        if (!shown(f)) {
+            return;
+        }
+        boolean showConditioned = f.condition != null && WurmEspMod.conditioned
+                || f.condition != null && WurmEspMod.conditionedcolorsallways
+                || f.champion && WurmEspMod.championmcoloralways;
+        this.render(queue, outlineColor(f, showConditioned));
     }
 
     /** The outline colour right now: the condition's (when asked and the unit has one), else its kind's. */
     public float[] outlineColor(boolean showConditioned) {
-        Facts f = this.facts();
+        return outlineColor(this.facts(), showConditioned);
+    }
+
+    private static float[] outlineColor(Facts f, boolean showConditioned) {
         if (showConditioned && f.condition != null) {
             return conditionColor(f.condition);
         }
@@ -243,16 +300,20 @@ public class Unit {
         if (this.pickableUnit == null) {
             return;
         }
+        this.render(queue, this.outlineColor(showconditioned));
+    }
+
+    private void render(Queue queue, float[] rgb) {
         float br = 3.5f;
-        RenderState renderStateFill = new RenderState();
-        RenderState renderStateFillDepth = new RenderState();
-        RenderState renderStateOutline = new RenderState();
-        Color color = new Color();
-        float[] rgb = this.outlineColor(showconditioned);
+        RenderState renderStateFill = STATE_FILL;
+        RenderState renderStateFillDepth = STATE_FILL_DEPTH;
+        RenderState renderStateOutline = STATE_OUTLINE;
+        Color color = COLOR;
         color.set(rgb[0], rgb[1], rgb[2]);
         renderStateFill.alphaval = color.a = br;
         color.a *= this.pickableUnit.getOutlineColor().a;
-        
+
+        // ReUtils resolves each Field once, so these are plain field reads
         WorldRender worldRenderer = (WorldRender)ReUtils.getField(this.world, "worldRenderer");
         PickRenderer.CustomPickFillRender customPickFill = (PickRenderer.CustomPickFillRender)ReUtils.getField(worldRenderer, "customPickFill");
         PickRenderer.CustomPickFillDepthRender customPickFillDepth = (PickRenderer.CustomPickFillDepthRender)ReUtils.getField(worldRenderer, "customPickFillDepth");
